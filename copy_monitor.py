@@ -41,6 +41,25 @@ WALLETS = {
 BET_SIZE = 30              # dollars per copy trade
 POLL_INTERVAL = 300        # 5 min
 SIZE_CHANGE_THRESHOLD = 0.15  # alert when position size moves >=15%
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")  # set in GitHub Secrets
+
+
+def send_ntfy(title, body):
+    """Push notification via ntfy.sh — instant phone alert, no account needed."""
+    if not NTFY_TOPIC:
+        return False
+    try:
+        requests.post(
+            f"https://ntfy.sh/{NTFY_TOPIC}",
+            data=body.encode("utf-8"),
+            headers={"Title": title, "Priority": "urgent", "Tags": "bell"},
+            timeout=10,
+        )
+        return True
+    except Exception as e:
+        print(f"ntfy send failed: {e}", flush=True)
+        return False
+
 
 # Notification: email if configured, else macOS notification
 def send_email(subject, body):
@@ -77,9 +96,11 @@ def notify_mac(title, body):
 
 
 def notify(title, body, detail=""):
-    """Send email if configured, else Mac notification."""
+    """Send ntfy push + email. Falls back to Mac notification if neither configured."""
     email_body = f"{body}\n\n{detail}" if detail else body
-    if not send_email(f"[Copy Trade] {title}", email_body):
+    sent = send_ntfy(title, email_body)
+    sent = send_email(f"[Copy Trade] {title}", email_body) or sent
+    if not sent:
         notify_mac(title, body)
 
 
@@ -258,18 +279,23 @@ def main():
     a = p.parse_args()
 
     if a.test_email:
-        log("=== TEST EMAIL ===")
-        ok = send_email(
-            "[Copy Monitor] Test email",
-            "If you got this, your GitHub Actions email alerts are working correctly.\n\n"
-            f"Wallets monitored: {list(WALLETS.keys())}\n"
-            f"Poll interval: {POLL_INTERVAL}s\n"
-            f"Size-change threshold: {SIZE_CHANGE_THRESHOLD:.0%}"
-        )
-        if ok:
+        log("=== TEST NOTIFICATION ===")
+        msg = ("Copy monitor is live. You will get this notification every time "
+               "a tracked wallet opens, closes, adds to, or partially exits a position.\n\n"
+               f"Wallets: {list(WALLETS.keys())}\n"
+               f"Poll interval: {POLL_INTERVAL}s")
+        ntfy_ok = send_ntfy("[Copy Monitor] Test", msg)
+        email_ok = send_email("[Copy Monitor] Test", msg)
+        if ntfy_ok:
+            log("ntfy push sent successfully.")
+        else:
+            log("ntfy skipped (NTFY_TOPIC not set or failed).")
+        if email_ok:
             log("Test email sent successfully.")
         else:
-            log("ERROR: email failed — check COPY_EMAIL_FROM / COPY_EMAIL_PASSWORD secrets.")
+            log("Email failed or not configured.")
+        if not ntfy_ok and not email_ok:
+            log("ERROR: no notification method worked.")
             sys.exit(1)
         return
 

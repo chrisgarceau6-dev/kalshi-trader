@@ -34,6 +34,7 @@ jobs:
           COPY_EMAIL_TO: ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           if [ "${{ github.event.inputs.test_email }}" = "yes" ]; then
             python copy_monitor.py --test-email
