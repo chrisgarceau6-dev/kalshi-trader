@@ -1,0 +1,45 @@
+name: Copy Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests
+
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: copy_state.json
+          key: copy-state-${{ github.run_id }}
+          restore-keys: copy-state-
+
+      - name: Run monitor
+        env:
+          COPY_EMAIL_TO: ${{ secrets.COPY_EMAIL_TO }}
+          COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
+        run: |
+          if [ -f copy_state.json ]; then
+            python copy_monitor.py --once
+          else
+            echo "No prior state — initializing baseline (no alerts this run)"
+            python copy_monitor.py --initialize
+          fi
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: copy_state.json
+          key: copy-state-${{ github.run_id }}
