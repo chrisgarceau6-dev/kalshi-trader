@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      test_email:
+        description: 'Send a test email to verify credentials (yes/no)'
+        required: false
+        default: 'no'
 
 jobs:
   monitor:
@@ -30,7 +35,9 @@ jobs:
           COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
         run: |
-          if [ -f copy_state.json ]; then
+          if [ "${{ github.event.inputs.test_email }}" = "yes" ]; then
+            python copy_monitor.py --test-email
+          elif [ -f copy_state.json ]; then
             python copy_monitor.py --once
           else
             echo "No prior state — initializing baseline (no alerts this run)"

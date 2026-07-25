@@ -253,7 +253,25 @@ def main():
     p.add_argument("--interval", type=int, default=POLL_INTERVAL)
     p.add_argument("--initialize", action="store_true",
                    help="fetch current positions without alerting (baseline for future polls)")
+    p.add_argument("--test-email", action="store_true",
+                   help="send a test email to verify SMTP credentials work, then exit")
     a = p.parse_args()
+
+    if a.test_email:
+        log("=== TEST EMAIL ===")
+        ok = send_email(
+            "[Copy Monitor] Test email",
+            "If you got this, your GitHub Actions email alerts are working correctly.\n\n"
+            f"Wallets monitored: {list(WALLETS.keys())}\n"
+            f"Poll interval: {POLL_INTERVAL}s\n"
+            f"Size-change threshold: {SIZE_CHANGE_THRESHOLD:.0%}"
+        )
+        if ok:
+            log("Test email sent successfully.")
+        else:
+            log("ERROR: email failed — check COPY_EMAIL_FROM / COPY_EMAIL_PASSWORD secrets.")
+            sys.exit(1)
+        return
 
     state = load_state()
 
