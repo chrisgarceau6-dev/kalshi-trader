@@ -183,6 +183,8 @@ def summarize_position(p):
 def poll_once(state):
     """Check all wallets, alert on new/exited/resized positions, update state."""
     log(f"=== POLL @ {datetime.now().strftime('%H:%M:%S')} ===")
+    if KALSHI_ENABLED and kalshi:
+        kalshi.check_stop_losses(state.setdefault("kalshi_positions", {}), log_fn=log)
     new_alerts = 0
     for label, wallet in WALLETS.items():
         first_seen = wallet not in state  # never polled before → initialize silently

@@ -315,10 +315,11 @@ def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
         filled = order.get("contracts_filled", contracts)
         log_fn(f"  [kalshi] order placed — filled {filled}/{contracts} contracts")
         kalshi_positions[condition_id] = {
-            "ticker":    ticker,
-            "contracts": filled or contracts,
-            "side":      side,
-            "placed_at": datetime.now().isoformat(timespec="seconds"),
+            "ticker":      ticker,
+            "contracts":   filled or contracts,
+            "side":        side,
+            "entry_cents": limit_cents,
+            "placed_at":   datetime.now().isoformat(timespec="seconds"),
         }
         return True
     else:
@@ -364,6 +365,32 @@ def close_trade(condition_id, kalshi_positions, log_fn=print):
     else:
         log_fn(f"  [kalshi] sell FAILED — HTTP {code}: {resp}")
         return False
+
+
+# ── stop loss ────────────────────────────────────────────────────────────────
+
+STOP_LOSS = 0.75  # close if position loses >= this fraction of entry value
+
+def check_stop_losses(kalshi_positions, log_fn=print):
+    """Close any open Kalshi position that has lost >= STOP_LOSS of its entry value."""
+    if not os.environ.get("KALSHI_API_KEY_ID"):
+        return
+    to_close = []
+    for condition_id, pos in list(kalshi_positions.items()):
+        ticker      = pos.get("ticker")
+        entry_cents = pos.get("entry_cents")
+        if not ticker or not entry_cents:
+            continue
+        code, data = kalshi_get(f"/markets/{ticker}")
+        if code != 200:
+            continue
+        bid_cents  = int((data.get("market", {}).get("yes_bid", 0) or 0) * 100)
+        stop_price = max(1, int(entry_cents * (1 - STOP_LOSS)))
+        if bid_cents <= stop_price:
+            log_fn(f"  [kalshi] STOP LOSS {ticker} — entry {entry_cents}c, now {bid_cents}c")
+            to_close.append(condition_id)
+    for cid in to_close:
+        close_trade(cid, kalshi_positions, log_fn=log_fn)
 
 
 # ── balance check ────────────────────────────────────────────────────────────
