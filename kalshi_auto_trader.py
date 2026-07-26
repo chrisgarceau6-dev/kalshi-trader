@@ -142,45 +142,66 @@ def kalshi_delete(path):
 
 # ── market fetching ─────────────────────────────────────────────────────────
 
-def _fetch_markets(sport_prefix, date_str=None):
-    """Fetch open Kalshi markets for a sport. date_str = 'YYYYMMDD'."""
-    params = {"status": "open", "limit": 200}
-    if date_str:
-        params["event_ticker"] = f"KX{sport_prefix}GAME"
-    code, data = kalshi_get("/markets", params)
+# Kalshi series tickers for each sport
+_SERIES = {
+    "MLB":  ["KXMLBGAME", "KXMLBTOTAL"],
+    "MLS":  ["KXMLSGAME", "KXLIGAMXGAME"],
+    "NFL":  ["KXNFLGAME"],
+    "UFC":  ["KXUFCFIGHT"],
+}
+
+
+def _fetch_events_for_sport(sport):
+    """Return list of (event_ticker, event_title) for open events of a sport."""
+    events = []
+    for series in _SERIES.get(sport, []):
+        cursor = ""
+        for _ in range(5):
+            params = {"series_ticker": series, "status": "open", "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            code, data = kalshi_get("/events", params)
+            if code != 200:
+                break
+            batch = data.get("events", [])
+            for e in batch:
+                events.append({
+                    "event_ticker": e.get("event_ticker", ""),
+                    "event_title":  e.get("title", ""),
+                    "series":       series,
+                })
+            cursor = data.get("cursor", "")
+            if not cursor or len(batch) < 200:
+                break
+    return events
+
+
+def _fetch_markets_for_event(event_ticker):
+    """Fetch individual markets (with prices) for a specific event."""
+    code, data = kalshi_get("/markets", {"event_ticker": event_ticker, "status": "open", "limit": 50})
     if code != 200:
         return []
-    markets = data.get("markets", [])
-    results = []
-    for m in markets:
+    markets = []
+    for m in data.get("markets", []):
         ticker = m.get("ticker", "")
-        if sport_prefix.upper() not in ticker.upper():
-            continue
-        results.append(m)
-    return results
-
-
-def _fetch_all_sports_markets():
-    """Fetch all open game markets (MLB + MLS + NFL + UFC)."""
-    all_markets = []
-    code, data = kalshi_get("/markets", {"status": "open", "limit": 1000})
-    if code == 200:
-        for m in data.get("markets", []):
-            t = m.get("ticker", "")
-            if any(s in t for s in ["MLBGAME", "MLSGAME", "NFLGAME", "UFCGAME"]):
-                all_markets.append(m)
-    return all_markets
+        # Prices come back as *_dollars fields (0-1 range) when fetched individually
+        code2, mdata = kalshi_get(f"/markets/{ticker}")
+        if code2 == 200:
+            markets.append(mdata.get("market", m))
+        else:
+            markets.append(m)
+    return markets
 
 
 # ── matching ────────────────────────────────────────────────────────────────
 
-def _score_team_match(team_name, kalshi_subtitle):
-    """Score how well a Polymarket team name matches a Kalshi market subtitle."""
-    subtitle_lower = kalshi_subtitle.lower()
+def _score_team_match(team_name, text):
+    """Score how well a Polymarket team name matches arbitrary Kalshi text."""
+    text_lower = text.lower()
     keywords = ALL_KEYWORDS.get(team_name, [team_name.lower().split()[0]])
     score = 0
     for kw in keywords:
-        if kw in subtitle_lower:
+        if kw in text_lower:
             score += len(kw)
     return score
 
@@ -188,12 +209,10 @@ def _score_team_match(team_name, kalshi_subtitle):
 def _detect_sport(title):
     """Guess sport from market title."""
     t = title.lower()
-    mlb_teams = set(k.lower() for k in MLB_KEYWORDS)
-    mls_teams = set(k.lower() for k in MLS_KEYWORDS)
-    for team in mlb_teams:
+    for team in (k.lower() for k in MLB_KEYWORDS):
         if team in t:
             return "MLB"
-    for team in mls_teams:
+    for team in (k.lower() for k in MLS_KEYWORDS):
         if team in t:
             return "MLS"
     if any(w in t for w in ["nfl", "super bowl", "patriots", "chiefs", "eagles"]):
@@ -210,55 +229,68 @@ def _extract_teams(title):
     return [p.strip() for p in parts if p.strip()]
 
 
-def _find_kalshi_ticker(title, outcome, markets):
+def _find_kalshi_ticker(title, outcome, sport):
     """
     Find the Kalshi market ticker that matches this Polymarket trade.
-    Returns (ticker, side, yes_price_cents) or (None, None, None).
+    Returns (ticker, side, yes_price) or (None, None, None).
+    yes_price is in 0-1 range (dollars).
 
-    outcome: team name (e.g. "Houston Astros") OR "Over"/"Under" OR "Yes"/"No"
+    outcome: team name (e.g. "Houston Astros") OR "Over"/"Under"
     """
-    if not markets:
+    events = _fetch_events_for_sport(sport)
+    if not events:
         return None, None, None
 
     teams = _extract_teams(title)
     is_over_under = "O/U" in title.upper() or outcome in ("Over", "Under")
 
-    best_ticker  = None
-    best_score   = 0
-    best_price   = None
+    # Step 1: find the best matching event by title
+    best_event  = None
+    best_escore = 0
+    for ev in events:
+        ev_title = ev["event_title"]
+        score = sum(_score_team_match(team, ev_title) for team in teams)
+        if score > best_escore:
+            best_escore = score
+            best_event  = ev
 
+    if not best_event or best_escore == 0:
+        return None, None, None
+
+    # Step 2: fetch individual markets for that event
+    markets = _fetch_markets_for_event(best_event["event_ticker"])
+    if not markets:
+        return None, None, None
+
+    if is_over_under:
+        # TOTAL markets: ticker suffix is a run total number
+        kw = "over" if outcome == "Over" else "under"
+        # For totals, YES = over, NO = under. Find the right side.
+        for m in markets:
+            ticker = m.get("ticker", "")
+            if "TOTAL" in ticker or "OVER" in ticker or "UNDER" in ticker:
+                yes_ask = float(m.get("yes_ask_dollars") or m.get("yes_ask") or 0.5)
+                return ticker, "yes" if kw == "over" else "no", yes_ask
+        return None, None, None
+
+    # Step 3: within the event's markets, find the one where YES = outcome team
+    best_ticker = None
+    best_mscore = 0
+    best_price  = None
     for m in markets:
-        ticker    = m.get("ticker", "")
-        subtitle  = m.get("subtitle", "") or m.get("title", "")
-        yes_ask   = m.get("yes_ask")
-        yes_bid   = m.get("yes_bid")
-
-        if is_over_under:
-            if "OVER" in ticker.upper() or "UNDER" in ticker.upper():
-                kw = "over" if outcome == "Over" else "under"
-                if kw in ticker.lower():
-                    price = yes_ask or 50
-                    if price is not None and price * 100 > best_score:
-                        best_score  = price * 100
-                        best_ticker = ticker
-                        best_price  = price
+        yes_sub = m.get("yes_sub_title") or ""
+        yes_ask = m.get("yes_ask_dollars") or m.get("yes_ask")
+        if not yes_ask:
             continue
+        yes_ask = float(yes_ask)
+        score = _score_team_match(outcome, yes_sub) if outcome not in ("Yes","No") else 1
+        if score > best_mscore:
+            best_mscore = score
+            best_ticker = m.get("ticker")
+            best_price  = yes_ask
 
-        for team in teams:
-            score = _score_team_match(team, subtitle)
-            if score <= 0:
-                continue
-            # Check if this team IS the outcome we want to bet on
-            outcome_score = _score_team_match(outcome if outcome not in ("Yes","No") else team,
-                                              subtitle)
-            if outcome not in ("Yes","No") and _score_team_match(outcome, subtitle) == 0:
-                continue
-            total_score = score + outcome_score
-            if total_score > best_score and yes_ask is not None:
-                best_score  = total_score
-                best_ticker = ticker
-                best_price  = yes_ask
-
+    if best_mscore == 0:
+        return None, None, None
     return best_ticker, "yes", best_price
 
 
@@ -280,8 +312,7 @@ def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
         log_fn(f"  [kalshi] can't detect sport from: {title[:60]}")
         return False
 
-    markets = _fetch_all_sports_markets()
-    ticker, side, ask_price = _find_kalshi_ticker(title, outcome, markets)
+    ticker, side, ask_price = _find_kalshi_ticker(title, outcome, sport)
 
     if not ticker:
         log_fn(f"  [kalshi] no Kalshi market found for: {title[:60]}")
@@ -343,7 +374,9 @@ def close_trade(condition_id, kalshi_positions, log_fn=print):
     code, market_data = kalshi_get(f"/markets/{ticker}")
     bid_cents = 50
     if code == 200:
-        bid_cents = int((market_data.get("market", {}).get("yes_bid", 0.5) or 0.5) * 100)
+        mkt = market_data.get("market", {})
+        bid_val = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0.5
+        bid_cents = int(float(bid_val) * 100)
     limit_sell = max(3, bid_cents - SLACK_CENTS)
 
     log_fn(f"  [kalshi] SELL {contracts} YES on {ticker} @ {limit_sell}¢")
@@ -385,7 +418,9 @@ def check_stop_losses(kalshi_positions, log_fn=print):
         code, data = kalshi_get(f"/markets/{ticker}")
         if code != 200:
             continue
-        bid_cents  = int((data.get("market", {}).get("yes_bid", 0) or 0) * 100)
+        mkt = data.get("market", {})
+        bid_val   = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0
+        bid_cents = int(float(bid_val) * 100)
         stop_price = max(1, int(entry_cents * (1 - STOP_LOSS)))
         if bid_cents <= stop_price:
             log_fn(f"  [kalshi] STOP LOSS {ticker} — entry {entry_cents}c, now {bid_cents}c")
@@ -463,13 +498,10 @@ def cmd_test():
         print("Auth failed — check KALSHI_API_KEY_ID and KALSHI_PRIVATE_KEY_PATH")
         return
 
-    markets = _fetch_all_sports_markets()
-    print(f"Open game markets: {len(markets)}")
-
     # Test match
     test_title   = "Houston Astros vs. Chicago White Sox"
     test_outcome = "Houston Astros"
-    ticker, side, price = _find_kalshi_ticker(test_title, test_outcome, markets)
+    ticker, side, price = _find_kalshi_ticker(test_title, test_outcome, "MLB")
     if ticker:
         print(f"Test match: '{test_title}' → {ticker} @ {int((price or 0)*100)}¢")
     else:
