@@ -40,7 +40,7 @@ WALLETS = {
     "sunguyen86": "0x7d83c905cb7b0e790499392ce641bb867bd7be92",  # $6,231/wk, 100% US
 }
 COPY_RATIO = 1.0           # fraction of their dollar bet to copy (1.0 = match them $-for-$)
-MAX_BET = 75               # hard cap per trade
+MAX_BET = 20               # hard cap per trade
 MIN_BET = 5                # skip alert if copy bet would be below this
 POLL_INTERVAL = 300        # 5 min
 SIZE_CHANGE_THRESHOLD = 0.15  # alert when position size moves >=15%
