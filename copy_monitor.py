@@ -32,14 +32,14 @@ LOG = BASE / "copy_alerts.log"
 DATA = "https://data-api.polymarket.com"
 GAMMA = "https://gamma-api.polymarket.com"
 
-# Option B portfolio
+# US-accessible portfolio — all 4 wallets trade 100% US-accessible markets
 WALLETS = {
-    "workhorse":  "0x412fe1a101554f0b382181c3af932e4b2d8030fa",
-    "hugewinner": "0xc8ec6d4cef5c5fe8409ef69303c37f05b678e8f1",
-    "fbf-safe":   "0xfbf3d501e88815464642d0e913f15379c3eeb218",
-    "new-anchor": "0xaa501f4663c454e94fba8907c42dafcc785a3ed5",
+    "workhorse":  "0x412fe1a101554f0b382181c3af932e4b2d8030fa",  # GrizzliesSuck, $1,319/wk
+    "fbf-safe":   "0xfbf3d501e88815464642d0e913f15379c3eeb218",  # VPenguin, $1,978/wk
+    "sentrio":    "0xdb83e85ffd22faa4009273034770f96ffc5b1e50",  # $7,710/wk, 100% US
+    "sunguyen86": "0x7d83c905cb7b0e790499392ce641bb867bd7be92",  # $6,231/wk, 100% US
 }
-BET_SIZE = 30              # dollars per copy trade
+BET_SIZE = 75              # dollars per copy trade
 POLL_INTERVAL = 300        # 5 min
 SIZE_CHANGE_THRESHOLD = 0.15  # alert when position size moves >=15%
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")  # set in GitHub Secrets
