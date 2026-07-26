@@ -174,6 +174,7 @@ def poll_once(state):
     log(f"=== POLL @ {datetime.now().strftime('%H:%M:%S')} ===")
     new_alerts = 0
     for label, wallet in WALLETS.items():
+        first_seen = wallet not in state  # never polled before → initialize silently
         prev_data = state.get(wallet, {}).get("positions", {})
         prev = set(prev_data.keys())
         positions = fetch_positions(wallet)
@@ -182,6 +183,16 @@ def poll_once(state):
             key = f"{p.get('conditionId')}:{p.get('asset')}"
             if float(p.get("size") or 0) > 0:
                 current[key] = summarize_position(p)
+
+        if first_seen:
+            log(f"  [{label}] {wallet[:12]}: first poll — baseline {len(current)} positions (no alerts)")
+            state[wallet] = {
+                "positions": current,
+                "last_poll": datetime.now().isoformat(timespec='seconds'),
+            }
+            save_state(state)
+            time.sleep(1)
+            continue
 
         new_keys = set(current.keys()) - prev
         exited_keys = prev - set(current.keys())
