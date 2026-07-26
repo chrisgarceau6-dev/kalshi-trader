@@ -116,8 +116,10 @@ def notify(title, body, detail=""):
 def log(msg):
     ts = datetime.now().isoformat(timespec='seconds')
     line = f"[{ts}] {msg}"
-    print(line, flush=True)
-    with open(LOG, "a") as f: f.write(line + "\n")
+    with open(LOG, "a") as f:
+        f.write(line + "\n")
+    if sys.stdout.isatty():
+        print(line, flush=True)
 
 
 def fetch_positions(wallet):

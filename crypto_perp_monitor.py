@@ -12,7 +12,7 @@ Usage:
     python crypto_perp_monitor.py --test   # check auth + balance
 """
 
-import argparse, json, os, time, base64
+import argparse, json, os, sys, time, base64
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import requests
@@ -26,7 +26,7 @@ DATA_BASE   = "https://data-api.polymarket.com"
 STATE_FILE  = Path(__file__).parent / "perp_state.json"
 LOG_FILE    = Path(__file__).parent / "perp_monitor.log"
 
-POLL_INTERVAL  = 45       # seconds between polls
+POLL_INTERVAL  = 12       # seconds between polls
 HOLD_MINUTES   = 7        # auto-close perp after this many minutes
 PERP_NOTIONAL  = float(os.environ.get("PERP_MAX_BET", "20"))   # dollars per trade
 KILL_LOSS_PCT  = 0.50     # halt if perp account drops 50% from start
@@ -44,14 +44,16 @@ NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
 # ── auth ─────────────────────────────────────────────────────────────────────
 
 def _load_private_key():
-    b64 = os.environ.get("KALSHI_PRIVATE_KEY", "")
-    if b64:
+    raw = os.environ.get("KALSHI_PRIVATE_KEY", "")
+    if raw:
         path = Path("/tmp/kalshi_private_key.pem")
-        path.write_bytes(base64.b64decode(b64))
+        pem = raw if raw.strip().startswith("-----") else base64.b64decode(raw)
+        path.write_bytes(pem if isinstance(pem, bytes) else pem.encode())
         path.chmod(0o600)
         os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(path)
     key_path = Path(os.path.expanduser(
-        os.environ.get("KALSHI_PRIVATE_KEY_PATH", "~/.kalshi/private_key.pem")
+        os.environ.get("KALSHI_PRIVATE_KEY_PATH",
+                       str(Path(__file__).parent / "kalshi_key.pem"))
     ))
     with open(key_path, "rb") as f:
         return serialization.load_pem_private_key(f.read(), password=None)
@@ -67,7 +69,7 @@ def _get_pk():
 def _signed_headers(method, path):
     api_key = os.environ.get("KALSHI_API_KEY_ID", "")
     ts  = str(int(time.time() * 1000))
-    msg = (ts + method.upper() + path).encode()
+    msg = (ts + method.upper() + "/trade-api/v2" + path).encode()
     sig = _get_pk().sign(
         msg,
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH),
@@ -98,11 +100,20 @@ def perp_post(path, body):
 
 def fetch_positions(wallet):
     try:
-        r = requests.get(f"{DATA_BASE}/positions",
-                         params={"user": wallet, "limit": 500},
-                         timeout=20)
-        if r.status_code == 200:
-            return r.json()
+        # Fetch twice with different sorts so new positions (high TOKENS but
+        # not yet in CURRENT top-500) aren't missed at the 500-row cap.
+        seen, results = set(), []
+        for sort in ("TOKENS", "CURRENT"):
+            r = requests.get(f"{DATA_BASE}/positions",
+                             params={"user": wallet, "limit": 500, "sortBy": sort},
+                             timeout=20)
+            if r.status_code == 200:
+                for p in r.json():
+                    cid = p.get("conditionId")
+                    if cid not in seen:
+                        seen.add(cid)
+                        results.append(p)
+        return results
     except Exception:
         pass
     return []
@@ -149,8 +160,16 @@ def get_perp_price(asset):
 def get_perp_balance():
     code, data = perp_get("/margin/balance")
     if code == 200:
+        # top-level settled_funds is the reliable cash balance
+        if "settled_funds" in data:
+            return float(data["settled_funds"])
+        # fallback: subaccount available_balance
+        subs = data.get("subaccount_balances", [])
+        if subs:
+            return float(subs[0].get("available_balance") or 0)
         bal = data.get("balance", {})
         return float(bal.get("available_balance") or bal.get("cash") or 0)
+    print(f"  [perp] balance HTTP {code}: {data}")
     return None
 
 
@@ -172,15 +191,11 @@ def open_perp(asset, direction, notional_dollars, signal_id, log_fn=print):
     side  = "bid" if direction == "up" else "ask"
     price = ask if direction == "up" else bid
 
-    # Contract size: KXBTCPERP = 0.0001 BTC
-    code2, mdata = perp_get(f"/margin/markets/{ticker}")
-    contract_size = float(mdata.get("market", {}).get("contract_size") or 0.0001)
-    contract_value = price * contract_size if price else 1
-
-    count = max(1, int(notional_dollars / contract_value))
+    # price is already the dollar value per contract (Kalshi quotes it this way)
+    count = max(1, int(notional_dollars / price))
     price_str = f"{price:.4f}"
 
-    log_fn(f"  [perp] {ticker} {direction.upper()} {count} contracts @ ${price_str} (notional ~${count*contract_value:.0f})")
+    log_fn(f"  [perp] {ticker} {direction.upper()} {count} contracts @ ${price_str} (notional ~${count*price:.0f})")
 
     code, resp = perp_post("/margin/orders", {
         "ticker":                    ticker,
@@ -189,25 +204,24 @@ def open_perp(asset, direction, notional_dollars, signal_id, log_fn=print):
         "count":                     str(count),
         "price":                     price_str,
         "time_in_force":             "immediate_or_cancel",
-        "self_trade_prevention_type": "cancel_resting",
+        "self_trade_prevention_type": "taker_at_cross",
     })
 
     if code in (200, 201):
-        order = resp.get("order", {})
-        filled = order.get("filled_count") or order.get("count", count)
-        order_id = order.get("order_id", "")
+        # Response is flat (not nested under "order")
+        filled   = resp.get("fill_count") or resp.get("filled_count") or count
+        order_id = resp.get("order_id", "")
         log_fn(f"  [perp] opened {direction.upper()} position: {filled} contracts, order_id={order_id}")
         return {
-            "order_id":      order_id,
-            "ticker":        ticker,
-            "asset":         asset,
-            "direction":     direction,
-            "count":         int(filled or count),
-            "entry_price":   price,
-            "contract_size": contract_size,
-            "opened_at":     datetime.now(timezone.utc).isoformat(),
-            "close_at":      (datetime.now(timezone.utc) + timedelta(minutes=HOLD_MINUTES)).isoformat(),
-            "signal_id":     signal_id,
+            "order_id":    order_id,
+            "ticker":      ticker,
+            "asset":       asset,
+            "direction":   direction,
+            "count":       int(float(filled or count)),
+            "entry_price": price,
+            "opened_at":   datetime.now(timezone.utc).isoformat(),
+            "close_at":    (datetime.now(timezone.utc) + timedelta(minutes=HOLD_MINUTES)).isoformat(),
+            "signal_id":   signal_id,
         }
     else:
         log_fn(f"  [perp] order FAILED HTTP {code}: {resp}")
@@ -239,7 +253,7 @@ def close_perp(pos, log_fn=print):
         "count":                     str(count),
         "price":                     price_str,
         "time_in_force":             "immediate_or_cancel",
-        "self_trade_prevention_type": "cancel_resting",
+        "self_trade_prevention_type": "taker_at_cross",
     })
     if code in (200, 201):
         log_fn(f"  [perp] position closed")
@@ -283,9 +297,10 @@ def notify(title, body):
 def log(msg):
     ts   = datetime.now().isoformat(timespec="seconds")
     line = f"[{ts}] {msg}"
-    print(line, flush=True)
     with open(LOG_FILE, "a") as f:
         f.write(line + "\n")
+    if sys.stdout.isatty():
+        print(line, flush=True)
 
 
 # ── main poll ────────────────────────────────────────────────────────────────
@@ -296,6 +311,9 @@ def poll_once(state):
     # 1. Auto-close expired perp positions
     still_open = []
     for pos in state.get("open_perps", []):
+        if int(float(pos.get("count", 0))) < 1:
+            log(f"  [perp] dropping zero-count ghost position ({pos['direction']} {pos['asset']})")
+            continue
         close_at = datetime.fromisoformat(pos["close_at"])
         if close_at.tzinfo is None:
             close_at = close_at.replace(tzinfo=timezone.utc)
@@ -324,18 +342,22 @@ def poll_once(state):
 
     # 3. Poll wallets for new crypto direction signals
     for label, wallet in CRYPTO_WALLETS.items():
+        # Key by conditionId only — deduplicate per market window, not per outcome.
+        # Prevents flip-flopping when a wallet buys both Up and Down in same window.
         prev_keys = set(state["wallets"].get(wallet, {}).keys())
         positions = fetch_positions(wallet)
 
         current = {}
         for p in positions:
-            key  = f"{p.get('conditionId')}:{p.get('asset')}"
+            cid  = p.get("conditionId", "")
             size = float(p.get("size") or 0)
-            if size > 0:
+            if size > 0 and cid:
                 title   = (p.get("title") or "")[:120]
                 outcome = p.get("outcome") or ""
-                current[key] = {"title": title, "outcome": outcome,
-                                 "conditionId": p.get("conditionId")}
+                # Only keep the first (largest) position seen for this market
+                if cid not in current:
+                    current[cid] = {"title": title, "outcome": outcome,
+                                    "conditionId": cid}
 
         if not prev_keys:
             log(f"  [{label}] first poll — baseline {len(current)} positions")
@@ -398,11 +420,18 @@ def main():
 
     log("=== CRYPTO PERP MONITOR STARTED ===")
     log(f"Watching {len(CRYPTO_WALLETS)} wallets | poll every {POLL_INTERVAL}s | hold {HOLD_MINUTES}min | ${PERP_NOTIONAL}/trade")
+    heartbeat_every = 300 // POLL_INTERVAL  # heartbeat every ~5 minutes
+    tick = 0
     while True:
         try:
             poll_once(state)
         except Exception as e:
             log(f"poll error: {e}")
+        tick += 1
+        if tick % heartbeat_every == 0:
+            bal = get_perp_balance()
+            bal_str = f"${bal:.2f}" if bal is not None else "unknown"
+            log(f"  [heartbeat] watching {len(CRYPTO_WALLETS)} wallets | balance {bal_str} | {tick} polls")
         time.sleep(POLL_INTERVAL)
 
 

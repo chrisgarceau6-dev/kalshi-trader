@@ -245,14 +245,28 @@ def _find_kalshi_ticker(title, outcome, sport):
     is_over_under = "O/U" in title.upper() or outcome in ("Over", "Under")
 
     # Step 1: find the best matching event by title
+    # For O/U bets prefer TOTAL series; for game-winner prefer GAME/FIGHT series
     best_event  = None
     best_escore = 0
     for ev in events:
+        if is_over_under and "TOTAL" not in ev.get("series", "").upper():
+            continue
+        if not is_over_under and "TOTAL" in ev.get("series", "").upper():
+            continue
         ev_title = ev["event_title"]
         score = sum(_score_team_match(team, ev_title) for team in teams)
         if score > best_escore:
             best_escore = score
             best_event  = ev
+
+    # Fallback: if no match found with strict filter, try any series
+    if not best_event or best_escore == 0:
+        for ev in events:
+            ev_title = ev["event_title"]
+            score = sum(_score_team_match(team, ev_title) for team in teams)
+            if score > best_escore:
+                best_escore = score
+                best_event  = ev
 
     if not best_event or best_escore == 0:
         return None, None, None
@@ -263,15 +277,35 @@ def _find_kalshi_ticker(title, outcome, sport):
         return None, None, None
 
     if is_over_under:
-        # TOTAL markets: ticker suffix is a run total number
-        kw = "over" if outcome == "Over" else "under"
-        # For totals, YES = over, NO = under. Find the right side.
+        # Extract the O/U line from the title (e.g. "O/U 8.5" → 8.5)
+        line_m = re.search(r'[Oo][/\\]?[Uu]\s*([\d]+\.[\d]+)', title)
+        ou_line = float(line_m.group(1)) if line_m else None
+
+        is_over = outcome == "Over"
+        best_m, best_diff = None, float("inf")
         for m in markets:
-            ticker = m.get("ticker", "")
-            if "TOTAL" in ticker or "OVER" in ticker or "UNDER" in ticker:
-                yes_ask = float(m.get("yes_ask_dollars") or m.get("yes_ask") or 0.5)
-                return ticker, "yes" if kw == "over" else "no", yes_ask
-        return None, None, None
+            # Prefer floor_strike field; fall back to parsing yes_sub_title
+            strike = m.get("floor_strike")
+            if strike is None:
+                sub_m = re.search(r'[Oo]ver\s*([\d]+\.[\d]+)',
+                                  m.get("yes_sub_title") or "")
+                if sub_m:
+                    strike = float(sub_m.group(1))
+            if strike is None:
+                continue
+            diff = abs(float(strike) - ou_line) if ou_line is not None else 0
+            if diff < best_diff:
+                best_diff = diff
+                best_m = m
+
+        if not best_m:
+            return None, None, None
+        if is_over:
+            price = float(best_m.get("yes_ask_dollars") or best_m.get("yes_ask") or 0.5)
+            return best_m.get("ticker"), "yes", price
+        else:
+            price = float(best_m.get("no_ask_dollars") or best_m.get("no_ask") or 0.5)
+            return best_m.get("ticker"), "no", price
 
     # Step 3: within the event's markets, find the one where YES = outcome team
     best_ticker = None
@@ -330,16 +364,20 @@ def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
 
     log_fn(f"  [kalshi] {ticker} — BUY {contracts} YES @ {limit_cents}¢ (~${our_bet:.0f})")
 
-    code, resp = kalshi_post("/portfolio/orders", {
+    order_body = {
         "ticker":          ticker,
         "type":            "limit",
         "action":          "buy",
         "side":            side,
         "count":           contracts,
-        "yes_price":       limit_cents,
         "client_order_id": f"copy-{condition_id[:8]}-{int(time.time())}",
         "time_in_force":   "GTC",
-    })
+    }
+    if side == "no":
+        order_body["no_price"] = limit_cents
+    else:
+        order_body["yes_price"] = limit_cents
+    code, resp = kalshi_post("/portfolio/orders", order_body)
 
     if code in (200, 201):
         order = resp.get("order", {})
@@ -369,27 +407,35 @@ def close_trade(condition_id, kalshi_positions, log_fn=print):
 
     ticker    = pos["ticker"]
     contracts = pos.get("contracts", 1)
+    side      = pos.get("side", "yes")
 
     # Get current bid to set sell limit
     code, market_data = kalshi_get(f"/markets/{ticker}")
     bid_cents = 50
     if code == 200:
         mkt = market_data.get("market", {})
-        bid_val = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0.5
+        if side == "no":
+            bid_val = mkt.get("no_bid_dollars") or mkt.get("no_bid") or 0.5
+        else:
+            bid_val = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0.5
         bid_cents = int(float(bid_val) * 100)
     limit_sell = max(3, bid_cents - SLACK_CENTS)
 
-    log_fn(f"  [kalshi] SELL {contracts} YES on {ticker} @ {limit_sell}¢")
-    code, resp = kalshi_post("/portfolio/orders", {
+    log_fn(f"  [kalshi] SELL {contracts} {side.upper()} on {ticker} @ {limit_sell}¢")
+    sell_body = {
         "ticker":          ticker,
         "type":            "limit",
         "action":          "sell",
-        "side":            "yes",
+        "side":            side,
         "count":           contracts,
-        "yes_price":       limit_sell,
         "client_order_id": f"exit-{condition_id[:8]}-{int(time.time())}",
         "time_in_force":   "GTC",
-    })
+    }
+    if side == "no":
+        sell_body["no_price"] = limit_sell
+    else:
+        sell_body["yes_price"] = limit_sell
+    code, resp = kalshi_post("/portfolio/orders", sell_body)
 
     if code in (200, 201):
         log_fn(f"  [kalshi] sell order placed for {ticker}")

@@ -1,3 +1,6 @@
+.env
+kalshi_key.pem
+perp_state.json
 copy_state.json
 copy_alerts.log
 copy_monitor_stdout.log
