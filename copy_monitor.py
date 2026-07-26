@@ -234,7 +234,7 @@ def poll_once(state):
                 continue
             your_shares = round(your_bet / entry, 1) if entry > 0 else 0
             slug = market_slug(pos["conditionId"])
-            url = f"https://polymarket.com/event/{slug}" if slug else pos["conditionId"]
+            url = f"https://polymarket.us/events/{slug}" if slug else pos["conditionId"]
             alert = (f"\n{'='*70}\n"
                      f"🎯 NEW COPY TRADE — {label} ({wallet[:10]})\n"
                      f"Market: {pos['title']}\n"
@@ -273,7 +273,7 @@ def poll_once(state):
             direction = "ADDED TO" if change_pct > 0 else "PARTIAL EXIT"
             entry = pos["avgPrice"]
             slug = market_slug(pos["conditionId"])
-            url = f"https://polymarket.com/event/{slug}" if slug else pos["conditionId"]
+            url = f"https://polymarket.us/events/{slug}" if slug else pos["conditionId"]
             log(f"  {direction} — {label}: {pos['title'][:60]} "
                 f"size {prev_size:.0f} → {curr_size:.0f} ({change_pct:+.0%})")
             notify(
