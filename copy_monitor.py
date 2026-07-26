@@ -256,7 +256,7 @@ def poll_once(state):
                      f"{'='*70}")
             log(alert)
             kalshi_note = ""
-            if KALSHI_ENABLED and kalshi:
+            if KALSHI_ENABLED and kalshi and not kalshi.is_kill_switch_active(state, log_fn=log):
                 kp = state.setdefault("kalshi_positions", {})
                 placed = kalshi.execute_trade(
                     pos["title"], pos["outcome"], entry, their_dollars,

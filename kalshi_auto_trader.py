@@ -369,7 +369,8 @@ def close_trade(condition_id, kalshi_positions, log_fn=print):
 
 # ── stop loss ────────────────────────────────────────────────────────────────
 
-STOP_LOSS = 0.75  # close if position loses >= this fraction of entry value
+STOP_LOSS    = 0.75  # close individual position if it loses >= this fraction
+KILL_SWITCH  = 0.75  # halt all new trades if account drops >= this fraction from start
 
 def check_stop_losses(kalshi_positions, log_fn=print):
     """Close any open Kalshi position that has lost >= STOP_LOSS of its entry value."""
@@ -391,6 +392,25 @@ def check_stop_losses(kalshi_positions, log_fn=print):
             to_close.append(condition_id)
     for cid in to_close:
         close_trade(cid, kalshi_positions, log_fn=log_fn)
+
+
+# ── account kill switch ───────────────────────────────────────────────────────
+
+def is_kill_switch_active(state, log_fn=print):
+    """Return True and halt new trades if account is down >= KILL_SWITCH from start."""
+    bal = get_balance()
+    if bal is None:
+        return False
+    if "kalshi_starting_balance" not in state:
+        state["kalshi_starting_balance"] = bal
+        log_fn(f"  [kalshi] starting balance recorded: ${bal:.2f}")
+        return False
+    start = state["kalshi_starting_balance"]
+    if start > 0 and bal <= start * (1 - KILL_SWITCH):
+        log_fn(f"  [kalshi] KILL SWITCH — balance ${bal:.2f} is >{KILL_SWITCH:.0%} below "
+               f"starting ${start:.2f}. No new trades until manually reset.")
+        return True
+    return False
 
 
 # ── balance check ────────────────────────────────────────────────────────────
