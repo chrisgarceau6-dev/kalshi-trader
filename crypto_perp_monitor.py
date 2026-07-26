@@ -33,10 +33,10 @@ KILL_LOSS_PCT  = 0.50     # halt if perp account drops 50% from start
 
 # Sharp crypto wallets — 94%+ win rate on BTC Up/Down markets
 CRYPTO_WALLETS = {
-    "btc-sharp-1": "0xaa9621b2c07e92e19cdbc8e21ef6bbdabab0f3c5",
-    "btc-sharp-2": "0xa191f281a0b5e87d0776a8b52778d88368455a0a",
-    "btc-sharp-3": "0x85d3796cb5b2f94c6b5d92f5e0c68c6827c25f30",
-    "btc-sharp-4": "0x8f6924e0879aa37d79756be56c1e3da6a3b9f39e",
+    "btc-sharp-1": "0xaa9621853f92c2dd3be06871b352bce365ef6969",
+    "btc-sharp-2": "0xa191f2791f6dc0adf74c4d9223ae7df3cdf6b426",
+    "btc-sharp-3": "0x85d379d0ed5ae9077e96fd97938e38a245816be3",
+    "btc-sharp-4": "0x8f6924adcc039b6f42c9b94751b36df65aab2039",
 }
 
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
