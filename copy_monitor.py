@@ -36,7 +36,7 @@ GAMMA = "https://gamma-api.polymarket.com"
 WALLETS = {
     "workhorse":  "0x412fe1a101554f0b382181c3af932e4b2d8030fa",  # GrizzliesSuck, $1,319/wk
     "fbf-safe":   "0xfbf3d501e88815464642d0e913f15379c3eeb218",  # VPenguin, $1,978/wk
-    "sentrio":    "0xdb83e85ffd22faa4009273034770f96ffc5b1e50",  # $7,710/wk, 100% US
+    "0x3dfb":     "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",  # MLB sharp, 94.7% win, $5,899/wk
     "sunguyen86": "0x7d83c905cb7b0e790499392ce641bb867bd7be92",  # $6,231/wk, 100% US
 }
 COPY_RATIO = 1.0           # fraction of their dollar bet to copy (1.0 = match them $-for-$)
