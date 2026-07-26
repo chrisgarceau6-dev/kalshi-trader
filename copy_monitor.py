@@ -136,12 +136,15 @@ def fetch_positions(wallet):
 
 
 def market_slug(condition_id):
-    """Look up market slug for URL. Cached in-memory per run."""
+    """Return the parent event slug (works on polymarket.us). Falls back to market slug."""
     try:
         r = requests.get(f"{GAMMA}/markets", params={"condition_ids": condition_id, "limit": 1}, timeout=10)
         j = r.json()
         if isinstance(j, list) and j:
-            return j[0].get("slug","")
+            events = j[0].get("events") or []
+            if events and events[0].get("slug"):
+                return events[0]["slug"]
+            return j[0].get("slug", "")
         return ""
     except: return ""
 
