@@ -38,16 +38,21 @@ LOG = BASE / "copy_alerts.log"
 DATA = "https://data-api.polymarket.com"
 GAMMA = "https://gamma-api.polymarket.com"
 
-# US-accessible portfolio — all 4 wallets trade 100% US-accessible markets
+# Active daily traders with verified Kalshi-matchable markets
 WALLETS = {
-    "workhorse":  "0x412fe1a101554f0b382181c3af932e4b2d8030fa",  # GrizzliesSuck, $1,319/wk
-    "fbf-safe":   "0xfbf3d501e88815464642d0e913f15379c3eeb218",  # VPenguin, $1,978/wk
-    "0x3dfb":     "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",  # MLB sharp, 94.7% win, $5,899/wk
-    "sunguyen86": "0x7d83c905cb7b0e790499392ce641bb867bd7be92",  # $6,231/wk, 100% US
+    "0x3dfb":    "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",  # MLB sharp, 94.7% win, $5,899/wk
+    "workhorse": "0x412fe1a101554f0b382181c3af932e4b2d8030fa",  # GrizzliesSuck, $1,319/wk
+    "fbf-safe":  "0xfbf3d501e88815464642d0e913f15379c3eeb218",  # VPenguin, $1,978/wk
 }
-COPY_RATIO = 1.0           # fraction of their dollar bet to copy (1.0 = match them $-for-$)
-MAX_BET = 20               # hard cap per trade
-MIN_BET = 5                # skip alert if copy bet would be below this
+# Per-wallet bet cap — higher for proven edges, conservative for unverified
+WALLET_MAX_BET = {
+    "0x3dfb":    int(os.environ.get("MAX_BET", "100")),  # primary edge
+    "workhorse": 30,
+    "fbf-safe":  30,
+}
+COPY_RATIO = 1.0           # fraction of their dollar bet to copy
+MAX_BET = int(os.environ.get("MAX_BET", "100"))  # global fallback
+MIN_BET = 5                # skip if copy bet would be below this
 POLL_INTERVAL = 300        # 5 min
 SIZE_CHANGE_THRESHOLD = 0.15  # alert when position size moves >=15%
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")  # set in GitHub Secrets
@@ -241,7 +246,8 @@ def poll_once(state):
             pos = current[k]
             entry = pos["avgPrice"]
             their_dollars = round(pos["size"] * entry, 2)
-            your_bet = min(MAX_BET, round(their_dollars * COPY_RATIO, 2))
+            wallet_cap = WALLET_MAX_BET.get(label, MAX_BET)
+            your_bet = min(wallet_cap, round(their_dollars * COPY_RATIO, 2))
             if your_bet < MIN_BET:
                 log(f"  skip tiny bet — {label}: ${their_dollars:.0f} position, copy would be ${your_bet:.0f}")
                 continue
@@ -262,7 +268,7 @@ def poll_once(state):
                 kp = state.setdefault("kalshi_positions", {})
                 placed = kalshi.execute_trade(
                     pos["title"], pos["outcome"], entry, their_dollars,
-                    pos["conditionId"], kp, log_fn=log,
+                    pos["conditionId"], kp, log_fn=log, max_bet=wallet_cap,
                 )
                 kalshi_note = "\nKalshi: AUTO-TRADED" if placed else "\nKalshi: no matching market"
             notify(

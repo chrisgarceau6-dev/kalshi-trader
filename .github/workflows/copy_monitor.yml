@@ -37,7 +37,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
-          MAX_BET: "20"
+          MAX_BET: "100"
         run: |
           if [ "${{ github.event.inputs.test_email }}" = "yes" ]; then
             python copy_monitor.py --test-email

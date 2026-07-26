@@ -331,7 +331,7 @@ def _find_kalshi_ticker(title, outcome, sport):
 # ── order execution ─────────────────────────────────────────────────────────
 
 def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
-                  kalshi_positions, log_fn=print):
+                  kalshi_positions, log_fn=print, max_bet=None):
     """
     Find equivalent Kalshi market and place a proportional buy order.
     Updates kalshi_positions dict with {condition_id: {ticker, count, side}}.
@@ -352,8 +352,8 @@ def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
         log_fn(f"  [kalshi] no Kalshi market found for: {title[:60]}")
         return False
 
-    # Proportional sizing: match their bet, cap at MAX_BET
-    our_bet = min(MAX_BET, their_dollars)
+    # Proportional sizing: match their bet, cap at wallet-specific or global MAX_BET
+    our_bet = min(max_bet if max_bet is not None else MAX_BET, their_dollars)
     if our_bet < MIN_BET:
         log_fn(f"  [kalshi] bet ${our_bet:.2f} below minimum ${MIN_BET} — skip")
         return False
