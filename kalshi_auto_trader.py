@@ -30,7 +30,7 @@ from kalshi_auth import get, post, delete, load_private_key
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2"
 MAX_BET   = float(os.environ.get("MAX_BET", "20"))
 MIN_BET   = 3.0
-SLACK_CENTS = 2  # place limit MAX(ask, last_price) + SLACK_CENTS to ensure fill
+SLACK     = 0.02  # 2¢ slack on limit price to help ensure fill
 
 # ── team name keyword → Kalshi team field fragment ─────────────────────────
 # Kalshi truncates team names. We match by checking if any keyword from the
@@ -358,37 +358,40 @@ def execute_trade(title, outcome, entry_price, their_dollars, condition_id,
         log_fn(f"  [kalshi] bet ${our_bet:.2f} below minimum ${MIN_BET} — skip")
         return False
 
-    # Limit price = ask + slack, capped at 97 cents
-    limit_cents = min(97, int((ask_price or 0.55) * 100) + SLACK_CENTS)
-    contracts   = max(1, int(our_bet / (limit_cents / 100)))
-
-    log_fn(f"  [kalshi] {ticker} — BUY {contracts} YES @ {limit_cents}¢ (~${our_bet:.0f})")
-
-    order_body = {
-        "ticker":          ticker,
-        "type":            "limit",
-        "action":          "buy",
-        "side":            side,
-        "count":           contracts,
-        "client_order_id": f"copy-{condition_id[:8]}-{int(time.time())}",
-        "time_in_force":   "GTC",
-    }
-    if side == "no":
-        order_body["no_price"] = limit_cents
+    # V2 API: side="bid"(buy YES) or "ask"(buy NO=sell YES at complement)
+    # price is in dollars as a string; count is a string with 2 decimal places
+    raw_ask = ask_price or 0.55
+    if side == "yes":
+        api_side    = "bid"
+        limit_price = min(0.97, raw_ask + SLACK)
+        contracts   = max(1, int(our_bet / limit_price))
     else:
-        order_body["yes_price"] = limit_cents
-    code, resp = kalshi_post("/portfolio/orders", order_body)
+        # Buy NO: post a YES ask at (1 - no_ask - slack) to match NO buyers
+        api_side    = "ask"
+        limit_price = max(0.03, 1 - raw_ask - SLACK)
+        contracts   = max(1, int(our_bet / raw_ask))
+
+    log_fn(f"  [kalshi] {ticker} — BUY {contracts} {side.upper()} @ ${limit_price:.2f} (~${our_bet:.0f})")
+
+    code, resp = kalshi_post("/portfolio/events/orders", {
+        "ticker":                    ticker,
+        "side":                      api_side,
+        "count":                     f"{contracts:.2f}",
+        "price":                     f"{limit_price:.4f}",
+        "client_order_id":           f"copy-{condition_id[:8]}-{int(time.time())}",
+        "time_in_force":             "good_till_canceled",
+        "self_trade_prevention_type": "taker_at_cross",
+    })
 
     if code in (200, 201):
-        order = resp.get("order", {})
-        filled = order.get("contracts_filled", contracts)
-        log_fn(f"  [kalshi] order placed — filled {filled}/{contracts} contracts")
+        filled = resp.get("fill_count") or resp.get("count") or contracts
+        log_fn(f"  [kalshi] order placed — filled ~{filled} contracts")
         kalshi_positions[condition_id] = {
-            "ticker":      ticker,
-            "contracts":   filled or contracts,
-            "side":        side,
-            "entry_cents": limit_cents,
-            "placed_at":   datetime.now().isoformat(timespec="seconds"),
+            "ticker":       ticker,
+            "contracts":    contracts,
+            "side":         side,
+            "entry_price":  limit_price,
+            "placed_at":    datetime.now().isoformat(timespec="seconds"),
         }
         return True
     else:
@@ -411,31 +414,32 @@ def close_trade(condition_id, kalshi_positions, log_fn=print):
 
     # Get current bid to set sell limit
     code, market_data = kalshi_get(f"/markets/{ticker}")
-    bid_cents = 50
+    limit_sell = 0.50
     if code == 200:
         mkt = market_data.get("market", {})
         if side == "no":
-            bid_val = mkt.get("no_bid_dollars") or mkt.get("no_bid") or 0.5
+            no_bid     = float(mkt.get("no_bid_dollars") or mkt.get("no_bid") or 0.5)
+            api_side   = "bid"
+            # Sell NO = buy YES at complement of no_bid; bid up slightly to ensure fill
+            limit_sell = min(0.97, 1 - no_bid + SLACK)
         else:
-            bid_val = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0.5
-        bid_cents = int(float(bid_val) * 100)
-    limit_sell = max(3, bid_cents - SLACK_CENTS)
-
-    log_fn(f"  [kalshi] SELL {contracts} {side.upper()} on {ticker} @ {limit_sell}¢")
-    sell_body = {
-        "ticker":          ticker,
-        "type":            "limit",
-        "action":          "sell",
-        "side":            side,
-        "count":           contracts,
-        "client_order_id": f"exit-{condition_id[:8]}-{int(time.time())}",
-        "time_in_force":   "GTC",
-    }
-    if side == "no":
-        sell_body["no_price"] = limit_sell
+            yes_bid    = float(mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0.5)
+            api_side   = "ask"
+            # Sell YES: post ask slightly below current bid to ensure fill
+            limit_sell = max(0.03, yes_bid - SLACK)
     else:
-        sell_body["yes_price"] = limit_sell
-    code, resp = kalshi_post("/portfolio/orders", sell_body)
+        api_side = "ask" if side == "yes" else "bid"
+
+    log_fn(f"  [kalshi] SELL {contracts} {side.upper()} on {ticker} @ ${limit_sell:.2f}")
+    code, resp = kalshi_post("/portfolio/events/orders", {
+        "ticker":                    ticker,
+        "side":                      api_side,
+        "count":                     f"{contracts:.2f}",
+        "price":                     f"{limit_sell:.4f}",
+        "client_order_id":           f"exit-{condition_id[:8]}-{int(time.time())}",
+        "time_in_force":             "good_till_canceled",
+        "self_trade_prevention_type": "taker_at_cross",
+    })
 
     if code in (200, 201):
         log_fn(f"  [kalshi] sell order placed for {ticker}")
@@ -458,18 +462,21 @@ def check_stop_losses(kalshi_positions, log_fn=print):
     to_close = []
     for condition_id, pos in list(kalshi_positions.items()):
         ticker      = pos.get("ticker")
-        entry_cents = pos.get("entry_cents")
-        if not ticker or not entry_cents:
+        entry_price = pos.get("entry_price") or (pos.get("entry_cents", 0) / 100)
+        side        = pos.get("side", "yes")
+        if not ticker or not entry_price:
             continue
         code, data = kalshi_get(f"/markets/{ticker}")
         if code != 200:
             continue
         mkt = data.get("market", {})
-        bid_val   = mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0
-        bid_cents = int(float(bid_val) * 100)
-        stop_price = max(1, int(entry_cents * (1 - STOP_LOSS)))
-        if bid_cents <= stop_price:
-            log_fn(f"  [kalshi] STOP LOSS {ticker} — entry {entry_cents}c, now {bid_cents}c")
+        if side == "no":
+            bid_val = float(mkt.get("no_bid_dollars") or mkt.get("no_bid") or 0)
+        else:
+            bid_val = float(mkt.get("yes_bid_dollars") or mkt.get("yes_bid") or 0)
+        stop_price = entry_price * (1 - STOP_LOSS)
+        if bid_val <= stop_price:
+            log_fn(f"  [kalshi] STOP LOSS {ticker} — entry ${entry_price:.2f}, now ${bid_val:.2f}")
             to_close.append(condition_id)
     for cid in to_close:
         close_trade(cid, kalshi_positions, log_fn=log_fn)
@@ -500,7 +507,10 @@ def get_balance():
     _ensure_key()
     code, data = kalshi_get("/portfolio/balance")
     if code == 200:
-        return data.get("balance", {}).get("available_balance_cents", 0) / 100
+        bal = data.get("balance", 0)
+        if isinstance(bal, (int, float)):
+            return bal / 100
+        return float(data.get("balance_dollars", 0))
     return None
 
 
