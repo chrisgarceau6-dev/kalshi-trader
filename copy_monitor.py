@@ -384,7 +384,7 @@ def main():
     if a.daemon:
         log(f"=== COPY MONITOR DAEMON STARTED ===")
         log(f"Polling {len(WALLETS)} wallets every {a.interval}s")
-        log(f"Bet size per copy: ${BET_SIZE}")
+        log(f"Bet size per copy: up to ${MAX_BET}")
         log(f"Alerts logged to: {LOG}")
         while True:
             try: poll_once(state)
