@@ -39,7 +39,9 @@ WALLETS = {
     "sentrio":    "0xdb83e85ffd22faa4009273034770f96ffc5b1e50",  # $7,710/wk, 100% US
     "sunguyen86": "0x7d83c905cb7b0e790499392ce641bb867bd7be92",  # $6,231/wk, 100% US
 }
-BET_SIZE = 75              # dollars per copy trade
+COPY_RATIO = 1.0           # fraction of their dollar bet to copy (1.0 = match them $-for-$)
+MAX_BET = 75               # hard cap per trade
+MIN_BET = 5                # skip alert if copy bet would be below this
 POLL_INTERVAL = 300        # 5 min
 SIZE_CHANGE_THRESHOLD = 0.15  # alert when position size moves >=15%
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")  # set in GitHub Secrets
@@ -225,26 +227,31 @@ def poll_once(state):
         for k in new_keys:
             pos = current[k]
             entry = pos["avgPrice"]
-            your_shares = round(BET_SIZE / entry, 1) if entry > 0 else 0
+            their_dollars = round(pos["size"] * entry, 2)
+            your_bet = min(MAX_BET, round(their_dollars * COPY_RATIO, 2))
+            if your_bet < MIN_BET:
+                log(f"  skip tiny bet — {label}: ${their_dollars:.0f} position, copy would be ${your_bet:.0f}")
+                continue
+            your_shares = round(your_bet / entry, 1) if entry > 0 else 0
             slug = market_slug(pos["conditionId"])
             url = f"https://polymarket.com/event/{slug}" if slug else pos["conditionId"]
             alert = (f"\n{'='*70}\n"
                      f"🎯 NEW COPY TRADE — {label} ({wallet[:10]})\n"
                      f"Market: {pos['title']}\n"
                      f"Their side: {pos['outcome']} @ avg ${entry:.3f}\n"
-                     f"Their size: {pos['size']:.0f} shares (${pos['size']*entry:.0f})\n"
-                     f"YOUR COPY: Buy {your_shares} shares of {pos['outcome']} at ~${entry:.3f} (~${BET_SIZE})\n"
+                     f"Their size: {pos['size']:.0f} shares (${their_dollars:.0f})\n"
+                     f"YOUR COPY: Buy {your_shares} shares of {pos['outcome']} at ~${entry:.3f} (~${your_bet:.0f})\n"
                      f"URL: {url}\n"
                      f"{'='*70}")
             log(alert)
             notify(
                 title=f"NEW: {label} → {pos['outcome']} @ ${entry:.3f}",
-                body=f"Buy {your_shares} shares for ${BET_SIZE}\n{pos['title']}",
+                body=f"Buy {your_shares} shares for ${your_bet:.0f}\n{pos['title']}",
                 detail=(f"Market: {pos['title']}\n"
                         f"Wallet: {label} ({wallet})\n"
                         f"Their side: {pos['outcome']} @ ${entry:.3f}\n"
-                        f"Their size: {pos['size']:.0f} shares (~${pos['size']*entry:.0f})\n\n"
-                        f"YOUR COPY: Buy {your_shares} shares of {pos['outcome']} at ~${entry:.3f}\n"
+                        f"Their size: {pos['size']:.0f} shares (~${their_dollars:.0f})\n\n"
+                        f"YOUR COPY: Buy {your_shares} shares of {pos['outcome']} at ~${your_bet:.0f}\n"
                         f"URL: {url}")
             )
             new_alerts += 1
