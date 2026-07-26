@@ -24,6 +24,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 import requests
+from poly_us_classifier import is_accessible
 
 BASE = Path(__file__).parent
 STATE = BASE / "copy_state.json"
@@ -185,9 +186,20 @@ def poll_once(state):
         new_keys = set(current.keys()) - prev
         exited_keys = prev - set(current.keys())
 
+        # Filter to US-accessible markets only
+        def us_ok(key, data=current):
+            title = data.get(key, {}).get("title", "") or prev_data.get(key, {}).get("title", "")
+            accessible, confidence, _ = is_accessible(title)
+            return accessible is not False or confidence < 0.70
+
+        new_keys    = {k for k in new_keys    if us_ok(k)}
+        exited_keys = {k for k in exited_keys if us_ok(k)}
+
         # Detect size changes (adds or partial closes) on existing positions
         size_changes = []
         for k in set(current.keys()) & prev:
+            if not us_ok(k):
+                continue
             prev_size = prev_data.get(k, {}).get("size", 0)
             curr_size = current[k].get("size", 0)
             if prev_size > 0:
