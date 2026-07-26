@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - run: pip install requests
+      - run: pip install requests cryptography
 
       - name: Restore state
         uses: actions/cache/restore@v4
@@ -35,6 +35,9 @@ jobs:
           COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+          MAX_BET: "20"
         run: |
           if [ "${{ github.event.inputs.test_email }}" = "yes" ]; then
             python copy_monitor.py --test-email

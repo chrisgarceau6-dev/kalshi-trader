@@ -25,6 +25,12 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 import requests
 from poly_us_classifier import is_accessible
+try:
+    import kalshi_auto_trader as kalshi
+    KALSHI_ENABLED = bool(os.environ.get("KALSHI_API_KEY_ID"))
+except ImportError:
+    kalshi = None
+    KALSHI_ENABLED = False
 
 BASE = Path(__file__).parent
 STATE = BASE / "copy_state.json"
@@ -153,7 +159,7 @@ def load_state():
     if STATE.exists():
         try: return json.loads(STATE.read_text())
         except: pass
-    return {}
+    return {"kalshi_positions": {}}
 
 
 def save_state(s):
@@ -247,6 +253,14 @@ def poll_once(state):
                      f"URL: {url}\n"
                      f"{'='*70}")
             log(alert)
+            kalshi_note = ""
+            if KALSHI_ENABLED and kalshi:
+                kp = state.setdefault("kalshi_positions", {})
+                placed = kalshi.execute_trade(
+                    pos["title"], pos["outcome"], entry, their_dollars,
+                    pos["conditionId"], kp, log_fn=log,
+                )
+                kalshi_note = "\nKalshi: AUTO-TRADED" if placed else "\nKalshi: no matching market"
             notify(
                 title=f"NEW: {label} → {pos['outcome']} @ ${entry:.3f}",
                 body=f"Buy {your_shares} shares for ${your_bet:.0f}\n{pos['title']}",
@@ -255,19 +269,25 @@ def poll_once(state):
                         f"Their side: {pos['outcome']} @ ${entry:.3f}\n"
                         f"Their size: {pos['size']:.0f} shares (~${their_dollars:.0f})\n\n"
                         f"YOUR COPY: Buy {your_shares} shares of {pos['outcome']} at ~${your_bet:.0f}\n"
-                        f"URL: {url}")
+                        f"URL: {url}{kalshi_note}")
             )
             new_alerts += 1
 
         for k in exited_keys:
             prev_pos = prev_data.get(k, {})
-            log(f"  ⚡ EXIT — {label}: {prev_pos.get('title','?')[:60]} — you should CLOSE your copy")
+            log(f"  EXIT — {label}: {prev_pos.get('title','?')[:60]} — you should CLOSE your copy")
+            condition_id = prev_pos.get("conditionId", k.split(":")[0])
+            kalshi_note = ""
+            if KALSHI_ENABLED and kalshi:
+                kp = state.setdefault("kalshi_positions", {})
+                closed = kalshi.close_trade(condition_id, kp, log_fn=log)
+                kalshi_note = "\nKalshi: AUTO-CLOSED" if closed else ""
             notify(
                 title=f"EXIT: {label} → close copy",
                 body=f"{prev_pos.get('title','?')[:80]}",
                 detail=(f"Wallet {label} ({wallet}) closed their position.\n"
                         f"Market: {prev_pos.get('title','?')}\n"
-                        f"→ Sell your copy on Polymarket now.")
+                        f"→ Sell your copy on Polymarket now.{kalshi_note}")
             )
             new_alerts += 1
 
