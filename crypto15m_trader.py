@@ -145,11 +145,20 @@ def fetch_balance():
     """Return available balance in dollars, or None on failure."""
     code, resp = kalshi_get("/portfolio/balance")
     if code != 200:
+        log(f"  balance fetch HTTP {code}: {str(resp)[:120]}")
         return None
     try:
-        cents = resp.get("balance") or resp.get("available_balance_cents", 0)
-        return float(cents) / 100
-    except Exception:
+        # API returns balance in cents as integer, or as string dollars
+        raw = resp.get("balance") or resp.get("available_balance_cents", 0)
+        if raw:
+            return float(raw) / 100
+        # Fallback: balance_dollars field
+        dollars_str = resp.get("balance_dollars", "")
+        if dollars_str:
+            return float(dollars_str)
+        return None
+    except Exception as e:
+        log(f"  balance parse error: {e} — resp={str(resp)[:120]}")
         return None
 
 
