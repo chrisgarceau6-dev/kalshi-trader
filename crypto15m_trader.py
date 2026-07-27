@@ -368,6 +368,7 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     open_ticker = open_mkt.get("ticker", "")
     open_event  = open_mkt.get("event_ticker", "")
     open_time   = open_mkt.get("open_time", "")
+    close_time  = open_mkt.get("close_time", "")
 
     if series_state.get("last_bet_event") == open_event:
         log(f"    already traded {open_event} — skip")
@@ -379,6 +380,17 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     except Exception:
         log(f"    cannot parse open_time {open_time!r} — skipping")
         return
+
+    # Guard: skip if fewer than 4 minutes remain — cron delay arrived too late
+    try:
+        close_dt      = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
+        secs_left     = (close_dt - now_utc).total_seconds()
+        if secs_left < 240:
+            log(f"    only {secs_left:.0f}s left on market — arrived too late, skip")
+            return
+        log(f"    {secs_left:.0f}s left on market")
+    except Exception:
+        pass  # if we can't parse close_time, proceed anyway
 
     # 3. Evaluate signal
     signal, side = evaluate_signal(
