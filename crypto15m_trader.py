@@ -427,6 +427,21 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
 
     # 5. Place and record
     placed = place_bet(open_ticker, side, dollars)
+
+    # Signal email — always send so you can verify the trade hit Kalshi
+    subject = f"[Kalshi] {'✅ Trade placed' if placed else '❌ Order FAILED'} — {series} {signal} {side.upper()} ${dollars}"
+    body = (
+        f"Signal detected and order {'placed ✅' if placed else 'FAILED ❌'}.\n\n"
+        f"Series:   {series}\n"
+        f"Signal:   {signal}\n"
+        f"Side:     {side.upper()}\n"
+        f"Bet:      ${dollars}\n"
+        f"Market:   {open_ticker}\n"
+        f"Balance:  ${balance:.2f}\n\n"
+        f"{'Check your Kalshi account to confirm the open position.' if placed else 'Order was rejected — check GitHub Actions logs for details.'}\n"
+    )
+    send_email(subject, body)
+
     if placed:
         series_state["last_bet_event"]    = open_event
         series_state["last_bet_at"]       = now_utc.isoformat(timespec="seconds")
@@ -436,7 +451,7 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
         series_state["last_bet_ticker"]   = open_ticker
         series_state["last_bet_kelly"]    = f"{kelly:.1%}"
         series_state["last_bet_balance"]  = round(balance, 2)
-        series_state["last_bet_reported"] = False   # reset so outcome check runs for this new bet
+        series_state["last_bet_reported"] = False
         state["stats"]["bets"] += 1
         save_state(state)
 
