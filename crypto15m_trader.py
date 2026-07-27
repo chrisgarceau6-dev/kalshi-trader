@@ -56,7 +56,7 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 # Half-Kelly fractions per series (fraction of balance for a base M1 bet)
 KELLY_PCT = {
-    "KXETH15M": 0.033,   # ETH OOS WR=55.0%, half-Kelly=3.3%
+    "KXETH15M": 0.040,   # ETH OOS WR=55.0%, half-Kelly≈4.1% — raised from 3.3%
     "KXSOL15M": 0.018,   # SOL OOS WR=53.5%, half-Kelly=1.8%
     "KXBTC15M": 0.010,   # BTC uncertain — quarter-Kelly conservatively
 }
@@ -64,12 +64,13 @@ KELLY_PCT = {
 # Magnitude multipliers: how much bigger to bet when the drop is larger
 # Thresholds are fractions (0.005 = 0.5%)
 MAG_MULTIPLIERS = [
-    (0.010, 99.0, 1.0),   # DN >1.0%: no extra sizing (too few data points)
-    (0.005, 0.010, 1.4),  # DN 0.5–1.0%: historically ~59-60% WR on ETH
+    (0.010, 99.0, 1.4),   # DN >1.0%: ETH 53.9% z=3.4, SOL 55.8% z=8.1 — deserves bonus
+    (0.005, 0.010, 1.4),  # DN 0.5–1.0%: ETH 56.2% z=10.6, SOL 52.6% z=6.2
     (0.003, 0.005, 1.0),  # DN 0.3–0.5%: baseline
 ]
 
-M2_MULTIPLIER   = 1.6   # consecutive down moves: additional confidence
+M2_MULTIPLIER   = 1.6   # 2 consecutive DN: ETH 55.4%, SOL 55.8%
+M3_MULTIPLIER   = 2.2   # 3 consecutive DN: ETH 59.9% z=6.6, SOL 58.0% z=7.7
 HOUR_MULTIPLIER = 1.0   # H-signals: no magnitude info, use flat sizing
 
 MIN_BET = 10    # dollars — below this Kalshi orders are impractical
@@ -198,8 +199,10 @@ def size_bet(series, signal, prev_mag, prev2_mag, balance):
     kelly = KELLY_PCT.get(series, 0.02)
     base  = balance * kelly
 
-    if signal == "M2":
-        # Both drops contribute to magnitude; use the larger one
+    if signal == "M3":
+        mag_mult = _mag_multiplier(max(prev_mag, prev2_mag))
+        dollars  = base * M3_MULTIPLIER * mag_mult
+    elif signal == "M2":
         mag_mult = _mag_multiplier(max(prev_mag, prev2_mag))
         dollars  = base * M2_MULTIPLIER * mag_mult
     elif signal == "M1":
@@ -253,13 +256,19 @@ def fetch_open(series):
 
 # ── signal logic ──────────────────────────────────────────────────────────────
 
-def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag, apply_hour_signals=True):
+def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag, apply_hour_signals=True,
+                    prev3_yes=True, prev3_mag=0.0):
     """Return (signal_name, side) or (None, None). Sizing is done separately."""
-    # M2: consecutive big down moves → strong bounce
+    # M3: three consecutive big down moves → strongest bounce (ETH 59.9%, SOL 58.0%)
+    if (not prev_yes) and (not prev2_yes) and (not prev3_yes) \
+            and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT and prev3_mag > BIG_MOVE_PCT:
+        return "M3", "yes"
+
+    # M2: two consecutive big down moves → strong bounce (ETH 55.4%, SOL 55.8%)
     if (not prev_yes) and (not prev2_yes) and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT:
         return "M2", "yes"
 
-    # M1: single big down move → bounce
+    # M1: single big down move → bounce (ETH 54.1%, SOL 52.6%)
     if (not prev_yes) and prev_mag > BIG_MOVE_PCT:
         return "M1", "yes"
 
@@ -326,24 +335,29 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
 
     log(f"  [{series}]")
 
-    # 1. Pull last 2 settled periods
-    settled = fetch_settled(series, limit=5)
+    # 1. Pull last 3 settled periods (need prev3 for M3 signal)
+    settled = fetch_settled(series, limit=6)
     if len(settled) < 2:
         log(f"    only {len(settled)} settled — skipping")
         return
 
-    prev, prev2 = settled[0], settled[1]
-    prev_yes    = (prev.get("result") == "yes")
-    prev2_yes   = (prev2.get("result") == "yes")
-    prev_start  = float(prev["floor_strike"])
-    prev_end    = float(prev["expiration_value"])
-    prev2_start = float(prev2["floor_strike"])
-    prev2_end   = float(prev2["expiration_value"])
-    prev_mag    = abs(prev_end - prev_start)   / prev_start   if prev_start  > 0 else 0
-    prev2_mag   = abs(prev2_end - prev2_start) / prev2_start if prev2_start > 0 else 0
+    prev,  prev2  = settled[0], settled[1]
+    prev3         = settled[2] if len(settled) >= 3 else None
+
+    def mkt_stats(m):
+        yes  = m.get("result") == "yes"
+        s, e = float(m["floor_strike"]), float(m["expiration_value"])
+        mag  = abs(e - s) / s if s > 0 else 0
+        return yes, mag
+
+    prev_yes,  prev_mag  = mkt_stats(prev)
+    prev2_yes, prev2_mag = mkt_stats(prev2)
+    prev3_yes  = prev3.get("result") == "yes" if prev3 else True   # default UP (no M3)
+    prev3_mag  = mkt_stats(prev3)[1]            if prev3 else 0.0
 
     log(f"    prev  {'UP' if prev_yes else 'DN'}  {prev_mag:.3%}  "
-        f"prev2 {'UP' if prev2_yes else 'DN'}  {prev2_mag:.3%}")
+        f"prev2 {'UP' if prev2_yes else 'DN'}  {prev2_mag:.3%}  "
+        f"prev3 {'UP' if prev3_yes else 'DN'}  {prev3_mag:.3%}")
 
     # 2. Find open market
     open_mkt = fetch_open(series)
@@ -369,7 +383,8 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     # 3. Evaluate signal
     signal, side = evaluate_signal(
         hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag,
-        apply_hour_signals=apply_hour
+        apply_hour_signals=apply_hour,
+        prev3_yes=prev3_yes, prev3_mag=prev3_mag,
     )
 
     if not signal:
@@ -379,8 +394,8 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     # 4. Size the bet
     dollars = size_bet(series, signal, prev_mag, prev2_mag, balance)
     kelly   = KELLY_PCT.get(series, 0.02)
-    mag_m   = _mag_multiplier(max(prev_mag, prev2_mag) if signal == "M2" else prev_mag)
-    extra_m = M2_MULTIPLIER if signal == "M2" else HOUR_MULTIPLIER if signal.startswith("H") else 1.0
+    mag_m   = _mag_multiplier(max(prev_mag, prev2_mag) if signal in ("M2","M3") else prev_mag)
+    extra_m = M3_MULTIPLIER if signal == "M3" else M2_MULTIPLIER if signal == "M2" else HOUR_MULTIPLIER if signal.startswith("H") else 1.0
 
     log(f"    SIGNAL {signal} → BET {side.upper()} ${dollars}  "
         f"(balance=${balance:.0f} × {kelly:.1%} Kelly × {mag_m:.1f}mag × {extra_m:.1f}sig = ${balance*kelly*mag_m*extra_m:.0f}→capped ${dollars})")
