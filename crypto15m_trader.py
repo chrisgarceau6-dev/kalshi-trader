@@ -51,7 +51,7 @@ BEHAVIORAL_MULT = {
 }
 
 MIN_BET         = 10
-MAX_BET         = 500
+MAX_BET         = 30
 MAX_PRICE_CENTS = 56
 BIG_MOVE_PCT    = 0.003
 
@@ -65,7 +65,6 @@ SERIES_CONFIG = {
     "KXBNB15M":  {"apply_m": False, "apply_h": False, "apply_behavioral": True},
 }
 
-DAILY_LOSS_LIMIT = -100.0   # stop all trading if daily P&L drops below this
 M_COOLDOWN_SECS  = 1800     # 30 min between M-signal bets on the same series
 
 
@@ -516,13 +515,6 @@ def run_once(dry_run=False):
     log(f"  balance=${balance:.2f}")
 
     check_outcomes(state, balance)
-
-    # Daily circuit breaker
-    today = now_utc.date().isoformat()
-    daily = state.get("daily", {})
-    if daily.get("date") == today and daily.get("pnl", 0.0) < DAILY_LOSS_LIMIT:
-        log(f"  CIRCUIT BREAKER: daily P&L ${daily['pnl']:.2f} < ${DAILY_LOSS_LIMIT:.0f} — no new trades today")
-        return
 
     settled_cache = {}
     for series in SERIES_CONFIG:
