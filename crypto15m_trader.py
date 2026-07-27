@@ -1,44 +1,7 @@
 #!/usr/bin/env python3
-"""Multi-asset 15-min mean-reversion trader for Kalshi.
+"""Multi-asset 15-min Kalshi trader — M1/M2/M3 + behavioral signals.
 
-Trades KXBTC15M, KXETH15M, and KXSOL15M in parallel.
-
-Bet sizing: Kelly-based compounding + magnitude multipliers.
-  Base bet = KELLY_PCT × current_balance (fetched live from Kalshi API).
-  Magnitude multiplier scales the bet up when the setup is stronger
-  (larger drop = higher historical win rate = more confidence = bigger bet).
-
-  Kelly fractions (half-Kelly for safety):
-    ETH M1: OOS WR=55.0%, half-Kelly ≈ 3.3% of balance
-    SOL M1: OOS WR=53.5%, half-Kelly ≈ 1.8% of balance
-    BTC M1: uncertain — 1.0% of balance (quarter-Kelly, monitor live)
-
-  Magnitude multipliers (backtested win rates from 5yr KuCoin data):
-    DN 0.3–0.5%  → 1.0×  (ETH 55%, SOL 53%)
-    DN 0.5–1.0%  → 1.4×  (ETH 60%, SOL 56%)
-    DN >1.0%     → 1.0×  (few data points, no extra sizing)
-    Double DN    → 1.6×  (ETH 57%, SOL 59% — consecutive signal)
-
-  Hard caps:
-    MIN_BET = $10   (Kalshi minimum meaningful order)
-    MAX_BET = $500  (absolute ceiling per trade)
-
-Signal priority (first match per series per period):
-  M2: prev DN>0.3% AND prev2 DN>0.3%  → YES  ETH 57%, SOL 60%
-  M1: prev DN>0.3%                     → YES  ETH 55%, SOL 54%
-  H13: hour==13 AND prev UP            → NO   BTC 54% (OOS validated)
-  H00: hour==0  AND prev UP            → NO   BTC 58% (OOS validated)
-  H01: hour==1  AND prev UP AND prev2 UP → NO BTC 55% (OOS validated)
-
-H-signals applied only to KXBTC15M where 5yr OOS validation exists.
-
-Runs via GitHub Actions cron: */5 * * * *
-State persisted in crypto15m_state.json via Actions cache.
-
-usage:
-    python crypto15m_trader.py --once       # live trade (default)
-    python crypto15m_trader.py --dry-run    # detect signals, no orders
-    python crypto15m_trader.py --status     # print current state JSON
+usage: --once (live) | --dry-run (no orders) | --status (dump state)
 """
 
 import argparse, base64, json, os, smtplib
@@ -52,46 +15,56 @@ BASE       = Path(__file__).parent
 STATE_FILE = BASE / "crypto15m_state.json"
 LOG_FILE   = BASE / "crypto15m.log"
 
-# ── bet sizing constants ───────────────────────────────────────────────────────
+# ── constants ─────────────────────────────────────────────────────────────────
 
-# Half-Kelly fractions per series (fraction of balance for a base M1 bet)
 KELLY_PCT = {
-    "KXETH15M": 0.040,   # ETH OOS WR=55.0%, half-Kelly≈4.1% — raised from 3.3%
-    "KXSOL15M": 0.018,   # SOL OOS WR=53.5%, half-Kelly=1.8%
-    "KXBTC15M": 0.010,   # BTC uncertain — quarter-Kelly conservatively
+    "KXETH15M": 0.040,
+    "KXSOL15M": 0.018,
+    "KXBTC15M": 0.010,
 }
 
-# Magnitude multipliers: how much bigger to bet when the drop is larger
-# Thresholds are fractions (0.005 = 0.5%)
 MAG_MULTIPLIERS = [
-    (0.010, 99.0, 1.4),   # DN >1.0%: ETH 53.9% z=3.4, SOL 55.8% z=8.1 — deserves bonus
-    (0.005, 0.010, 1.4),  # DN 0.5–1.0%: ETH 56.2% z=10.6, SOL 52.6% z=6.2
-    (0.003, 0.005, 1.0),  # DN 0.3–0.5%: baseline
+    (0.010, 99.0, 1.4),
+    (0.005, 0.010, 1.4),
+    (0.003, 0.005, 1.0),
 ]
 
-M2_MULTIPLIER   = 1.6   # 2 consecutive DN: ETH 55.4%, SOL 55.8%
-M3_MULTIPLIER   = 2.2   # 3 consecutive DN: ETH 59.9% z=6.6, SOL 58.0% z=7.7
-HOUR_MULTIPLIER = 1.0   # H-signals: no magnitude info, use flat sizing
+M2_MULTIPLIER   = 1.6
+M3_MULTIPLIER   = 2.2
+HOUR_MULTIPLIER = 1.0
 
-MIN_BET = 10    # dollars — below this Kalshi orders are impractical
-MAX_BET = 500   # dollars — hard ceiling per trade regardless of balance
+# behavioral signal constants (69-day Kalshi validated, z>2.0 each)
 
-# ── series config ─────────────────────────────────────────────────────────────
-
-SERIES_CONFIG = {
-    # BTC: 5yr KuCoin shows 48.9% (uncertain) — run at quarter-Kelly, hour signals on
-    "KXBTC15M": {"apply_hour_signals": True},
-    # ETH: 5yr OOS WR=55.0% z=10.36 — half-Kelly
-    "KXETH15M": {"apply_hour_signals": False},
-    # SOL: 5yr OOS WR=53.5% z=8.95  — half-Kelly
-    "KXSOL15M": {"apply_hour_signals": False},
+BEHAVIORAL_KELLY = {
+    "KXETH15M":  0.025,
+    "KXSOL15M":  0.020,
+    "KXDOGE15M": 0.020,
+    "KXBNB15M":  0.018,
 }
 
-MAX_PRICE_CENTS = 56    # refuse if ask > 56¢
-BIG_MOVE_PCT    = 0.003  # 0.3% — confirmed threshold on 5yr data
+BEHAVIORAL_MULT = {
+    "HD23DN": 1.4, "HD04UP": 1.4, "HD19DN": 1.3,
+    "HD10DN": 1.2, "HD02UP": 1.3, "XDIV":   1.2,
+    "SAT_ETH": 1.1, "SAT_DOGE": 1.0,
+    "HB15": 1.0, "HB22": 1.0, "HB02": 1.0, "HB04": 1.0,
+    "STRK_ETH": 1.1, "STRK_DOGE": 1.1, "STRK_SOL": 1.2, "STRK_BNB": 1.0,
+}
+
+MIN_BET         = 10
+MAX_BET         = 500
+MAX_PRICE_CENTS = 56
+BIG_MOVE_PCT    = 0.003
+
+SERIES_CONFIG = {
+    "KXBTC15M":  {"apply_hour_signals": True,  "apply_behavioral": False},
+    "KXETH15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
+    "KXSOL15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
+    "KXDOGE15M": {"apply_hour_signals": False,  "apply_behavioral": True},
+    "KXBNB15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
+}
 
 
-# ── auth ──────────────────────────────────────────────────────────────────────
+# ── auth / state / logging / balance / email ──────────────────────────────────
 
 def _ensure_key():
     if os.environ.get("KALSHI_PRIVATE_KEY_PATH"):
@@ -100,8 +73,7 @@ def _ensure_key():
     if not raw:
         return
     p = Path("/tmp/kalshi_crypto15m_key.pem")
-    # Strip all whitespace, fix base64 padding, decode to get raw PEM bytes
-    b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
+    b64  = raw.replace("\n", "").replace("\r", "").replace(" ", "")
     b64 += "=" * (-len(b64) % 4)
     p.write_bytes(base64.b64decode(b64))
     p.chmod(0o600)
@@ -112,8 +84,6 @@ def kalshi_get(path, params=None):
     _ensure_key()
     return _get(path, params)
 
-
-# ── state / logging ───────────────────────────────────────────────────────────
 
 def load_state():
     if STATE_FILE.exists():
@@ -136,20 +106,15 @@ def log(msg):
     print(line, flush=True)
 
 
-# ── balance fetching ──────────────────────────────────────────────────────────
-
 def fetch_balance():
-    """Return available balance in dollars, or None on failure."""
     code, resp = kalshi_get("/portfolio/balance")
     if code != 200:
         log(f"  balance fetch HTTP {code}: {str(resp)[:120]}")
         return None
     try:
-        # API returns balance in cents as integer, or as string dollars
         raw = resp.get("balance") or resp.get("available_balance_cents", 0)
         if raw:
             return float(raw) / 100
-        # Fallback: balance_dollars field
         dollars_str = resp.get("balance_dollars", "")
         if dollars_str:
             return float(dollars_str)
@@ -159,8 +124,6 @@ def fetch_balance():
         return None
 
 
-# ── email notifications ───────────────────────────────────────────────────────
-
 def send_email(subject, body):
     to_addr   = os.environ.get("COPY_EMAIL_TO", "")
     from_addr = os.environ.get("COPY_EMAIL_FROM", "")
@@ -168,7 +131,7 @@ def send_email(subject, body):
     if not (to_addr and from_addr and password):
         return
     try:
-        msg = MIMEText(body, "plain")
+        msg            = MIMEText(body, "plain")
         msg["From"]    = from_addr
         msg["To"]      = to_addr
         msg["Subject"] = subject
@@ -181,47 +144,35 @@ def send_email(subject, body):
         log(f"  email failed: {e}")
 
 
-# ── bet sizing ────────────────────────────────────────────────────────────────
+# ── sizing / markets / signals / orders ───────────────────────────────────────
 
-def _mag_multiplier(mag):
-    """Return the magnitude multiplier for a given move size."""
-    for lo, hi, mult in MAG_MULTIPLIERS:
+def _mag_mult(mag):
+    for lo, hi, m in MAG_MULTIPLIERS:
         if lo <= mag < hi:
-            return mult
+            return m
     return 1.0
 
 
 def size_bet(series, signal, prev_mag, prev2_mag, balance):
-    """
-    Compute dollar bet size using Kelly fraction × balance × magnitude multiplier.
-    Returns an integer dollar amount between MIN_BET and MAX_BET.
-    """
-    kelly = KELLY_PCT.get(series, 0.02)
-    base  = balance * kelly
-
-    if signal == "M3":
-        mag_mult = _mag_multiplier(max(prev_mag, prev2_mag))
-        dollars  = base * M3_MULTIPLIER * mag_mult
-    elif signal == "M2":
-        mag_mult = _mag_multiplier(max(prev_mag, prev2_mag))
-        dollars  = base * M2_MULTIPLIER * mag_mult
-    elif signal == "M1":
-        dollars  = base * _mag_multiplier(prev_mag)
+    if signal[0] in ("M", "H"):
+        kelly = KELLY_PCT.get(series, 0.02)
+        if signal == "M3":
+            dollars = balance * kelly * M3_MULTIPLIER * _mag_mult(max(prev_mag, prev2_mag))
+        elif signal == "M2":
+            dollars = balance * kelly * M2_MULTIPLIER * _mag_mult(max(prev_mag, prev2_mag))
+        elif signal == "M1":
+            dollars = balance * kelly * _mag_mult(prev_mag)
+        else:
+            dollars = balance * kelly * HOUR_MULTIPLIER
     else:
-        # Hour signals (H00, H01, H13) — no magnitude info
-        dollars  = base * HOUR_MULTIPLIER
+        kelly   = BEHAVIORAL_KELLY.get(series, 0.015)
+        dollars = balance * kelly * BEHAVIORAL_MULT.get(signal, 1.0)
 
-    dollars = max(MIN_BET, min(MAX_BET, dollars))
-    return int(dollars)
-
-
-# ── market fetching ───────────────────────────────────────────────────────────
+    return max(MIN_BET, min(MAX_BET, int(dollars)))
 
 def _markets_direct(series, status, limit):
     code, data = kalshi_get("/markets", {"series_ticker": series, "status": status, "limit": limit})
-    if code == 200:
-        return data.get("markets", [])
-    return []
+    return data.get("markets", []) if code == 200 else []
 
 
 def _markets_via_events(series, status, limit):
@@ -230,22 +181,17 @@ def _markets_via_events(series, status, limit):
         return []
     markets = []
     for ev in data.get("events", []):
-        code2, mdata = kalshi_get("/markets", {
-            "event_ticker": ev.get("event_ticker", ""), "limit": 5
-        })
+        code2, mdata = kalshi_get("/markets", {"event_ticker": ev.get("event_ticker", ""), "limit": 5})
         if code2 == 200:
             markets.extend(mdata.get("markets", []))
     return markets
 
 
-def fetch_settled(series, limit=5):
+def fetch_settled(series, limit=6):
     mktlist = _markets_direct(series, "settled", limit) or _markets_via_events(series, "settled", limit)
-    mktlist = [
-        m for m in mktlist
-        if m.get("result") in ("yes", "no")
-        and m.get("floor_strike")
-        and m.get("expiration_value")
-    ]
+    mktlist = [m for m in mktlist
+               if m.get("result") in ("yes", "no")
+               and m.get("floor_strike") and m.get("expiration_value")]
     return sorted(mktlist, key=lambda m: m.get("close_time", ""), reverse=True)
 
 
@@ -253,39 +199,65 @@ def fetch_open(series):
     mktlist = _markets_direct(series, "open", 3) or _markets_via_events(series, "open", 1)
     return mktlist[0] if mktlist else None
 
-
-# ── signal logic ──────────────────────────────────────────────────────────────
-
-def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag, apply_hour_signals=True,
-                    prev3_yes=True, prev3_mag=0.0):
-    """Return (signal_name, side) or (None, None). Sizing is done separately."""
-    # M3: three consecutive big down moves → strongest bounce (ETH 59.9%, SOL 58.0%)
+def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag,
+                    apply_hour_signals=True, prev3_yes=True, prev3_mag=0.0):
     if (not prev_yes) and (not prev2_yes) and (not prev3_yes) \
             and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT and prev3_mag > BIG_MOVE_PCT:
         return "M3", "yes"
-
-    # M2: two consecutive big down moves → strong bounce (ETH 55.4%, SOL 55.8%)
     if (not prev_yes) and (not prev2_yes) and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT:
         return "M2", "yes"
-
-    # M1: single big down move → bounce (ETH 54.1%, SOL 52.6%)
     if (not prev_yes) and prev_mag > BIG_MOVE_PCT:
         return "M1", "yes"
-
     if not apply_hour_signals:
         return None, None
+    if hour_utc == 13 and prev_yes:                return "H13", "no"
+    if hour_utc == 0  and prev_yes:                return "H00", "no"
+    if hour_utc == 1  and prev_yes and prev2_yes:  return "H01", "no"
+    return None, None
 
-    # H13: 1PM UTC up move reverts (BTC only, 5yr OOS validated)
-    if hour_utc == 13 and prev_yes:
-        return "H13", "no"
 
-    # H00: midnight UTC up move reverts (BTC only)
-    if hour_utc == 0 and prev_yes:
-        return "H00", "no"
+def _res_yes(m):
+    return m.get("result") == "yes"
 
-    # H01: two consecutive up moves at 1AM UTC revert (BTC only)
-    if hour_utc == 1 and prev_yes and prev2_yes:
-        return "H01", "no"
+
+def evaluate_behavioral(series, hour_utc, weekday, settled, cross_settled):
+    if len(settled) < 2:
+        return None, None
+
+    prev_yes  = _res_yes(settled[0])
+    prev2_yes = _res_yes(settled[1])
+    is_sat    = (weekday == 5)
+
+    # Cross-asset divergence: ETH↓ SOL↑ → SOL NO (z=+4.17, 58.5%)
+    if series == "KXSOL15M":
+        eth = cross_settled.get("KXETH15M", [])
+        if eth and not _res_yes(eth[0]) and prev_yes:
+            return "XDIV", "no"
+
+    # Saturday patterns
+    if series == "KXETH15M"  and is_sat and not prev_yes: return "SAT_ETH",  "yes"
+    if series == "KXDOGE15M" and is_sat and prev_yes:     return "SAT_DOGE", "no"
+
+    # Hour × direction (highest-confidence conditional signals)
+    if series in ("KXETH15M", "KXBNB15M") and hour_utc == 19 and not prev_yes: return "HD19DN", "yes"
+    if series == "KXETH15M"                and hour_utc == 2  and prev_yes:     return "HD02UP", "no"
+    if series in ("KXSOL15M", "KXDOGE15M") and hour_utc == 23 and not prev_yes: return "HD23DN", "yes"
+    if series == "KXDOGE15M"               and hour_utc == 4  and prev_yes:     return "HD04UP", "no"
+    if series == "KXDOGE15M"               and hour_utc == 10 and not prev_yes: return "HD10DN", "yes"
+
+    # Hour bias (unconditional)
+    if series == "KXETH15M"                 and hour_utc == 15: return "HB15", "yes"
+    if series in ("KXETH15M", "KXDOGE15M")  and hour_utc == 22: return "HB22", "no"
+    if series == "KXSOL15M"                 and hour_utc == 2:  return "HB02", "no"
+    if series == "KXBNB15M"                 and hour_utc == 4:  return "HB04", "no"
+
+    # Streak fade (2+×UP → NO, 4+×DN → YES for SOL)
+    if series == "KXETH15M"  and prev_yes and prev2_yes: return "STRK_ETH",  "no"
+    if series == "KXDOGE15M" and prev_yes and prev2_yes: return "STRK_DOGE", "no"
+    if series == "KXBNB15M"  and prev_yes and prev2_yes: return "STRK_BNB",  "no"
+    if series == "KXSOL15M"  and len(settled) >= 4:
+        if all(not _res_yes(settled[i]) for i in range(4)):
+            return "STRK_SOL", "yes"
 
     return None, None
 
@@ -293,7 +265,6 @@ def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag, apply_ho
 # ── order placement ───────────────────────────────────────────────────────────
 
 def place_bet(ticker, side, dollars):
-    """Fetch live ask, place a crossing limit order. Returns True on acceptance."""
     code, resp = kalshi_get(f"/markets/{ticker}")
     if code != 200:
         log(f"  cannot fetch market {ticker} (HTTP {code})")
@@ -308,7 +279,6 @@ def place_bet(ticker, side, dollars):
         return False
 
     ask_cents = int(round(float(raw_ask) * 100))
-
     if ask_cents > MAX_PRICE_CENTS:
         log(f"  skip — {side} ask is {ask_cents}¢ > max {MAX_PRICE_CENTS}¢")
         return False
@@ -316,7 +286,6 @@ def place_bet(ticker, side, dollars):
     limit_cents = min(MAX_PRICE_CENTS, ask_cents + 1)
     count       = max(1, int(dollars * 100 / limit_cents))
     est_cost    = round(count * limit_cents / 100, 2)
-
     log(f"  → {count} {side.upper()} @ {limit_cents}¢ on {ticker}  (est. ${est_cost:.2f})")
 
     code, order_resp = place_order(
@@ -331,40 +300,35 @@ def place_bet(ticker, side, dollars):
     log(f"  order FAILED — HTTP {code}: {order_resp}")
     return False
 
-
-# ── per-series poll ───────────────────────────────────────────────────────────
-
-def poll_series(series, config, state, now_utc, dry_run, balance):
-    apply_hour   = config.get("apply_hour_signals", False)
+def poll_series(series, config, state, now_utc, dry_run, balance, cross_settled, settled_cache):
+    apply_hour = config.get("apply_hour_signals", False)
+    apply_beh  = config.get("apply_behavioral",   False)
     series_state = state.setdefault("series", {}).setdefault(series, {"last_bet_event": ""})
 
     log(f"  [{series}]")
 
-    # 1. Pull last 3 settled periods (need prev3 for M3 signal)
-    settled = fetch_settled(series, limit=6)
+    settled = settled_cache.get(series) or fetch_settled(series, limit=6)
     if len(settled) < 2:
         log(f"    only {len(settled)} settled — skipping")
         return
 
-    prev,  prev2  = settled[0], settled[1]
-    prev3         = settled[2] if len(settled) >= 3 else None
+    prev,  prev2 = settled[0], settled[1]
+    prev3        = settled[2] if len(settled) >= 3 else None
 
     def mkt_stats(m):
-        yes  = m.get("result") == "yes"
+        yes = m.get("result") == "yes"
         s, e = float(m["floor_strike"]), float(m["expiration_value"])
-        mag  = abs(e - s) / s if s > 0 else 0
-        return yes, mag
+        return yes, (abs(e - s) / s if s > 0 else 0)
 
     prev_yes,  prev_mag  = mkt_stats(prev)
     prev2_yes, prev2_mag = mkt_stats(prev2)
-    prev3_yes  = prev3.get("result") == "yes" if prev3 else True   # default UP (no M3)
-    prev3_mag  = mkt_stats(prev3)[1]            if prev3 else 0.0
+    prev3_yes  = prev3.get("result") == "yes" if prev3 else True
+    prev3_mag  = mkt_stats(prev3)[1]           if prev3 else 0.0
 
     log(f"    prev  {'UP' if prev_yes else 'DN'}  {prev_mag:.3%}  "
         f"prev2 {'UP' if prev2_yes else 'DN'}  {prev2_mag:.3%}  "
         f"prev3 {'UP' if prev3_yes else 'DN'}  {prev3_mag:.3%}")
 
-    # 2. Find open market
     open_mkt = fetch_open(series)
     if not open_mkt:
         log(f"    no open market — skipping")
@@ -382,40 +346,38 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     try:
         open_dt  = datetime.fromisoformat(open_time.replace("Z", "+00:00"))
         hour_utc = open_dt.hour
+        weekday  = open_dt.weekday()
     except Exception:
         log(f"    cannot parse open_time {open_time!r} — skipping")
         return
 
-    # Guard: skip if fewer than 4 minutes remain — cron delay arrived too late
     try:
-        close_dt      = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
-        secs_left     = (close_dt - now_utc).total_seconds()
+        close_dt  = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
+        secs_left = (close_dt - now_utc).total_seconds()
         if secs_left < 240:
-            log(f"    only {secs_left:.0f}s left on market — arrived too late, skip")
+            log(f"    only {secs_left:.0f}s left — skip")
             return
-        log(f"    {secs_left:.0f}s left on market")
+        log(f"    {secs_left:.0f}s left")
     except Exception:
-        pass  # if we can't parse close_time, proceed anyway
+        pass
 
-    # 3. Evaluate signal
+    # M-signals take priority (5yr OOS validated)
     signal, side = evaluate_signal(
         hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag,
         apply_hour_signals=apply_hour,
         prev3_yes=prev3_yes, prev3_mag=prev3_mag,
     )
 
+    # Fallback to behavioral signals
+    if not signal and apply_beh:
+        signal, side = evaluate_behavioral(series, hour_utc, weekday, settled, cross_settled)
+
     if not signal:
-        log(f"    no signal (hour={hour_utc} prev={'UP' if prev_yes else 'DN'} {prev_mag:.3%})")
+        log(f"    no signal (h={hour_utc} prev={'UP' if prev_yes else 'DN'} {prev_mag:.3%})")
         return
 
-    # 4. Size the bet
     dollars = size_bet(series, signal, prev_mag, prev2_mag, balance)
-    kelly   = KELLY_PCT.get(series, 0.02)
-    mag_m   = _mag_multiplier(max(prev_mag, prev2_mag) if signal in ("M2","M3") else prev_mag)
-    extra_m = M3_MULTIPLIER if signal == "M3" else M2_MULTIPLIER if signal == "M2" else HOUR_MULTIPLIER if signal.startswith("H") else 1.0
-
-    log(f"    SIGNAL {signal} → BET {side.upper()} ${dollars}  "
-        f"(balance=${balance:.0f} × {kelly:.1%} Kelly × {mag_m:.1f}mag × {extra_m:.1f}sig = ${balance*kelly*mag_m*extra_m:.0f}→capped ${dollars})")
+    log(f"    SIGNAL {signal} → BET {side.upper()} ${dollars}  (balance=${balance:.0f})")
 
     if dry_run:
         log(f"    [dry-run] order skipped")
@@ -425,10 +387,8 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
         log(f"    KALSHI_API_KEY_ID not set — cannot trade")
         return
 
-    # 5. Place and record
     placed = place_bet(open_ticker, side, dollars)
 
-    # Signal email — always send so you can verify the trade hit Kalshi
     subject = f"[Kalshi] {'✅ Trade placed' if placed else '❌ Order FAILED'} — {series} {signal} {side.upper()} ${dollars}"
     body = (
         f"Signal detected and order {'placed ✅' if placed else 'FAILED ❌'}.\n\n"
@@ -438,7 +398,7 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
         f"Bet:      ${dollars}\n"
         f"Market:   {open_ticker}\n"
         f"Balance:  ${balance:.2f}\n\n"
-        f"{'Check your Kalshi account to confirm the open position.' if placed else 'Order was rejected — check GitHub Actions logs for details.'}\n"
+        f"{'Check your Kalshi account to confirm the open position.' if placed else 'Order rejected — check GitHub Actions logs for details.'}\n"
     )
     send_email(subject, body)
 
@@ -449,19 +409,14 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
         series_state["last_bet_side"]     = side
         series_state["last_bet_dollars"]  = dollars
         series_state["last_bet_ticker"]   = open_ticker
-        series_state["last_bet_kelly"]    = f"{kelly:.1%}"
         series_state["last_bet_balance"]  = round(balance, 2)
         series_state["last_bet_reported"] = False
         state["stats"]["bets"] += 1
         save_state(state)
 
 
-# ── outcome tracking ─────────────────────────────────────────────────────────
-
 def check_outcomes(state, balance):
-    """Check if any previously placed bets have settled, email on wins."""
-    series_state = state.get("series", {})
-    for series, ss in series_state.items():
+    for series, ss in state.get("series", {}).items():
         ticker   = ss.get("last_bet_ticker", "")
         side     = ss.get("last_bet_side", "")
         dollars  = ss.get("last_bet_dollars", 0)
@@ -471,7 +426,6 @@ def check_outcomes(state, balance):
         if not ticker or reported:
             continue
 
-        # Fetch that specific market to see if it settled
         code, resp = kalshi_get(f"/markets/{ticker}")
         if code != 200:
             continue
@@ -480,20 +434,19 @@ def check_outcomes(state, balance):
         result = mkt.get("result", "")
 
         if status not in ("settled", "finalized") or result not in ("yes", "no"):
-            continue  # still open
+            continue
 
         won = (result == side)
         ss["last_bet_reported"] = True
         save_state(state)
 
-        outcome_str = "WIN ✓" if won else "loss ✗"
-        fee   = dollars * 0.07 * 0.50
-        pnl   = round(dollars - fee, 2) if won else -dollars
-        log(f"  [{series}] {ticker} settled {result.upper()} → {outcome_str}  pnl=${pnl:+.2f}")
+        fee = dollars * 0.07 * 0.50
+        pnl = round(dollars - fee, 2) if won else -dollars
+        log(f"  [{series}] {ticker} settled {result.upper()} → {'WIN ✓' if won else 'loss ✗'}  pnl=${pnl:+.2f}")
 
         if won:
             subject = f"[Kalshi] WIN +${pnl:.2f} — {series} {signal}"
-            body = (
+            body    = (
                 f"Trade settled as a WIN.\n\n"
                 f"Series:   {series}\n"
                 f"Signal:   {signal}\n"
@@ -506,40 +459,39 @@ def check_outcomes(state, balance):
             send_email(subject, body)
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
-
 def run_once(dry_run=False):
     state   = load_state()
     now_utc = datetime.now(timezone.utc)
     log(f"=== CRYPTO15M @ {now_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC ===")
 
-    # Fetch balance once and share across all series
     balance = fetch_balance()
     if balance is None:
         log("  WARNING: could not fetch balance — using fallback $500")
         balance = 500.0
-    log(f"  balance=${balance:.2f}  (bets will scale with this)")
+    log(f"  balance=${balance:.2f}")
 
-    # Check if any previous bets have settled; email on wins
     check_outcomes(state, balance)
 
+    settled_cache = {}
+    for series in SERIES_CONFIG:
+        settled_cache[series] = fetch_settled(series, limit=6)
+
     for series, config in SERIES_CONFIG.items():
-        poll_series(series, config, state, now_utc, dry_run, balance)
+        poll_series(series, config, state, now_utc, dry_run, balance,
+                    cross_settled=settled_cache, settled_cache=settled_cache)
 
     log("=== done ===")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Multi-asset 15-min mean-reversion trader")
-    ap.add_argument("--once",    action="store_true", help="run one poll (default)")
-    ap.add_argument("--dry-run", action="store_true", help="detect signals, no orders")
-    ap.add_argument("--status",  action="store_true", help="print state JSON and exit")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--once",    action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--status",  action="store_true")
     a = ap.parse_args()
-
     if a.status:
         print(json.dumps(load_state(), indent=2))
         return
-
     run_once(dry_run=a.dry_run)
 
 

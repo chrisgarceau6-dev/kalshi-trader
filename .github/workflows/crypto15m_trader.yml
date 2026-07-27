@@ -1,4 +1,4 @@
-name: Crypto 15-Min Trader (BTC+ETH+SOL)
+name: Crypto 15-Min Trader (BTC+ETH+SOL+DOGE+BNB)
 
 on:
   schedule:
