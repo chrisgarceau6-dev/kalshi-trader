@@ -41,8 +41,9 @@ usage:
     python crypto15m_trader.py --status     # print current state JSON
 """
 
-import argparse, base64, json, os
+import argparse, base64, json, os, smtplib
 from datetime import datetime, timezone
+from email.mime.text import MIMEText
 from pathlib import Path
 
 from kalshi_auth import get as _get, place_order
@@ -142,6 +143,28 @@ def fetch_balance():
         return float(cents) / 100
     except Exception:
         return None
+
+
+# ── email notifications ───────────────────────────────────────────────────────
+
+def send_email(subject, body):
+    to_addr   = os.environ.get("COPY_EMAIL_TO", "")
+    from_addr = os.environ.get("COPY_EMAIL_FROM", "")
+    password  = os.environ.get("COPY_EMAIL_PASSWORD", "")
+    if not (to_addr and from_addr and password):
+        return
+    try:
+        msg = MIMEText(body, "plain")
+        msg["From"]    = from_addr
+        msg["To"]      = to_addr
+        msg["Subject"] = subject
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            s.login(from_addr, password)
+            s.send_message(msg)
+        log(f"  email sent: {subject}")
+    except Exception as e:
+        log(f"  email failed: {e}")
 
 
 # ── bet sizing ────────────────────────────────────────────────────────────────
@@ -372,6 +395,56 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
         save_state(state)
 
 
+# ── outcome tracking ─────────────────────────────────────────────────────────
+
+def check_outcomes(state, balance):
+    """Check if any previously placed bets have settled, email on wins."""
+    series_state = state.get("series", {})
+    for series, ss in series_state.items():
+        ticker   = ss.get("last_bet_ticker", "")
+        side     = ss.get("last_bet_side", "")
+        dollars  = ss.get("last_bet_dollars", 0)
+        signal   = ss.get("last_bet_signal", "")
+        reported = ss.get("last_bet_reported", False)
+
+        if not ticker or reported:
+            continue
+
+        # Fetch that specific market to see if it settled
+        code, resp = kalshi_get(f"/markets/{ticker}")
+        if code != 200:
+            continue
+        mkt    = resp.get("market", resp)
+        status = mkt.get("status", "")
+        result = mkt.get("result", "")
+
+        if status not in ("settled", "finalized") or result not in ("yes", "no"):
+            continue  # still open
+
+        won = (result == side)
+        ss["last_bet_reported"] = True
+        save_state(state)
+
+        outcome_str = "WIN ✓" if won else "loss ✗"
+        fee   = dollars * 0.07 * 0.50
+        pnl   = round(dollars - fee, 2) if won else -dollars
+        log(f"  [{series}] {ticker} settled {result.upper()} → {outcome_str}  pnl=${pnl:+.2f}")
+
+        if won:
+            subject = f"[Kalshi] WIN +${pnl:.2f} — {series} {signal}"
+            body = (
+                f"Trade settled as a WIN.\n\n"
+                f"Series:   {series}\n"
+                f"Signal:   {signal}\n"
+                f"Bet:      {side.upper()} ${dollars}\n"
+                f"Result:   {result.upper()} → WIN\n"
+                f"Profit:   +${pnl:.2f} (after fee)\n"
+                f"Market:   {ticker}\n\n"
+                f"Account balance: ${balance:.2f}\n"
+            )
+            send_email(subject, body)
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def run_once(dry_run=False):
@@ -385,6 +458,9 @@ def run_once(dry_run=False):
         log("  WARNING: could not fetch balance — using fallback $500")
         balance = 500.0
     log(f"  balance=${balance:.2f}  (bets will scale with this)")
+
+    # Check if any previous bets have settled; email on wins
+    check_outcomes(state, balance)
 
     for series, config in SERIES_CONFIG.items():
         poll_series(series, config, state, now_utc, dry_run, balance)
