@@ -265,10 +265,11 @@ def evaluate_behavioral(series, hour_utc, weekday, settled, cross_settled):
 # ── order placement ───────────────────────────────────────────────────────────
 
 def place_bet(ticker, side, dollars):
+    """Return True=placed, False=API rejection, None=skipped (price/liquidity)."""
     code, resp = kalshi_get(f"/markets/{ticker}")
     if code != 200:
         log(f"  cannot fetch market {ticker} (HTTP {code})")
-        return False
+        return None
 
     market    = resp.get("market", resp)
     ask_field = "yes_ask_dollars" if side == "yes" else "no_ask_dollars"
@@ -276,12 +277,12 @@ def place_bet(ticker, side, dollars):
 
     if raw_ask is None:
         log(f"  skip — no {side} ask (no liquidity)")
-        return False
+        return None
 
     ask_cents = int(round(float(raw_ask) * 100))
     if ask_cents > MAX_PRICE_CENTS:
         log(f"  skip — {side} ask is {ask_cents}¢ > max {MAX_PRICE_CENTS}¢")
-        return False
+        return None
 
     limit_cents = min(MAX_PRICE_CENTS, ask_cents + 1)
     count       = max(1, int(dollars * 100 / limit_cents))
@@ -389,20 +390,35 @@ def poll_series(series, config, state, now_utc, dry_run, balance, cross_settled,
 
     placed = place_bet(open_ticker, side, dollars)
 
-    subject = f"[Kalshi] {'✅ Trade placed' if placed else '❌ Order FAILED'} — {series} {signal} {side.upper()} ${dollars}"
-    body = (
-        f"Signal detected and order {'placed ✅' if placed else 'FAILED ❌'}.\n\n"
-        f"Series:   {series}\n"
-        f"Signal:   {signal}\n"
-        f"Side:     {side.upper()}\n"
-        f"Bet:      ${dollars}\n"
-        f"Market:   {open_ticker}\n"
-        f"Balance:  ${balance:.2f}\n\n"
-        f"{'Check your Kalshi account to confirm the open position.' if placed else 'Order rejected — check GitHub Actions logs for details.'}\n"
-    )
-    send_email(subject, body)
+    if placed is True:
+        subject = f"[Kalshi] ✅ Trade placed — {series} {signal} {side.upper()} ${dollars}"
+        body = (
+            f"Signal detected and order placed ✅.\n\n"
+            f"Series:   {series}\n"
+            f"Signal:   {signal}\n"
+            f"Side:     {side.upper()}\n"
+            f"Bet:      ${dollars}\n"
+            f"Market:   {open_ticker}\n"
+            f"Balance:  ${balance:.2f}\n\n"
+            f"Check your Kalshi account to confirm the open position.\n"
+        )
+        send_email(subject, body)
+    elif placed is False:
+        subject = f"[Kalshi] ❌ Order FAILED — {series} {signal} {side.upper()} ${dollars}"
+        body = (
+            f"Signal detected but order FAILED ❌.\n\n"
+            f"Series:   {series}\n"
+            f"Signal:   {signal}\n"
+            f"Side:     {side.upper()}\n"
+            f"Bet:      ${dollars}\n"
+            f"Market:   {open_ticker}\n"
+            f"Balance:  ${balance:.2f}\n\n"
+            f"Order rejected — check GitHub Actions logs for details.\n"
+        )
+        send_email(subject, body)
+    # placed is None = silent skip (price too high, no liquidity) — no email
 
-    if placed:
+    if placed is True:
         series_state["last_bet_event"]    = open_event
         series_state["last_bet_at"]       = now_utc.isoformat(timespec="seconds")
         series_state["last_bet_signal"]   = signal
