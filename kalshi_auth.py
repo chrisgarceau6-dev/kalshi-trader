@@ -92,30 +92,34 @@ def get_balance():
 
 def place_order(ticker, side, count, yes_price_cents=None, no_price_cents=None,
                 order_type="limit", action="buy", time_in_force="GTC"):
-    """Place an order on Kalshi.
-    - ticker: e.g., 'KXMLBGAME-26JUL251910HOUCWS-HOU'
-    - side: 'yes' or 'no' (which token to trade)
+    """Place an order on Kalshi using the V2 endpoint.
+    - ticker: market ticker, e.g. 'KXETH15M-26JUL271100-T3491.25'
+    - side: 'yes' or 'no' (which token to buy)
     - count: number of contracts
-    - yes_price_cents: 1-99 (limit price in cents, required if type=limit and side=yes)
-    - no_price_cents: 1-99 (required if type=limit and side=no)
-    - order_type: 'limit' or 'market'
-    - action: 'buy' or 'sell'
+    - yes_price_cents: 1-99 limit price in cents when side=yes
+    - no_price_cents: 1-99 limit price in cents when side=no
     """
+    # V2 always quotes from the YES side: bid=buy YES, ask=sell YES (= buy NO)
+    v2_side = "bid" if side == "yes" else "ask"
+
+    if side == "yes" and yes_price_cents is not None:
+        price_str = f"{int(yes_price_cents) / 100:.4f}"
+    elif side == "no" and no_price_cents is not None:
+        # buying NO at X¢ = selling YES at (100−X)¢
+        price_str = f"{(100 - int(no_price_cents)) / 100:.4f}"
+    else:
+        price_str = "0.5000"
+
     body = {
-        "ticker":         ticker,
-        "type":           order_type,
-        "action":         action,
-        "side":           side,
-        "count":          int(count),
-        "client_order_id": f"arb-{int(time.time()*1000)}",
-        "time_in_force":  time_in_force,
+        "ticker":                    ticker,
+        "side":                      v2_side,
+        "count":                     str(int(count)),
+        "price":                     price_str,
+        "time_in_force":             "good_till_canceled",
+        "self_trade_prevention_type": "taker_at_cross",
+        "client_order_id":           f"arb-{int(time.time()*1000)}",
     }
-    if order_type == "limit":
-        if side == "yes" and yes_price_cents is not None:
-            body["yes_price"] = int(yes_price_cents)
-        elif side == "no" and no_price_cents is not None:
-            body["no_price"] = int(no_price_cents)
-    return post("/portfolio/orders", body)
+    return post("/portfolio/events/orders", body)
 
 
 # ---------------------------------------------------------------- CLI
@@ -151,13 +155,13 @@ def cmd_test(a):
 
 
 def cmd_place(a):
-    print(f"Placing: {a.ticker} {a.action} {a.count} {a.side} @ {a.yes_price}c")
+    price = a.yes_price if a.side == "yes" else a.no_price
+    print(f"Placing: {a.ticker} buy {a.side} x{a.count} @ {price}¢")
     if a.dry_run:
         print("[dry-run] not submitting")
         return
     code, j = place_order(a.ticker, a.side, a.count,
-                          yes_price_cents=a.yes_price, no_price_cents=a.no_price,
-                          action=a.action)
+                          yes_price_cents=a.yes_price, no_price_cents=a.no_price)
     print(f"HTTP {code}")
     print(json.dumps(j, indent=2))
 
