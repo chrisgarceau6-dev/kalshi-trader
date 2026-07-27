@@ -56,12 +56,17 @@ MAX_PRICE_CENTS = 56
 BIG_MOVE_PCT    = 0.003
 
 SERIES_CONFIG = {
-    "KXBTC15M":  {"apply_hour_signals": True,  "apply_behavioral": False},
-    "KXETH15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
-    "KXSOL15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
-    "KXDOGE15M": {"apply_hour_signals": False,  "apply_behavioral": True},
-    "KXBNB15M":  {"apply_hour_signals": False,  "apply_behavioral": True},
+    # apply_m: whether M1/M2/M3 signals apply (only ETH/SOL/BTC are backtest-validated)
+    # apply_h: whether H-hour signals apply (BTC only)
+    "KXBTC15M":  {"apply_m": True,  "apply_h": True,  "apply_behavioral": False},
+    "KXETH15M":  {"apply_m": True,  "apply_h": False, "apply_behavioral": True},
+    "KXSOL15M":  {"apply_m": True,  "apply_h": False, "apply_behavioral": True},
+    "KXDOGE15M": {"apply_m": False, "apply_h": False, "apply_behavioral": True},
+    "KXBNB15M":  {"apply_m": False, "apply_h": False, "apply_behavioral": True},
 }
+
+DAILY_LOSS_LIMIT = -100.0   # stop all trading if daily P&L drops below this
+M_COOLDOWN_SECS  = 1800     # 30 min between M-signal bets on the same series
 
 
 # ── auth / state / logging / balance / email ──────────────────────────────────
@@ -200,15 +205,16 @@ def fetch_open(series):
     return mktlist[0] if mktlist else None
 
 def evaluate_signal(hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag,
-                    apply_hour_signals=True, prev3_yes=True, prev3_mag=0.0):
-    if (not prev_yes) and (not prev2_yes) and (not prev3_yes) \
-            and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT and prev3_mag > BIG_MOVE_PCT:
-        return "M3", "yes"
-    if (not prev_yes) and (not prev2_yes) and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT:
-        return "M2", "yes"
-    if (not prev_yes) and prev_mag > BIG_MOVE_PCT:
-        return "M1", "yes"
-    if not apply_hour_signals:
+                    apply_m=True, apply_h=True, prev3_yes=True, prev3_mag=0.0):
+    if apply_m:
+        if (not prev_yes) and (not prev2_yes) and (not prev3_yes) \
+                and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT and prev3_mag > BIG_MOVE_PCT:
+            return "M3", "yes"
+        if (not prev_yes) and (not prev2_yes) and prev_mag > BIG_MOVE_PCT and prev2_mag > BIG_MOVE_PCT:
+            return "M2", "yes"
+        if (not prev_yes) and prev_mag > BIG_MOVE_PCT:
+            return "M1", "yes"
+    if not apply_h:
         return None, None
     if hour_utc == 13 and prev_yes:                return "H13", "no"
     if hour_utc == 0  and prev_yes:                return "H00", "no"
@@ -302,8 +308,9 @@ def place_bet(ticker, side, dollars):
     return False
 
 def poll_series(series, config, state, now_utc, dry_run, balance, cross_settled, settled_cache):
-    apply_hour = config.get("apply_hour_signals", False)
-    apply_beh  = config.get("apply_behavioral",   False)
+    apply_m   = config.get("apply_m",         False)
+    apply_h   = config.get("apply_h",         False)
+    apply_beh = config.get("apply_behavioral", False)
     series_state = state.setdefault("series", {}).setdefault(series, {"last_bet_event": ""})
 
     log(f"  [{series}]")
@@ -362,10 +369,24 @@ def poll_series(series, config, state, now_utc, dry_run, balance, cross_settled,
     except Exception:
         pass
 
-    # M-signals take priority (5yr OOS validated)
+    # M-signal cooldown: suppress M signals for 30 min after last M bet on this series
+    effective_apply_m = apply_m
+    if apply_m:
+        last_sig = series_state.get("last_bet_signal", "")
+        last_at  = series_state.get("last_bet_at", "")
+        if last_sig and last_sig[0] == "M" and last_at:
+            try:
+                elapsed = (now_utc - datetime.fromisoformat(last_at)).total_seconds()
+                if elapsed < M_COOLDOWN_SECS:
+                    effective_apply_m = False
+                    log(f"    M cooldown — last M bet {elapsed/60:.0f}min ago, suppressing")
+            except Exception:
+                pass
+
+    # M-signals take priority (5yr OOS validated for ETH/SOL/BTC only)
     signal, side = evaluate_signal(
         hour_utc, prev_yes, prev2_yes, prev_mag, prev2_mag,
-        apply_hour_signals=apply_hour,
+        apply_m=effective_apply_m, apply_h=apply_h,
         prev3_yes=prev3_yes, prev3_mag=prev3_mag,
     )
 
@@ -432,6 +453,12 @@ def poll_series(series, config, state, now_utc, dry_run, balance, cross_settled,
 
 
 def check_outcomes(state, balance):
+    today = datetime.now(timezone.utc).date().isoformat()
+    daily = state.setdefault("daily", {"date": today, "pnl": 0.0})
+    if daily.get("date") != today:
+        daily["date"] = today
+        daily["pnl"]  = 0.0
+
     for series, ss in state.get("series", {}).items():
         ticker   = ss.get("last_bet_ticker", "")
         side     = ss.get("last_bet_side", "")
@@ -454,11 +481,13 @@ def check_outcomes(state, balance):
 
         won = (result == side)
         ss["last_bet_reported"] = True
-        save_state(state)
 
         fee = dollars * 0.07 * 0.50
         pnl = round(dollars - fee, 2) if won else -dollars
-        log(f"  [{series}] {ticker} settled {result.upper()} → {'WIN ✓' if won else 'loss ✗'}  pnl=${pnl:+.2f}")
+        daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
+        save_state(state)
+
+        log(f"  [{series}] {ticker} settled {result.upper()} → {'WIN ✓' if won else 'loss ✗'}  pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}")
 
         if won:
             subject = f"[Kalshi] WIN +${pnl:.2f} — {series} {signal}"
@@ -487,6 +516,13 @@ def run_once(dry_run=False):
     log(f"  balance=${balance:.2f}")
 
     check_outcomes(state, balance)
+
+    # Daily circuit breaker
+    today = now_utc.date().isoformat()
+    daily = state.get("daily", {})
+    if daily.get("date") == today and daily.get("pnl", 0.0) < DAILY_LOSS_LIMIT:
+        log(f"  CIRCUIT BREAKER: daily P&L ${daily['pnl']:.2f} < ${DAILY_LOSS_LIMIT:.0f} — no new trades today")
+        return
 
     settled_cache = {}
     for series in SERIES_CONFIG:
