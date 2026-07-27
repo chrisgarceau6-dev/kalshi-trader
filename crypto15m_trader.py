@@ -99,14 +99,10 @@ def _ensure_key():
     if not raw:
         return
     p = Path("/tmp/kalshi_crypto15m_key.pem")
-    if raw.startswith("-----"):
-        # Raw PEM stored directly in the secret (possibly with literal \n sequences)
-        p.write_text(raw.replace("\\n", "\n") + "\n")
-    else:
-        # Base64-encoded PEM — strip whitespace, fix padding, decode
-        b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
-        b64 += "=" * (-len(b64) % 4)
-        p.write_bytes(base64.b64decode(b64))
+    # Strip all whitespace, fix base64 padding, decode to get raw PEM bytes
+    b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
+    b64 += "=" * (-len(b64) % 4)
+    p.write_bytes(base64.b64decode(b64))
     p.chmod(0o600)
     os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
 
