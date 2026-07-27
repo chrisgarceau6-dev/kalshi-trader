@@ -38,17 +38,20 @@ LOG = BASE / "copy_alerts.log"
 DATA = "https://data-api.polymarket.com"
 GAMMA = "https://gamma-api.polymarket.com"
 
-# Active daily traders with verified Kalshi-matchable markets
+# Sharp wallets with verified Kalshi-matchable markets
 WALLETS = {
-    "0x3dfb":    "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",  # MLB sharp, 94.7% win, $5,899/wk
-    "workhorse": "0x412fe1a101554f0b382181c3af932e4b2d8030fa",  # GrizzliesSuck, $1,319/wk
-    "fbf-safe":  "0xfbf3d501e88815464642d0e913f15379c3eeb218",  # VPenguin, $1,978/wk
+    "0x3dfb":   "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",  # MLB sharp, 94.7% win, $5,899/wk — primary
+    "sentrio":  "0xdb83e85ffd22faa4009273034770f96ffc5b1e50",  # 99.3% win, $7,710/wk — MLB/MLS only
 }
-# Per-wallet bet cap — higher for proven edges, conservative for unverified
+# Per-wallet bet cap — 0x3dfb is proven, sentrio is secondary with unknown MLB-specific rate
 WALLET_MAX_BET = {
-    "0x3dfb":    int(os.environ.get("MAX_BET", "100")),  # primary edge
-    "workhorse": 30,
-    "fbf-safe":  30,
+    "0x3dfb":  int(os.environ.get("MAX_BET", "100")),
+    "sentrio": 50,
+}
+# Minimum THEIR position size before we copy — filters mid-game noise bets
+WALLET_MIN_THEIR_DOLLARS = {
+    "0x3dfb":  100,   # smallest 0x3dfb bet is $50K, this is just a safety floor
+    "sentrio": 500,   # sentrio makes tiny noise bets; only copy real conviction
 }
 COPY_RATIO = 1.0           # fraction of their dollar bet to copy
 MAX_BET = int(os.environ.get("MAX_BET", "100"))  # global fallback
@@ -246,6 +249,10 @@ def poll_once(state):
             pos = current[k]
             entry = pos["avgPrice"]
             their_dollars = round(pos["size"] * entry, 2)
+            min_their = WALLET_MIN_THEIR_DOLLARS.get(label, 0)
+            if their_dollars < min_their:
+                log(f"  skip — {label} bet ${their_dollars:.0f} below min ${min_their:.0f}")
+                continue
             wallet_cap = WALLET_MAX_BET.get(label, MAX_BET)
             your_bet = min(wallet_cap, round(their_dollars * COPY_RATIO, 2))
             if your_bet < MIN_BET:
