@@ -2,7 +2,7 @@ name: Crypto 15-Min Trader (BTC+ETH+SOL)
 
 on:
   schedule:
-    - cron: '0,15,30,45 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -33,6 +33,9 @@ jobs:
         env:
           KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+          COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_TO: ${{ secrets.COPY_EMAIL_TO }}
+          COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             python crypto15m_trader.py --dry-run

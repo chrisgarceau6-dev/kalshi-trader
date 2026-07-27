@@ -32,7 +32,7 @@ Signal priority (first match per series per period):
 
 H-signals applied only to KXBTC15M where 5yr OOS validation exists.
 
-Runs via GitHub Actions cron: 0,15,30,45 * * * *
+Runs via GitHub Actions cron: */5 * * * *
 State persisted in crypto15m_state.json via Actions cache.
 
 usage:
@@ -301,8 +301,13 @@ def place_bet(ticker, side, dollars):
 
     market    = resp.get("market", resp)
     ask_field = "yes_ask_dollars" if side == "yes" else "no_ask_dollars"
-    raw_ask   = float(market.get(ask_field) or 0.50)
-    ask_cents = int(round(raw_ask * 100))
+    raw_ask   = market.get(ask_field)
+
+    if raw_ask is None:
+        log(f"  skip — no {side} ask (no liquidity)")
+        return False
+
+    ask_cents = int(round(float(raw_ask) * 100))
 
     if ask_cents > MAX_PRICE_CENTS:
         log(f"  skip — {side} ask is {ask_cents}¢ > max {MAX_PRICE_CENTS}¢")
@@ -423,14 +428,15 @@ def poll_series(series, config, state, now_utc, dry_run, balance):
     # 5. Place and record
     placed = place_bet(open_ticker, side, dollars)
     if placed:
-        series_state["last_bet_event"]   = open_event
-        series_state["last_bet_at"]      = now_utc.isoformat(timespec="seconds")
-        series_state["last_bet_signal"]  = signal
-        series_state["last_bet_side"]    = side
-        series_state["last_bet_dollars"] = dollars
-        series_state["last_bet_ticker"]  = open_ticker
-        series_state["last_bet_kelly"]   = f"{kelly:.1%}"
-        series_state["last_bet_balance"] = round(balance, 2)
+        series_state["last_bet_event"]    = open_event
+        series_state["last_bet_at"]       = now_utc.isoformat(timespec="seconds")
+        series_state["last_bet_signal"]   = signal
+        series_state["last_bet_side"]     = side
+        series_state["last_bet_dollars"]  = dollars
+        series_state["last_bet_ticker"]   = open_ticker
+        series_state["last_bet_kelly"]    = f"{kelly:.1%}"
+        series_state["last_bet_balance"]  = round(balance, 2)
+        series_state["last_bet_reported"] = False   # reset so outcome check runs for this new bet
         state["stats"]["bets"] += 1
         save_state(state)
 
