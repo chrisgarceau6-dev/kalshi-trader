@@ -59,22 +59,29 @@ def signed_headers(method, path, api_key_id=None, private_key=None):
     }
 
 
+def _parse(r):
+    try:
+        return r.json() if r.content else {}
+    except Exception:
+        return {"_raw": r.text[:200]}
+
+
 def get(path, params=None):
     hdrs = signed_headers("GET", path)
     r = requests.get(KALSHI + path, headers=hdrs, params=params, timeout=20)
-    return r.status_code, r.json() if r.content else {}
+    return r.status_code, _parse(r)
 
 
 def post(path, body):
     hdrs = signed_headers("POST", path)
     r = requests.post(KALSHI + path, headers=hdrs, json=body, timeout=20)
-    return r.status_code, r.json() if r.content else {}
+    return r.status_code, _parse(r)
 
 
 def delete(path):
     hdrs = signed_headers("DELETE", path)
     r = requests.delete(KALSHI + path, headers=hdrs, timeout=20)
-    return r.status_code, r.json() if r.content else {}
+    return r.status_code, _parse(r)
 
 
 # ---------------------------------------------------------------- orders

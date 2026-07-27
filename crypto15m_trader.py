@@ -492,7 +492,11 @@ def main():
     if a.status:
         print(json.dumps(load_state(), indent=2))
         return
-    run_once(dry_run=a.dry_run)
+    try:
+        run_once(dry_run=a.dry_run)
+    except Exception as e:
+        log(f"FATAL: {e}")
+        raise
 
 
 if __name__ == "__main__":
