@@ -95,14 +95,20 @@ BIG_MOVE_PCT    = 0.003  # 0.3% — confirmed threshold on 5yr data
 def _ensure_key():
     if os.environ.get("KALSHI_PRIVATE_KEY_PATH"):
         return
-    b64 = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
-    if b64:
-        # GitHub Secrets strips trailing '=' padding — restore it
+    raw = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
+    if not raw:
+        return
+    p = Path("/tmp/kalshi_crypto15m_key.pem")
+    if raw.startswith("-----"):
+        # Raw PEM stored directly in the secret (possibly with literal \n sequences)
+        p.write_text(raw.replace("\\n", "\n") + "\n")
+    else:
+        # Base64-encoded PEM — strip whitespace, fix padding, decode
+        b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
         b64 += "=" * (-len(b64) % 4)
-        p = Path("/tmp/kalshi_crypto15m_key.pem")
         p.write_bytes(base64.b64decode(b64))
-        p.chmod(0o600)
-        os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
+    p.chmod(0o600)
+    os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
 
 
 def kalshi_get(path, params=None):
