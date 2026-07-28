@@ -67,39 +67,34 @@ LEGACY_RESET_DATE       = "2026-07-28-v2"    # bump to force fresh state on depl
 # ── SIGNAL SET V2 (2-year OOS validated, 21/21 holds) ─────────────────────────
 # Priority: HSW > 2COND > 1COND (most specific wins; at most one signal per window)
 
-# Hour × slot × weekday (highest WR, small samples but 4/4 periods hold)
-# key = (series, hour, slot, weekday) -> (name, side, wr)
+# Only signals that hold on BOTH Coinbase 2y data AND Kalshi 68d actual settlements.
+# Cross-verified: signals discovered on Coinbase OHLC (2y) must also show >=55% WR
+# on real Kalshi settlements before being deployed. This eliminates signals that
+# might be Coinbase-specific noise.
+
+# Hour × slot × weekday (7 survived cross-verification, all >=55% on both)
 HSW_SIGNALS = {
     ("KXDOGE15M", 23, 0, 4): ("DOGE_FRI_H23_S00", "no",  0.712),
-    ("KXETH15M",  11, 0, 2): ("ETH_WED_H11_S00",  "yes", 0.692),
     ("KXETH15M",  17, 1, 5): ("ETH_SAT_H17_S15",  "yes", 0.680),
     ("KXDOGE15M", 20, 3, 6): ("DOGE_SUN_H20_S45", "no",  0.676),
     ("KXXRP15M",  23, 0, 3): ("XRP_THU_H23_S00",  "no",  0.673),
-    ("KXXRP15M",  15, 2, 5): ("XRP_SAT_H15_S30",  "no",  0.670),
-    ("KXXRP15M",  23, 0, 4): ("XRP_FRI_H23_S00",  "no",  0.663),
     ("KXSOL15M",  17, 1, 5): ("SOL_SAT_H17_S15",  "yes", 0.660),
     ("KXXRP15M",   6, 1, 4): ("XRP_FRI_H06_S15",  "no",  0.660),
     ("KXXRP15M",  18, 0, 1): ("XRP_TUE_H18_S00",  "yes", 0.657),
     ("KXDOGE15M",  5, 2, 4): ("DOGE_FRI_H05_S30", "yes", 0.650),
 }
 
-# 2-condition (hour + previous 2 candle directions)
-# key = (series, hour, prev_yes, prev2_yes) -> (name, side, wr)
+# 2-condition (4 survived, ETH_H12_2UP_FADE removed - only 46% on Kalshi)
 COND2_SIGNALS = {
     ("KXDOGE15M",  4, 1, 1): ("DOGE_H04_2UP_FADE",  "no",  0.593),
-    ("KXXRP15M",  13, 1, 1): ("XRP_H13_2UP_FADE",   "no",  0.586),
     ("KXSOL15M",  12, 1, 1): ("SOL_H12_2UP_FADE",   "no",  0.584),
     ("KXETH15M",  19, 0, 1): ("ETH_H19_UP_AFTER_DN","yes", 0.580),
-    ("KXETH15M",  12, 1, 1): ("ETH_H12_2UP_FADE",   "no",  0.580),
 }
 
-# 1-condition (hour + previous 1 candle direction)
-# key = (series, hour, prev_yes) -> (name, side, wr)
+# 1-condition (3 kept — strongest on Kalshi: 59-64% WR with 100+ Kalshi samples)
 COND1_SIGNALS = {
     ("KXETH15M",  19, 0): ("ETH_H19_BOUNCE", "yes", 0.571),
     ("KXDOGE15M",  4, 1): ("DOGE_H04_FADE",  "no",  0.562),
-    ("KXXRP15M",  13, 1): ("XRP_H13_FADE",   "no",  0.561),
-    ("KXDOGE15M", 10, 1): ("DOGE_H10_FADE",  "no",  0.552),
     ("KXETH15M",   0, 1): ("ETH_H00_FADE",   "no",  0.551),
 }
 
