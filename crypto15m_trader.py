@@ -530,7 +530,33 @@ def run_once(dry_run=False):
     for series in SERIES_LIST:
         poll_series(series, state, now_utc, dry_run, balance)
 
+    # Heartbeat: log next scheduled signal so you can see the schedule
+    nxt = _next_scheduled_signal(now_utc)
+    if nxt:
+        h, slot, names = nxt
+        min_away = ((h - now_utc.hour) % 24) * 60 + (slot * 15 - now_utc.minute)
+        if min_away < 0: min_away += 1440
+        log(f"  next signal: {h:02d}:{slot*15:02d} UTC  ({min_away} min)  {', '.join(names)}")
     log("=== done ===")
+
+
+def _next_scheduled_signal(now_utc):
+    """Return (hour, slot, [signal_names]) of next scheduled signal, or None."""
+    fires = {}
+    for (s, h, slot), (name, _, _) in SLOT_SIGNALS.items():
+        fires.setdefault((h, slot), []).append(name)
+    for (s, h), (name, _, _) in HOUR_SIGNALS.items():
+        for slot in range(4):
+            if (s, h, slot) not in SLOT_SIGNALS:
+                fires.setdefault((h, slot), []).append(name)
+    cur_slot = now_utc.minute // 15
+    for hour_off in range(25):
+        h = (now_utc.hour + hour_off) % 24
+        for slot in range(4):
+            if hour_off == 0 and slot <= cur_slot: continue
+            if (h, slot) in fires:
+                return h, slot, fires[(h, slot)]
+    return None
 
 
 def main():
