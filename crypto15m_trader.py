@@ -36,19 +36,44 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 # ── constants ──────────────────────────────────────────────────────────────────
 
-# Kelly fractions by signal tier
-KELLY_ELITE     = 0.030   # WR >= 62%
-KELLY_STRONG    = 0.020   # WR 56-62%
-KELLY_STANDARD  = 0.012   # WR 53-56%
 MIN_BET         = 5
 MAX_PRICE_CENTS = 56
 STOP_BALANCE    = 400
 
-def max_bet_for(balance):
-    if balance < 750:   return 10
-    if balance < 1500:  return 20
-    if balance < 3000:  return 40
-    return 60
+# ── SIZING TIERS with auto-escalation ─────────────────────────────────────────
+# Start at "conservative" until we've proven live edge. Auto-bump to "moderate"
+# after 50+ trades w/ WR >=55%. Then to "aggressive" after another week of 58%+.
+# Auto-revert one step if live WR drops below the entry threshold for that tier.
+SIZING_TIERS = {
+    "conservative": {
+        "kelly": {"elite": 0.030, "strong": 0.020, "standard": 0.012},
+        "max_brackets": [(750,10),(1500,20),(3000,40),(999999,60)],
+        # promote if:
+        "promote_min_trades": 50,
+        "promote_min_wr":     0.55,
+    },
+    "moderate": {
+        "kelly": {"elite": 0.050, "strong": 0.035, "standard": 0.025},
+        "max_brackets": [(750,20),(1500,40),(3000,80),(999999,150)],
+        "promote_min_trades": 150,   # cumulative — 100 more after entering this tier
+        "promote_min_wr":     0.58,
+        # demote if live WR falls below this:
+        "demote_wr": 0.52,
+    },
+    "aggressive": {
+        "kelly": {"elite": 0.080, "strong": 0.060, "standard": 0.040},
+        "max_brackets": [(750,30),(1500,75),(3000,150),(999999,300)],
+        "promote_min_trades": 99999,  # top tier, no further promotion
+        "promote_min_wr":     1.00,
+        "demote_wr": 0.54,
+    },
+}
+TIER_ORDER = ["conservative", "moderate", "aggressive"]
+
+def max_bet_for(balance, tier="conservative"):
+    for cap, mb in SIZING_TIERS[tier]["max_brackets"]:
+        if balance < cap: return mb
+    return SIZING_TIERS[tier]["max_brackets"][-1][1]
 
 # Adaptive learning thresholds
 LEARN_MIN_TRADES        = 5
@@ -290,14 +315,55 @@ def is_halted(state, balance):
 
 
 def size_bet(oos_wr, balance, state, name):
-    kelly = (KELLY_ELITE    if oos_wr >= 0.62 else
-             KELLY_STRONG   if oos_wr >= 0.56 else
-             KELLY_STANDARD)
+    tier = state.get("sizing_tier", "conservative")
+    k    = SIZING_TIERS[tier]["kelly"]
+    kelly = (k["elite"]    if oos_wr >= 0.62 else
+             k["strong"]   if oos_wr >= 0.56 else
+             k["standard"])
     raw   = balance * kelly * learning_multiplier(state, name)
     if raw <= 0:
         return 0
-    max_bet = max_bet_for(balance)
-    return max(MIN_BET, min(max_bet, int(raw)))
+    mb = max_bet_for(balance, tier)
+    return max(MIN_BET, min(mb, int(raw)))
+
+
+def overall_live_stats(state):
+    """Return (total_trades, overall_wr, disabled_signal_count)."""
+    stats = state.get("signal_stats", {})
+    total_trades = sum(s.get("trades", 0) for s in stats.values())
+    total_wins   = sum(s.get("wins",   0) for s in stats.values())
+    wr = total_wins / total_trades if total_trades else 0
+    disabled = sum(1 for name in stats
+                   if learning_multiplier(state, name) == 0.0)
+    return total_trades, wr, disabled
+
+
+def evaluate_tier_change(state):
+    """Check auto-escalation / auto-demotion. Returns (new_tier, reason) or (None, None)."""
+    current_tier = state.get("sizing_tier", "conservative")
+    n, wr, disabled = overall_live_stats(state)
+    cfg = SIZING_TIERS[current_tier]
+
+    # DEMOTE first: if we're above conservative and things look bad
+    if current_tier != "conservative" and n >= 30:
+        if wr < cfg.get("demote_wr", 0):
+            idx = TIER_ORDER.index(current_tier)
+            return TIER_ORDER[idx-1], f"live WR {wr*100:.1f}% < {cfg['demote_wr']*100:.0f}% demote threshold"
+        # extra safety: if too many signals disabled
+        if disabled >= 4:
+            idx = TIER_ORDER.index(current_tier)
+            return TIER_ORDER[idx-1], f"{disabled} signals disabled by adaptive learning"
+
+    # PROMOTE: enough trades + good WR + few disabled
+    if current_tier != "aggressive":
+        if (n >= cfg["promote_min_trades"] and
+            wr >= cfg["promote_min_wr"] and
+            disabled <= 2):
+            idx = TIER_ORDER.index(current_tier)
+            new_tier = TIER_ORDER[idx+1]
+            return new_tier, f"live WR {wr*100:.1f}% over {n} trades qualifies for promotion"
+
+    return None, None
 
 
 # ── order placement ───────────────────────────────────────────────────────────
@@ -536,7 +602,25 @@ def run_once(dry_run=False):
             save_state(state)
         return
 
-    log(f"  max bet this run: ${max_bet_for(balance)}  |  24h P&L: ${rolling_pnl_24h(state):+.2f}")
+    # Auto tier promotion / demotion
+    new_tier, reason = evaluate_tier_change(state)
+    if new_tier:
+        old_tier = state.get("sizing_tier", "conservative")
+        state["sizing_tier"] = new_tier
+        save_state(state)
+        log(f"  TIER CHANGE: {old_tier} -> {new_tier}  ({reason})")
+        send_email(
+            f"[Kalshi] Sizing tier: {old_tier} -> {new_tier}",
+            f"Adaptive tier change.\nReason: {reason}\nBalance: ${balance:.2f}\n"
+            f"New Kelly: {SIZING_TIERS[new_tier]['kelly']}\n"
+            f"New MAX_BET brackets: {SIZING_TIERS[new_tier]['max_brackets']}\n",
+        )
+
+    tier = state.get("sizing_tier", "conservative")
+    n_live, wr_live, disabled = overall_live_stats(state)
+    log(f"  tier={tier}  max bet=${max_bet_for(balance, tier)}  "
+        f"live: {n_live} trades  WR {wr_live*100:.0f}%  disabled: {disabled}  "
+        f"24h P&L: ${rolling_pnl_24h(state):+.2f}")
 
     for series in SERIES_LIST:
         poll_series(series, state, now_utc, dry_run, balance)
