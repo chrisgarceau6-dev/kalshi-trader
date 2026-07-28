@@ -27,13 +27,32 @@ LOG_FILE   = BASE / "crypto15m.log"
 # ── constants ──────────────────────────────────────────────────────────────────
 
 # VALIDATION MODE — small bets while we confirm the strategy works live.
-# Raise KELLY_* and MAX_BET after ~2 weeks of positive live results.
+# Bet size auto-scales up as balance grows AND as signals prove out live.
 KELLY_STRONG    = 0.010   # OOS WR >= 60%   (1.0% of balance)
 KELLY_WEAK      = 0.008   # OOS WR 54-60%   (0.8% of balance)
 MIN_BET         = 5
-MAX_BET         = 10
 MAX_PRICE_CENTS = 56      # skip if our side costs more than this
 STOP_BALANCE    = 400     # halt all trading if balance <= this
+
+# Adaptive MAX_BET scales with balance (proves strategy at small stake first)
+def max_bet_for(balance):
+    if balance < 750:   return 10
+    if balance < 1500:  return 20
+    if balance < 3000:  return 40
+    return 60
+
+# Adaptive learning thresholds
+LEARN_MIN_TRADES        = 5     # ignore stats until this many settled trades
+LEARN_HALF_TRADES       = 10    # ≥N trades w/ WR<45%   -> halve bet size
+LEARN_DISABLE_TRADES    = 20    # ≥N trades w/ WR<48%   -> disable signal
+LEARN_HALF_WR           = 0.45
+LEARN_DISABLE_WR        = 0.48
+LEARN_BOOST_TRADES      = 30    # ≥N trades w/ WR>65%   -> 1.25x boost
+LEARN_BOOST_WR          = 0.65
+
+# Circuit breakers on rolling P&L
+DAILY_HALT_LOSS         = -80   # if today's P&L <= this, halt for the day
+ROLLING_HALT_LOSS       = -150  # if 24h P&L <= this, halt for 24h
 
 # High-conviction slot-specific signals (OOS WR >= 55%)
 # key = (series, hour, slot) where slot = 0/1/2/3 for :00/:15/:30/:45
@@ -189,9 +208,80 @@ def find_signal(series, hour, slot):
     return None, None, None
 
 
-def size_bet(oos_wr, balance):
+# ── adaptive learning ─────────────────────────────────────────────────────────
+
+def get_signal_stats(state, name):
+    """Return {'trades': n, 'wins': w, 'pnl': p} for a signal (creates if missing)."""
+    return state.setdefault("signal_stats", {}).setdefault(
+        name, {"trades": 0, "wins": 0, "pnl": 0.0}
+    )
+
+
+def update_signal_stats(state, name, won, pnl):
+    s = get_signal_stats(state, name)
+    s["trades"] = s.get("trades", 0) + 1
+    if won:
+        s["wins"] = s.get("wins", 0) + 1
+    s["pnl"] = round(s.get("pnl", 0.0) + pnl, 2)
+
+
+def learning_multiplier(state, name):
+    """Bet-size multiplier based on live performance.
+    Returns 0.0 (disabled), 0.5 (halved), 1.0 (normal), or 1.25 (boosted)."""
+    s = get_signal_stats(state, name)
+    n = s.get("trades", 0)
+    if n < LEARN_MIN_TRADES:
+        return 1.0                       # not enough data yet
+    wr = s.get("wins", 0) / n
+    if n >= LEARN_DISABLE_TRADES and wr < LEARN_DISABLE_WR:
+        return 0.0                       # persistently losing — disable
+    if n >= LEARN_HALF_TRADES and wr < LEARN_HALF_WR:
+        return 0.5                       # underperforming — halve
+    if n >= LEARN_BOOST_TRADES and wr >= LEARN_BOOST_WR:
+        return 1.25                      # crushing it — boost
+    return 1.0
+
+
+def rolling_pnl_24h(state):
+    """Sum of P&L across all settled signals in the last 24 hours."""
+    cutoff = datetime.now(timezone.utc).timestamp() - 86400
+    total = 0.0
+    for entry in state.get("recent_pnl", []):
+        if entry.get("ts", 0) >= cutoff:
+            total += entry.get("pnl", 0.0)
+    return total
+
+
+def add_recent_pnl(state, pnl):
+    now_ts = datetime.now(timezone.utc).timestamp()
+    hist = state.setdefault("recent_pnl", [])
+    hist.append({"ts": now_ts, "pnl": pnl})
+    # prune anything older than 48h
+    cutoff = now_ts - 172800
+    state["recent_pnl"] = [e for e in hist if e.get("ts", 0) >= cutoff]
+
+
+def is_halted(state, balance):
+    """Return (halted, reason) — combines all safety brakes."""
+    if balance <= STOP_BALANCE:
+        return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
+    today = datetime.now(timezone.utc).date().isoformat()
+    daily = state.get("daily", {})
+    if daily.get("date") == today and daily.get("pnl", 0) <= DAILY_HALT_LOSS:
+        return True, f"today's P&L ${daily['pnl']:+.2f} <= daily halt ${DAILY_HALT_LOSS}"
+    r24 = rolling_pnl_24h(state)
+    if r24 <= ROLLING_HALT_LOSS:
+        return True, f"24h P&L ${r24:+.2f} <= rolling halt ${ROLLING_HALT_LOSS}"
+    return False, ""
+
+
+def size_bet(oos_wr, balance, state, name):
     kelly = KELLY_STRONG if oos_wr >= 0.60 else KELLY_WEAK
-    return max(MIN_BET, min(MAX_BET, int(balance * kelly)))
+    raw   = balance * kelly * learning_multiplier(state, name)
+    if raw <= 0:
+        return 0                         # signal disabled
+    max_bet = max_bet_for(balance)
+    return max(MIN_BET, min(max_bet, int(raw)))
 
 
 # ── order placement ───────────────────────────────────────────────────────────
@@ -276,8 +366,22 @@ def poll_series(series, state, now_utc, dry_run, balance):
         log(f"    no signal for h={hour:02d} :{slot*15:02d}")
         return
 
-    dollars = size_bet(wr, balance)
-    log(f"    SIGNAL {name} (OOS {wr*100:.1f}%) -> BET {side.upper()} ${dollars}  (bal=${balance:.0f})")
+    dollars = size_bet(wr, balance, state, name)
+    stats   = get_signal_stats(state, name)
+    live_wr = stats["wins"] / stats["trades"] if stats["trades"] else None
+    mult    = learning_multiplier(state, name)
+
+    if dollars <= 0 or mult == 0.0:
+        log(f"    SIGNAL {name} DISABLED (live {stats['trades']} trades, "
+            f"WR {live_wr*100:.0f}%) — skip")
+        return
+
+    tag = f"OOS {wr*100:.0f}%"
+    if stats["trades"] >= LEARN_MIN_TRADES:
+        tag += f", live {live_wr*100:.0f}% ({stats['trades']}n)"
+    if mult != 1.0:
+        tag += f", mult={mult:.2f}x"
+    log(f"    SIGNAL {name} ({tag}) -> BET {side.upper()} ${dollars}  (bal=${balance:.0f})")
 
     if dry_run:
         log(f"    [dry-run] skipped")
@@ -349,9 +453,17 @@ def check_outcomes(state, balance):
         fee = dollars * 0.07 * 0.50
         pnl = round(dollars - fee, 2) if won else -dollars
         daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
+
+        # adaptive learning — record per-signal stats + rolling P&L
+        update_signal_stats(state, signal, won, pnl)
+        add_recent_pnl(state, pnl)
         save_state(state)
 
-        log(f"  [{series}] {ticker} {result.upper()} -> {'WIN' if won else 'loss'}  pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}")
+        sig_stats = get_signal_stats(state, signal)
+        live_wr   = sig_stats["wins"] / sig_stats["trades"]
+        log(f"  [{series}] {ticker} {result.upper()} -> {'WIN' if won else 'loss'}  "
+            f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  "
+            f"[{signal} live: {sig_stats['wins']}/{sig_stats['trades']} = {live_wr*100:.0f}%]")
 
         if won:
             send_email(
@@ -375,16 +487,25 @@ def run_once(dry_run=False):
         balance = 500.0
     log(f"  balance=${balance:.2f}")
 
-    if balance <= STOP_BALANCE:
-        log(f"  HALTED — balance ${balance:.2f} <= stop ${STOP_BALANCE}. No trades.")
-        send_email(
-            f"[Kalshi] HALTED — balance ${balance:.2f}",
-            f"Trading halted. Balance ${balance:.2f} hit the ${STOP_BALANCE} floor.\n"
-            f"Re-enable by lowering STOP_BALANCE in crypto15m_trader.py.\n",
-        )
+    check_outcomes(state, balance)
+
+    halted, reason = is_halted(state, balance)
+    if halted:
+        log(f"  HALTED — {reason}. No new trades this run.")
+        # only email on the first halt of the day
+        if not state.get("halted_notified_date") == datetime.now(timezone.utc).date().isoformat():
+            send_email(
+                f"[Kalshi] HALTED — {reason}",
+                f"Trading halted this cycle.\nReason: {reason}\n"
+                f"Balance: ${balance:.2f}\n"
+                f"Trading resumes automatically when the brake clears (next UTC day for daily "
+                f"halt, or when 24h P&L recovers for rolling halt).\n",
+            )
+            state["halted_notified_date"] = datetime.now(timezone.utc).date().isoformat()
+            save_state(state)
         return
 
-    check_outcomes(state, balance)
+    log(f"  max bet this run: ${max_bet_for(balance)}  |  24h P&L: ${rolling_pnl_24h(state):+.2f}")
 
     for series in SERIES_LIST:
         poll_series(series, state, now_utc, dry_run, balance)
