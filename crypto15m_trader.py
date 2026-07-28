@@ -26,10 +26,12 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 # ── constants ──────────────────────────────────────────────────────────────────
 
-KELLY_STRONG    = 0.030   # OOS WR >= 60%
-KELLY_WEAK      = 0.020   # OOS WR 54-60%
-MIN_BET         = 10
-MAX_BET         = 30
+# VALIDATION MODE — small bets while we confirm the strategy works live.
+# Raise KELLY_* and MAX_BET after ~2 weeks of positive live results.
+KELLY_STRONG    = 0.010   # OOS WR >= 60%   (1.0% of balance)
+KELLY_WEAK      = 0.008   # OOS WR 54-60%   (0.8% of balance)
+MIN_BET         = 5
+MAX_BET         = 10
 MAX_PRICE_CENTS = 56      # skip if our side costs more than this
 STOP_BALANCE    = 400     # halt all trading if balance <= this
 
