@@ -51,8 +51,16 @@ LEARN_BOOST_TRADES      = 30    # ≥N trades w/ WR>65%   -> 1.25x boost
 LEARN_BOOST_WR          = 0.65
 
 # Circuit breakers on rolling P&L
-DAILY_HALT_LOSS         = -80   # if today's P&L <= this, halt for the day
-ROLLING_HALT_LOSS       = -150  # if 24h P&L <= this, halt for 24h
+# Set very wide during validation — the real safety is the $400 balance floor.
+# At $5 bets * 53 trades = max $265 loss/day even at 0% WR, so -$500 daily halt
+# gives huge cushion while still catching a catastrophic bug.
+DAILY_HALT_LOSS         = -500
+ROLLING_HALT_LOSS       = -700
+
+# One-shot cleanup: state file may hold legacy P&L from XARB/STRK trades that
+# settled after the calendar-only deploy. Clear it so today's counter reflects
+# only new-strategy trades going forward.
+LEGACY_RESET_DATE       = "2026-07-28"
 
 # High-conviction slot-specific signals (OOS WR >= 55%)
 # key = (series, hour, slot) where slot = 0/1/2/3 for :00/:15/:30/:45
@@ -486,6 +494,18 @@ def run_once(dry_run=False):
         log("  WARNING: could not fetch balance — using fallback $500")
         balance = 500.0
     log(f"  balance=${balance:.2f}")
+
+    # One-shot: clear legacy daily P&L + rolling window from old strategy trades
+    if not state.get("legacy_reset_done") == LEGACY_RESET_DATE:
+        old_daily  = state.get("daily", {}).get("pnl", 0)
+        old_recent = len(state.get("recent_pnl", []))
+        state["daily"]      = {"date": datetime.now(timezone.utc).date().isoformat(), "pnl": 0.0}
+        state["recent_pnl"] = []
+        state["halted_notified_date"] = ""
+        state["legacy_reset_done"]    = LEGACY_RESET_DATE
+        save_state(state)
+        log(f"  LEGACY RESET — cleared old daily P&L (${old_daily:+.2f}) "
+            f"and {old_recent} rolling entries. Fresh start for new strategy.")
 
     check_outcomes(state, balance)
 
