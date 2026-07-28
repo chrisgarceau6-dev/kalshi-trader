@@ -52,6 +52,7 @@ SERIES_CONFIG = {
     "KXSOL15M":  {"anchor": False, "xarb": True,  "calendar": True},
     "KXDOGE15M": {"anchor": False, "xarb": True,  "calendar": True},
     "KXBNB15M":  {"anchor": False, "xarb": True,  "calendar": True},
+    "KXXRP15M":  {"anchor": False, "xarb": True,  "calendar": False},  # 79.7% ETH co-resolution
 }
 
 
