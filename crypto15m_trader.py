@@ -27,8 +27,9 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 # ── constants ──────────────────────────────────────────────────────────────────
 
-XARB_THRESH_CENTS = 8   # min ETH-vs-follower YES gap to trigger arb
-XARB_ETH_MIN_AWAY = 7   # ETH must be >= N cents from 50c to be informative
+XARB_THRESH_CENTS  = 8   # min ETH-vs-follower YES gap to trigger arb
+XARB_ETH_MIN_AWAY  = 7   # ETH must be >= N cents from 50c to be informative
+MAX_XARB_PER_DIR   = 2   # max simultaneous XARB bets in the same direction per run
 
 XARB_KELLY     = 0.025  # fractional Kelly for XARB bets
 CALENDAR_KELLY = 0.020  # fractional Kelly for calendar bets
@@ -251,7 +252,7 @@ def place_bet(ticker, side, dollars):
 
 # ── polling ───────────────────────────────────────────────────────────────────
 
-def poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents):
+def poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents, xarb_count):
     series_state = state.setdefault("series", {}).setdefault(series, {"last_bet_event": ""})
     log(f"  [{series}]")
 
@@ -291,7 +292,11 @@ def poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents)
     if config.get("xarb"):
         series_yes_cents, _ = fetch_market_price(open_ticker)
         log(f"    ETH={eth_yes_cents}c  {series}={series_yes_cents}c")
-        signal, side = eval_xarb(eth_yes_cents, series_yes_cents)
+        xsig, xside = eval_xarb(eth_yes_cents, series_yes_cents)
+        if xsig and xarb_count.get(xside, 0) < MAX_XARB_PER_DIR:
+            signal, side = xsig, xside
+        elif xsig:
+            log(f"    XARB {xside} cap reached ({MAX_XARB_PER_DIR}) — skip")
 
     if not signal and config.get("calendar"):
         signal, side = eval_calendar(series, hour_utc)
@@ -327,6 +332,8 @@ def poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents)
         )
 
     if placed is True:
+        if signal.startswith("XARB"):
+            xarb_count[side] = xarb_count.get(side, 0) + 1
         series_state.update({
             "last_bet_event":    open_event,
             "last_bet_at":       now_utc.isoformat(timespec="seconds"),
@@ -408,8 +415,9 @@ def run_once(dry_run=False):
         eth_yes_cents, _ = fetch_market_price(eth_open.get("ticker", ""))
     log(f"  ETH anchor YES={eth_yes_cents}c")
 
+    xarb_count = {}   # tracks {side: n} XARB bets placed this run
     for series, config in SERIES_CONFIG.items():
-        poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents)
+        poll_series(series, config, state, now_utc, dry_run, balance, eth_yes_cents, xarb_count)
 
     log("=== done ===")
 
