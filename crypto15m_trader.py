@@ -35,6 +35,7 @@ XARB_KELLY     = 0.025  # fractional Kelly for XARB bets
 CALENDAR_KELLY = 0.020  # fractional Kelly for calendar bets
 MIN_BET        = 10
 MAX_BET        = 30
+STOP_BALANCE   = 500    # halt all trading if balance falls at or below this
 MAX_PRICE_CENTS = 56    # skip if our side costs more than this
 
 # (series, hour_utc) -> (signal_name, side)
@@ -405,6 +406,15 @@ def run_once(dry_run=False):
         log("  WARNING: could not fetch balance — using fallback $500")
         balance = 500.0
     log(f"  balance=${balance:.2f}")
+
+    if balance <= STOP_BALANCE:
+        log(f"  HALTED — balance ${balance:.2f} <= stop threshold ${STOP_BALANCE}. No trades.")
+        send_email(
+            f"[Kalshi] HALTED — balance ${balance:.2f}",
+            f"Trading halted. Balance ${balance:.2f} has hit the ${STOP_BALANCE} floor.\n"
+            f"Re-enable manually when ready.\n",
+        )
+        return
 
     check_outcomes(state, balance)
 
