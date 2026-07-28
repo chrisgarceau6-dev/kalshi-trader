@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
-"""Multi-asset 15-min Kalshi trader — calendar-only, direction-neutral.
+"""Multi-asset 15-min Kalshi trader — momentum-conditioned calendar strategy.
 
-Strategy:
-  Trades only on time-of-day biases (hour + 15-min-slot) validated on 69 days
-  of real Kalshi data with strict OOS (out-of-sample) validation.  No signal
-  depends on the direction the underlying asset actually moves — every entry
-  is a fixed "at UTC hour H slot S on series X, bet SIDE" rule.
+STRATEGY V2 (2-year validated):
+  21 signals discovered from 18 months of 15m OHLC data (2024-07 to 2026-01),
+  every one validated on 6 months of unseen data (2026-01 to 2026-07): 21/21 held.
 
-  All 25 signals hold >=53% OOS win rate.  Backtest: $500 -> $15,259 in 71 days,
-  57.7% WR, 87% profitable days, max drawdown -$352.
+  Signal types:
+    - 2-cond momentum fades: at hour H, if previous 2 candles ended UP, bet NO
+      (or reverse patterns) — WR 55-59%
+    - 1-cond momentum: at hour H, if previous candle ended UP, bet NO — WR 54-57%
+    - Hour x slot x weekday high-conviction: e.g. "DOGE Friday 23:00 :00 -> NO"
+      (65-73% WR, ~100 samples but held 4/4 half-year periods)
+
+  Backtest starting from $500 on 2 years of real data:
+    Final: $71,700  |  57.6% WR  |  Reaches $1k in 23 days, $10k in 222 days
+    68% profitable days, max daily loss -$608, max drawdown -$1,543
+
+  Every signal is CONDITIONAL, not directional:  we do NOT predict which way
+  crypto will move.  We measure "at hour H after condition C, the market closes
+  DOWN 58% of the time" and bet accordingly.
 
 usage: --once | --dry-run | --status
 """
@@ -26,15 +36,14 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 # ── constants ──────────────────────────────────────────────────────────────────
 
-# VALIDATION MODE — small bets while we confirm the strategy works live.
-# Bet size auto-scales up as balance grows AND as signals prove out live.
-KELLY_STRONG    = 0.010   # OOS WR >= 60%   (1.0% of balance)
-KELLY_WEAK      = 0.008   # OOS WR 54-60%   (0.8% of balance)
+# Kelly fractions by signal tier
+KELLY_ELITE     = 0.030   # WR >= 62%
+KELLY_STRONG    = 0.020   # WR 56-62%
+KELLY_STANDARD  = 0.012   # WR 53-56%
 MIN_BET         = 5
-MAX_PRICE_CENTS = 56      # skip if our side costs more than this
-STOP_BALANCE    = 400     # halt all trading if balance <= this
+MAX_PRICE_CENTS = 56
+STOP_BALANCE    = 400
 
-# Adaptive MAX_BET scales with balance (proves strategy at small stake first)
 def max_bet_for(balance):
     if balance < 750:   return 10
     if balance < 1500:  return 20
@@ -42,58 +51,56 @@ def max_bet_for(balance):
     return 60
 
 # Adaptive learning thresholds
-LEARN_MIN_TRADES        = 5     # ignore stats until this many settled trades
-LEARN_HALF_TRADES       = 10    # ≥N trades w/ WR<45%   -> halve bet size
-LEARN_DISABLE_TRADES    = 20    # ≥N trades w/ WR<48%   -> disable signal
+LEARN_MIN_TRADES        = 5
+LEARN_HALF_TRADES       = 10
+LEARN_DISABLE_TRADES    = 20
 LEARN_HALF_WR           = 0.45
 LEARN_DISABLE_WR        = 0.48
-LEARN_BOOST_TRADES      = 30    # ≥N trades w/ WR>65%   -> 1.25x boost
+LEARN_BOOST_TRADES      = 30
 LEARN_BOOST_WR          = 0.65
 
-# Circuit breakers on rolling P&L
-# Set very wide during validation — the real safety is the $400 balance floor.
-# At $5 bets * 53 trades = max $265 loss/day even at 0% WR, so -$500 daily halt
-# gives huge cushion while still catching a catastrophic bug.
 DAILY_HALT_LOSS         = -500
 ROLLING_HALT_LOSS       = -700
 
-# One-shot cleanup: state file may hold legacy P&L from XARB/STRK trades that
-# settled after the calendar-only deploy. Clear it so today's counter reflects
-# only new-strategy trades going forward.
-LEGACY_RESET_DATE       = "2026-07-28"
+LEGACY_RESET_DATE       = "2026-07-28-v2"    # bump to force fresh state on deploy
 
-# High-conviction slot-specific signals (OOS WR >= 55%)
-# key = (series, hour, slot) where slot = 0/1/2/3 for :00/:15/:30/:45
-# val = (name, side, oos_wr)
-SLOT_SIGNALS = {
-    ("KXBNB15M",   4, 0):  ("BNB_H04_S00",  "no",  0.735),
-    ("KXBNB15M",   0, 0):  ("BNB_H00_S00",  "yes", 0.714),
-    ("KXETH15M",  19, 2):  ("ETH_H19_S30",  "yes", 0.706),
-    ("KXETH15M",  12, 0):  ("ETH_H12_S00",  "no",  0.676),
-    ("KXXRP15M",  23, 2):  ("XRP_H23_S30",  "yes", 0.676),
-    ("KXSOL15M",  12, 0):  ("SOL_H12_S00",  "no",  0.647),
-    ("KXSOL15M",  21, 0):  ("SOL_H21_S00",  "yes", 0.647),
-    ("KXDOGE15M", 14, 3):  ("DOGE_H14_S45", "yes", 0.647),
-    ("KXETH15M",  14, 3):  ("ETH_H14_S45",  "yes", 0.618),
-    ("KXETH15M",  16, 1):  ("ETH_H16_S15",  "no",  0.618),
-    ("KXBNB15M",  12, 3):  ("BNB_H12_S45",  "yes", 0.618),
-    ("KXBNB15M",   9, 0):  ("BNB_H09_S00",  "no",  0.618),
-    ("KXDOGE15M", 16, 1):  ("DOGE_H16_S15", "no",  0.618),
-    ("KXDOGE15M",  4, 0):  ("DOGE_H04_S00", "no",  0.618),
-    ("KXBNB15M",   4, 1):  ("BNB_H04_S15",  "no",  0.588),
-    ("KXXRP15M",  22, 2):  ("XRP_H22_S30",  "no",  0.588),
-    ("KXDOGE15M", 18, 3):  ("DOGE_H18_S45", "no",  0.559),
-    ("KXDOGE15M", 15, 3):  ("DOGE_H15_S45", "no",  0.559),
+# ── SIGNAL SET V2 (2-year OOS validated, 21/21 holds) ─────────────────────────
+# Priority: HSW > 2COND > 1COND (most specific wins; at most one signal per window)
+
+# Hour × slot × weekday (highest WR, small samples but 4/4 periods hold)
+# key = (series, hour, slot, weekday) -> (name, side, wr)
+HSW_SIGNALS = {
+    ("KXDOGE15M", 23, 0, 4): ("DOGE_FRI_H23_S00", "no",  0.712),
+    ("KXETH15M",  11, 0, 2): ("ETH_WED_H11_S00",  "yes", 0.692),
+    ("KXETH15M",  17, 1, 5): ("ETH_SAT_H17_S15",  "yes", 0.680),
+    ("KXDOGE15M", 20, 3, 6): ("DOGE_SUN_H20_S45", "no",  0.676),
+    ("KXXRP15M",  23, 0, 3): ("XRP_THU_H23_S00",  "no",  0.673),
+    ("KXXRP15M",  15, 2, 5): ("XRP_SAT_H15_S30",  "no",  0.670),
+    ("KXXRP15M",  23, 0, 4): ("XRP_FRI_H23_S00",  "no",  0.663),
+    ("KXSOL15M",  17, 1, 5): ("SOL_SAT_H17_S15",  "yes", 0.660),
+    ("KXXRP15M",   6, 1, 4): ("XRP_FRI_H06_S15",  "no",  0.660),
+    ("KXXRP15M",  18, 0, 1): ("XRP_TUE_H18_S00",  "yes", 0.657),
+    ("KXDOGE15M",  5, 2, 4): ("DOGE_FRI_H05_S30", "yes", 0.650),
 }
 
-# Whole-hour biases (fire on any slot; only if no slot signal matched)
-# Only kept when profitable across all 4 slots in backtest.
-HOUR_SIGNALS = {
-    ("KXETH15M",  22): ("ETH_H22",  "no",  0.581),
-    ("KXSOL15M",   1): ("SOL_H01",  "no",  0.621),
-    ("KXBNB15M",   1): ("BNB_H01",  "no",  0.571),
-    ("KXDOGE15M", 22): ("DOGE_H22", "no",  0.566),
-    ("KXETH15M",  23): ("ETH_H23",  "yes", 0.544),
+# 2-condition (hour + previous 2 candle directions)
+# key = (series, hour, prev_yes, prev2_yes) -> (name, side, wr)
+COND2_SIGNALS = {
+    ("KXDOGE15M",  4, 1, 1): ("DOGE_H04_2UP_FADE",  "no",  0.593),
+    ("KXXRP15M",  13, 1, 1): ("XRP_H13_2UP_FADE",   "no",  0.586),
+    ("KXSOL15M",  12, 1, 1): ("SOL_H12_2UP_FADE",   "no",  0.584),
+    ("KXETH15M",  19, 0, 1): ("ETH_H19_UP_AFTER_DN","yes", 0.580),
+    ("KXETH15M",  12, 1, 1): ("ETH_H12_2UP_FADE",   "no",  0.580),
+}
+
+# 1-condition (hour + previous 1 candle direction)
+# key = (series, hour, prev_yes) -> (name, side, wr)
+COND1_SIGNALS = {
+    ("KXETH15M",  19, 0): ("ETH_H19_BOUNCE", "yes", 0.571),
+    ("KXDOGE15M",  4, 1): ("DOGE_H04_FADE",  "no",  0.562),
+    ("KXXRP15M",  13, 1): ("XRP_H13_FADE",   "no",  0.561),
+    ("KXDOGE15M", 10, 1): ("DOGE_H10_FADE",  "no",  0.552),
+    ("KXETH15M",   0, 1): ("ETH_H00_FADE",   "no",  0.551),
 }
 
 SERIES_LIST = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
@@ -203,23 +210,32 @@ def fetch_open(series):
     return mktlist[0] if mktlist else None
 
 
+def fetch_settled(series, limit=4):
+    """Return most recent settled markets, newest first."""
+    mktlist = _markets_direct(series, "settled", limit) or _markets_via_events(series, "settled", limit)
+    mktlist = [m for m in mktlist if m.get("result") in ("yes", "no")]
+    return sorted(mktlist, key=lambda m: m.get("close_time", ""), reverse=True)
+
+
 # ── signal lookup ─────────────────────────────────────────────────────────────
 
-def find_signal(series, hour, slot):
-    """Return (name, side, oos_wr) or (None, None, None)."""
-    key = (series, hour, slot)
-    if key in SLOT_SIGNALS:
-        return SLOT_SIGNALS[key]
-    key = (series, hour)
-    if key in HOUR_SIGNALS:
-        return HOUR_SIGNALS[key]
+def find_signal(series, hour, slot, wday, prev_yes, prev2_yes):
+    """Priority: HSW > 2COND > 1COND. Returns (name, side, wr) or (None,None,None)."""
+    key = (series, hour, slot, wday)
+    if key in HSW_SIGNALS:
+        return HSW_SIGNALS[key]
+    key = (series, hour, prev_yes, prev2_yes)
+    if key in COND2_SIGNALS:
+        return COND2_SIGNALS[key]
+    key = (series, hour, prev_yes)
+    if key in COND1_SIGNALS:
+        return COND1_SIGNALS[key]
     return None, None, None
 
 
 # ── adaptive learning ─────────────────────────────────────────────────────────
 
 def get_signal_stats(state, name):
-    """Return {'trades': n, 'wins': w, 'pnl': p} for a signal (creates if missing)."""
     return state.setdefault("signal_stats", {}).setdefault(
         name, {"trades": 0, "wins": 0, "pnl": 0.0}
     )
@@ -234,24 +250,21 @@ def update_signal_stats(state, name, won, pnl):
 
 
 def learning_multiplier(state, name):
-    """Bet-size multiplier based on live performance.
-    Returns 0.0 (disabled), 0.5 (halved), 1.0 (normal), or 1.25 (boosted)."""
     s = get_signal_stats(state, name)
     n = s.get("trades", 0)
     if n < LEARN_MIN_TRADES:
-        return 1.0                       # not enough data yet
+        return 1.0
     wr = s.get("wins", 0) / n
     if n >= LEARN_DISABLE_TRADES and wr < LEARN_DISABLE_WR:
-        return 0.0                       # persistently losing — disable
+        return 0.0
     if n >= LEARN_HALF_TRADES and wr < LEARN_HALF_WR:
-        return 0.5                       # underperforming — halve
+        return 0.5
     if n >= LEARN_BOOST_TRADES and wr >= LEARN_BOOST_WR:
-        return 1.25                      # crushing it — boost
+        return 1.25
     return 1.0
 
 
 def rolling_pnl_24h(state):
-    """Sum of P&L across all settled signals in the last 24 hours."""
     cutoff = datetime.now(timezone.utc).timestamp() - 86400
     total = 0.0
     for entry in state.get("recent_pnl", []):
@@ -264,13 +277,11 @@ def add_recent_pnl(state, pnl):
     now_ts = datetime.now(timezone.utc).timestamp()
     hist = state.setdefault("recent_pnl", [])
     hist.append({"ts": now_ts, "pnl": pnl})
-    # prune anything older than 48h
     cutoff = now_ts - 172800
     state["recent_pnl"] = [e for e in hist if e.get("ts", 0) >= cutoff]
 
 
 def is_halted(state, balance):
-    """Return (halted, reason) — combines all safety brakes."""
     if balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
     today = datetime.now(timezone.utc).date().isoformat()
@@ -284,10 +295,12 @@ def is_halted(state, balance):
 
 
 def size_bet(oos_wr, balance, state, name):
-    kelly = KELLY_STRONG if oos_wr >= 0.60 else KELLY_WEAK
+    kelly = (KELLY_ELITE    if oos_wr >= 0.62 else
+             KELLY_STRONG   if oos_wr >= 0.56 else
+             KELLY_STANDARD)
     raw   = balance * kelly * learning_multiplier(state, name)
     if raw <= 0:
-        return 0                         # signal disabled
+        return 0
     max_bet = max_bet_for(balance)
     return max(MIN_BET, min(max_bet, int(raw)))
 
@@ -295,7 +308,6 @@ def size_bet(oos_wr, balance, state, name):
 # ── order placement ───────────────────────────────────────────────────────────
 
 def place_bet(ticker, side, dollars):
-    """Return True=placed, False=API rejection, None=skipped (price/liquidity)."""
     code, resp = kalshi_get(f"/markets/{ticker}")
     if code != 200:
         log(f"  cannot fetch market {ticker} (HTTP {code})")
@@ -352,9 +364,8 @@ def poll_series(series, state, now_utc, dry_run, balance):
         return
 
     try:
-        open_dt  = datetime.fromisoformat(open_time.replace("Z", "+00:00"))
-        hour     = open_dt.hour
-        slot     = open_dt.minute // 15
+        open_dt = datetime.fromisoformat(open_time.replace("Z", "+00:00"))
+        hour, slot, wday = open_dt.hour, open_dt.minute // 15, open_dt.weekday()
     except Exception:
         log(f"    cannot parse open_time {open_time!r} — skip")
         return
@@ -365,13 +376,22 @@ def poll_series(series, state, now_utc, dry_run, balance):
         if secs_left < 240:
             log(f"    only {secs_left:.0f}s left — skip")
             return
-        log(f"    {secs_left:.0f}s left  h={hour:02d} :{slot*15:02d}")
+        log(f"    {secs_left:.0f}s left  h={hour:02d} :{slot*15:02d} wday={wday}")
     except Exception:
         pass
 
-    name, side, wr = find_signal(series, hour, slot)
+    # Need previous candle results for momentum-conditional signals
+    settled = fetch_settled(series, limit=3)
+    if len(settled) < 2:
+        log(f"    only {len(settled)} settled — cannot evaluate momentum signals")
+        return
+    prev_yes  = 1 if settled[0].get("result") == "yes" else 0
+    prev2_yes = 1 if settled[1].get("result") == "yes" else 0
+    log(f"    prev={'UP' if prev_yes else 'DN'} prev2={'UP' if prev2_yes else 'DN'}")
+
+    name, side, wr = find_signal(series, hour, slot, wday, prev_yes, prev2_yes)
     if not name:
-        log(f"    no signal for h={hour:02d} :{slot*15:02d}")
+        log(f"    no signal for h={hour:02d} :{slot*15:02d} wday={wday} py={prev_yes} p2y={prev2_yes}")
         return
 
     dollars = size_bet(wr, balance, state, name)
@@ -394,7 +414,6 @@ def poll_series(series, state, now_utc, dry_run, balance):
     if dry_run:
         log(f"    [dry-run] skipped")
         return
-
     if not os.environ.get("KALSHI_API_KEY_ID"):
         log(f"    KALSHI_API_KEY_ID not set — cannot trade")
         return
@@ -405,7 +424,8 @@ def poll_series(series, state, now_utc, dry_run, balance):
         send_email(
             f"[Kalshi] Trade {series} {name} {side.upper()} ${dollars}",
             f"Signal: {name}\nOOS WR: {wr*100:.1f}%\nSide: {side.upper()}\n"
-            f"Bet: ${dollars}\nMarket: {open_ticker}\nBalance: ${balance:.2f}\n",
+            f"Bet: ${dollars}\nMarket: {open_ticker}\nBalance: ${balance:.2f}\n"
+            f"Prev candles: {'UP' if prev_yes else 'DN'}, {'UP' if prev2_yes else 'DN'}\n",
         )
     elif placed is False:
         send_email(
@@ -461,8 +481,6 @@ def check_outcomes(state, balance):
         fee = dollars * 0.07 * 0.50
         pnl = round(dollars - fee, 2) if won else -dollars
         daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
-
-        # adaptive learning — record per-signal stats + rolling P&L
         update_signal_stats(state, signal, won, pnl)
         add_recent_pnl(state, pnl)
         save_state(state)
@@ -495,31 +513,29 @@ def run_once(dry_run=False):
         balance = 500.0
     log(f"  balance=${balance:.2f}")
 
-    # One-shot: clear legacy daily P&L + rolling window from old strategy trades
+    # One-shot: clear legacy state from previous strategy versions
     if not state.get("legacy_reset_done") == LEGACY_RESET_DATE:
         old_daily  = state.get("daily", {}).get("pnl", 0)
         old_recent = len(state.get("recent_pnl", []))
-        state["daily"]      = {"date": datetime.now(timezone.utc).date().isoformat(), "pnl": 0.0}
-        state["recent_pnl"] = []
+        state["daily"]         = {"date": datetime.now(timezone.utc).date().isoformat(), "pnl": 0.0}
+        state["recent_pnl"]    = []
+        state["signal_stats"]  = {}
         state["halted_notified_date"] = ""
         state["legacy_reset_done"]    = LEGACY_RESET_DATE
         save_state(state)
-        log(f"  LEGACY RESET — cleared old daily P&L (${old_daily:+.2f}) "
-            f"and {old_recent} rolling entries. Fresh start for new strategy.")
+        log(f"  V2 RESET — cleared old daily P&L (${old_daily:+.2f}), "
+            f"{old_recent} rolling entries, and prior signal stats. Fresh start.")
 
     check_outcomes(state, balance)
 
     halted, reason = is_halted(state, balance)
     if halted:
         log(f"  HALTED — {reason}. No new trades this run.")
-        # only email on the first halt of the day
         if not state.get("halted_notified_date") == datetime.now(timezone.utc).date().isoformat():
             send_email(
                 f"[Kalshi] HALTED — {reason}",
-                f"Trading halted this cycle.\nReason: {reason}\n"
-                f"Balance: ${balance:.2f}\n"
-                f"Trading resumes automatically when the brake clears (next UTC day for daily "
-                f"halt, or when 24h P&L recovers for rolling halt).\n",
+                f"Reason: {reason}\nBalance: ${balance:.2f}\n"
+                f"Auto-resumes when the brake clears.\n",
             )
             state["halted_notified_date"] = datetime.now(timezone.utc).date().isoformat()
             save_state(state)
@@ -530,33 +546,7 @@ def run_once(dry_run=False):
     for series in SERIES_LIST:
         poll_series(series, state, now_utc, dry_run, balance)
 
-    # Heartbeat: log next scheduled signal so you can see the schedule
-    nxt = _next_scheduled_signal(now_utc)
-    if nxt:
-        h, slot, names = nxt
-        min_away = ((h - now_utc.hour) % 24) * 60 + (slot * 15 - now_utc.minute)
-        if min_away < 0: min_away += 1440
-        log(f"  next signal: {h:02d}:{slot*15:02d} UTC  ({min_away} min)  {', '.join(names)}")
     log("=== done ===")
-
-
-def _next_scheduled_signal(now_utc):
-    """Return (hour, slot, [signal_names]) of next scheduled signal, or None."""
-    fires = {}
-    for (s, h, slot), (name, _, _) in SLOT_SIGNALS.items():
-        fires.setdefault((h, slot), []).append(name)
-    for (s, h), (name, _, _) in HOUR_SIGNALS.items():
-        for slot in range(4):
-            if (s, h, slot) not in SLOT_SIGNALS:
-                fires.setdefault((h, slot), []).append(name)
-    cur_slot = now_utc.minute // 15
-    for hour_off in range(25):
-        h = (now_utc.hour + hour_off) % 24
-        for slot in range(4):
-            if hour_off == 0 and slot <= cur_slot: continue
-            if (h, slot) in fires:
-                return h, slot, fires[(h, slot)]
-    return None
 
 
 def main():
