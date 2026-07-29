@@ -37,8 +37,19 @@ LOG_FILE   = BASE / "crypto15m.log"
 # ── constants ──────────────────────────────────────────────────────────────────
 
 MIN_BET         = 5
-MAX_PRICE_CENTS = 56
+MIN_PRICE_CENTS = 20     # skip longshots below this — market's 15c means it strongly disagrees
+MAX_PRICE_CENTS = 56     # skip if our side costs more than this
 STOP_BALANCE    = 0      # disabled — user removed the balance floor
+
+# Per-signal protection (defends against cascading losses like ETH_H03 4x losing streak)
+SIGNAL_COOLDOWN_AFTER_LOSSES   = 2       # after 2 consecutive losses, cooldown
+SIGNAL_COOLDOWN_MINS           = 60      # 60-min cooldown per signal after a loss streak
+SIGNAL_DAILY_LOSS_LIMIT        = 3       # disable signal for rest of UTC day after N losses
+
+# Volatility gate — skip trades when recent 15m candles are moving unusually large.
+# Estimated from settled prev market's floor_strike vs expiration_value.
+VOL_GATE_LOOKBACK      = 4        # last 4 settled 15m candles (1 hour)
+VOL_GATE_MAX_AVG_MOVE  = 0.008    # skip if average abs move > 0.8% (extreme volatility)
 
 # ── SIZING TIERS with auto-escalation ─────────────────────────────────────────
 # Start at "conservative" until we've proven live edge. Auto-bump to "moderate"
@@ -298,16 +309,69 @@ def find_signal(series, hour, slot, wday, prev_yes, prev2_yes, prev3_yes=0):
 
 def get_signal_stats(state, name):
     return state.setdefault("signal_stats", {}).setdefault(
-        name, {"trades": 0, "wins": 0, "pnl": 0.0}
+        name, {"trades": 0, "wins": 0, "pnl": 0.0,
+               "consec_losses": 0, "last_loss_ts": 0,
+               "losses_today": 0, "losses_today_date": ""}
     )
 
 
 def update_signal_stats(state, name, won, pnl):
     s = get_signal_stats(state, name)
     s["trades"] = s.get("trades", 0) + 1
+    today = datetime.now(timezone.utc).date().isoformat()
+    if s.get("losses_today_date") != today:
+        s["losses_today_date"] = today
+        s["losses_today"] = 0
     if won:
         s["wins"] = s.get("wins", 0) + 1
+        s["consec_losses"] = 0
+    else:
+        s["consec_losses"] = s.get("consec_losses", 0) + 1
+        s["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
+        s["losses_today"]  = s.get("losses_today", 0) + 1
     s["pnl"] = round(s.get("pnl", 0.0) + pnl, 2)
+
+
+def signal_cooldown_reason(state, name):
+    """Return reason string if signal is cooling down, else empty string."""
+    s = get_signal_stats(state, name)
+    today = datetime.now(timezone.utc).date().isoformat()
+    losses_today = s.get("losses_today", 0) if s.get("losses_today_date") == today else 0
+
+    # Daily loss cap — disable for rest of UTC day
+    if losses_today >= SIGNAL_DAILY_LOSS_LIMIT:
+        return f"{losses_today} losses today (daily cap {SIGNAL_DAILY_LOSS_LIMIT})"
+
+    # Consecutive-loss cooldown
+    if s.get("consec_losses", 0) >= SIGNAL_COOLDOWN_AFTER_LOSSES:
+        last_loss = s.get("last_loss_ts", 0)
+        age_min = (datetime.now(timezone.utc).timestamp() - last_loss) / 60
+        if age_min < SIGNAL_COOLDOWN_MINS:
+            remaining = int(SIGNAL_COOLDOWN_MINS - age_min)
+            return f"{s['consec_losses']} consec losses, cooldown {remaining}m remaining"
+
+    return ""
+
+
+def check_volatility_gate(settled):
+    """Return reason string if volatility is too high to trade, else empty string."""
+    if len(settled) < VOL_GATE_LOOKBACK:
+        return ""
+    moves = []
+    for m in settled[:VOL_GATE_LOOKBACK]:
+        try:
+            fs = float(m.get("floor_strike", 0))
+            ev = float(m.get("expiration_value", 0))
+            if fs > 0:
+                moves.append(abs(ev - fs) / fs)
+        except Exception:
+            continue
+    if not moves:
+        return ""
+    avg = sum(moves) / len(moves)
+    if avg > VOL_GATE_MAX_AVG_MOVE:
+        return f"vol gate: avg move {avg*100:.2f}% > {VOL_GATE_MAX_AVG_MOVE*100:.2f}%"
+    return ""
 
 
 def learning_multiplier(state, name):
@@ -427,6 +491,9 @@ def place_bet(ticker, side, dollars):
     if ask_cents > MAX_PRICE_CENTS:
         log(f"  skip — {side} ask is {ask_cents}c > max {MAX_PRICE_CENTS}c")
         return None
+    if ask_cents < MIN_PRICE_CENTS:
+        log(f"  skip — {side} ask is {ask_cents}c < min {MIN_PRICE_CENTS}c (longshot, market strongly disagrees)")
+        return None
 
     limit_cents = min(MAX_PRICE_CENTS, ask_cents + 1)
     count       = max(1, int(dollars * 100 / limit_cents))
@@ -495,6 +562,18 @@ def poll_series(series, state, now_utc, dry_run, balance):
     name, side, wr = find_signal(series, hour, slot, wday, prev_yes, prev2_yes, prev3_yes)
     if not name:
         log(f"    no signal for h={hour:02d} :{slot*15:02d} wday={wday} py={prev_yes} p2y={prev2_yes}")
+        return
+
+    # PRE-TRADE FILTER 1: volatility gate — skip during unusual crypto moves
+    vol_skip = check_volatility_gate(settled)
+    if vol_skip:
+        log(f"    SIGNAL {name} SKIPPED — {vol_skip}")
+        return
+
+    # PRE-TRADE FILTER 2: per-signal cooldown after losing streak / daily loss cap
+    cooldown = signal_cooldown_reason(state, name)
+    if cooldown:
+        log(f"    SIGNAL {name} COOLDOWN — {cooldown}")
         return
 
     dollars = size_bet(wr, balance, state, name)
