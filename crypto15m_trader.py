@@ -38,7 +38,7 @@ LOG_FILE   = BASE / "crypto15m.log"
 
 MIN_BET         = 5
 MAX_PRICE_CENTS = 56
-STOP_BALANCE    = 400
+STOP_BALANCE    = 0      # disabled — user removed the balance floor
 
 # ── SIZING TIERS with auto-escalation ─────────────────────────────────────────
 # Start at "conservative" until we've proven live edge. Auto-bump to "moderate"
