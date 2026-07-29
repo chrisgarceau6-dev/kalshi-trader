@@ -109,18 +109,56 @@ HSW_SIGNALS = {
     ("KXDOGE15M",  5, 2, 4): ("DOGE_FRI_H05_S30", "yes", 0.650),
 }
 
-# 2-condition (4 survived, ETH_H12_2UP_FADE removed - only 46% on Kalshi)
+# 3-condition (2 signals — highest edge, more restrictive)
+COND3_SIGNALS = {
+    ("KXETH15M",  10, 1, 1, 1): ("ETH_H10_3UP_FADE",  "no",  0.624),
+    ("KXXRP15M",  13, 1, 1, 1): ("XRP_H13_3UP_FADE",  "no",  0.613),
+}
+
+# 2-condition — expanded from 3 to 18
 COND2_SIGNALS = {
     ("KXDOGE15M",  4, 1, 1): ("DOGE_H04_2UP_FADE",  "no",  0.593),
     ("KXSOL15M",  12, 1, 1): ("SOL_H12_2UP_FADE",   "no",  0.584),
     ("KXETH15M",  19, 0, 1): ("ETH_H19_UP_AFTER_DN","yes", 0.580),
+    ("KXXRP15M",  13, 1, 1): ("XRP_H13_2UP_FADE",   "no",  0.586),
+    ("KXETH15M",   9, 0, 0): ("ETH_H09_2DN_BOUNCE", "yes", 0.572),
+    ("KXETH15M",  10, 1, 1): ("ETH_H10_2UP_FADE",   "no",  0.567),
+    ("KXSOL15M",  13, 1, 1): ("SOL_H13_2UP_FADE",   "no",  0.571),
+    ("KXDOGE15M",  9, 1, 1): ("DOGE_H09_2UP_FADE",  "no",  0.572),
+    ("KXETH15M",   5, 0, 0): ("ETH_H05_2DN_BOUNCE", "yes", 0.567),
+    ("KXSOL15M",  16, 1, 1): ("SOL_H16_2UP_FADE",   "no",  0.575),
+    ("KXDOGE15M", 10, 0, 0): ("DOGE_H10_2DN_BOUNCE","yes", 0.572),
+    ("KXDOGE15M", 17, 0, 0): ("DOGE_H17_2DN_BOUNCE","yes", 0.562),
+    ("KXDOGE15M", 21, 0, 0): ("DOGE_H21_2DN_BOUNCE","yes", 0.566),
+    ("KXETH15M",  11, 0, 0): ("ETH_H11_2DN_BOUNCE", "yes", 0.579),
+    ("KXSOL15M",   4, 1, 1): ("SOL_H04_2UP_FADE",   "no",  0.563),
+    ("KXSOL15M",   7, 0, 0): ("SOL_H07_2DN_BOUNCE", "yes", 0.565),
+    ("KXSOL15M",  21, 0, 0): ("SOL_H21_2DN_BOUNCE_V2","yes", 0.571),
+    ("KXETH15M",   0, 1, 1): ("ETH_H00_2UP_FADE",   "no",  0.562),
+    ("KXETH15M",  16, 1, 1): ("ETH_H16_2UP_FADE",   "no",  0.572),
+    ("KXDOGE15M", 18, 1, 1): ("DOGE_H18_2UP_FADE",  "no",  0.566),
 }
 
-# 1-condition (3 kept — strongest on Kalshi: 59-64% WR with 100+ Kalshi samples)
+# 1-condition — expanded from 3 to 18 (all validated on Coinbase 2y + Kalshi 68d)
 COND1_SIGNALS = {
-    ("KXETH15M",  19, 0): ("ETH_H19_BOUNCE", "yes", 0.571),
-    ("KXDOGE15M",  4, 1): ("DOGE_H04_FADE",  "no",  0.562),
-    ("KXETH15M",   0, 1): ("ETH_H00_FADE",   "no",  0.551),
+    ("KXETH15M",  19, 0): ("ETH_H19_BOUNCE",  "yes", 0.571),
+    ("KXDOGE15M",  4, 1): ("DOGE_H04_FADE",   "no",  0.562),
+    ("KXETH15M",   0, 1): ("ETH_H00_FADE",    "no",  0.551),
+    ("KXDOGE15M", 13, 1): ("DOGE_H13_FADE",   "no",  0.549),
+    ("KXETH15M",  11, 0): ("ETH_H11_BOUNCE",  "yes", 0.548),
+    ("KXETH15M",   5, 0): ("ETH_H05_BOUNCE",  "yes", 0.544),
+    ("KXSOL15M",   7, 0): ("SOL_H07_BOUNCE",  "yes", 0.545),
+    ("KXSOL15M",  16, 1): ("SOL_H16_FADE",    "no",  0.545),
+    ("KXETH15M",   9, 0): ("ETH_H09_BOUNCE",  "yes", 0.542),
+    ("KXETH15M",   3, 0): ("ETH_H03_BOUNCE",  "yes", 0.543),
+    ("KXDOGE15M",  9, 1): ("DOGE_H09_FADE",   "no",  0.541),
+    ("KXETH15M",  21, 0): ("ETH_H21_BOUNCE",  "yes", 0.544),
+    ("KXDOGE15M", 10, 1): ("DOGE_H10_FADE",   "no",  0.552),
+    ("KXSOL15M",  12, 1): ("SOL_H12_FADE",    "no",  0.542),
+    ("KXXRP15M",  23, 1): ("XRP_H23_FADE",    "no",  0.550),
+    ("KXSOL15M",  13, 1): ("SOL_H13_FADE",    "no",  0.545),
+    ("KXDOGE15M", 23, 1): ("DOGE_H23_FADE",   "no",  0.542),
+    ("KXETH15M",  16, 1): ("ETH_H16_FADE",    "no",  0.541),
 }
 
 SERIES_LIST = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
@@ -239,11 +277,14 @@ def fetch_settled(series, limit=4):
 
 # ── signal lookup ─────────────────────────────────────────────────────────────
 
-def find_signal(series, hour, slot, wday, prev_yes, prev2_yes):
-    """Priority: HSW > 2COND > 1COND. Returns (name, side, wr) or (None,None,None)."""
+def find_signal(series, hour, slot, wday, prev_yes, prev2_yes, prev3_yes=0):
+    """Priority: HSW > 3COND > 2COND > 1COND. At most one signal per market."""
     key = (series, hour, slot, wday)
     if key in HSW_SIGNALS:
         return HSW_SIGNALS[key]
+    key = (series, hour, prev_yes, prev2_yes, prev3_yes)
+    if key in COND3_SIGNALS:
+        return COND3_SIGNALS[key]
     key = (series, hour, prev_yes, prev2_yes)
     if key in COND2_SIGNALS:
         return COND2_SIGNALS[key]
@@ -442,15 +483,16 @@ def poll_series(series, state, now_utc, dry_run, balance):
         pass
 
     # Need previous candle results for momentum-conditional signals
-    settled = fetch_settled(series, limit=3)
-    if len(settled) < 2:
+    settled = fetch_settled(series, limit=4)
+    if len(settled) < 3:
         log(f"    only {len(settled)} settled — cannot evaluate momentum signals")
         return
     prev_yes  = 1 if settled[0].get("result") == "yes" else 0
     prev2_yes = 1 if settled[1].get("result") == "yes" else 0
-    log(f"    prev={'UP' if prev_yes else 'DN'} prev2={'UP' if prev2_yes else 'DN'}")
+    prev3_yes = 1 if settled[2].get("result") == "yes" else 0
+    log(f"    prev={'UP' if prev_yes else 'DN'} prev2={'UP' if prev2_yes else 'DN'} prev3={'UP' if prev3_yes else 'DN'}")
 
-    name, side, wr = find_signal(series, hour, slot, wday, prev_yes, prev2_yes)
+    name, side, wr = find_signal(series, hour, slot, wday, prev_yes, prev2_yes, prev3_yes)
     if not name:
         log(f"    no signal for h={hour:02d} :{slot*15:02d} wday={wday} py={prev_yes} p2y={prev2_yes}")
         return
