@@ -1,8 +1,9 @@
 name: Crypto 15-Min Trader (BTC+ETH+SOL+DOGE+BNB)
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
+  # HALTED — disabled by user request 2026-07-30 (strategy losing money)
+  # schedule:
+  #   - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
