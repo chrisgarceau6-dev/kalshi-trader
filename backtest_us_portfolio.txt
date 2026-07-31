@@ -1,0 +1,25 @@
+
+=======================================================
+  US PORTFOLIO BACKTEST — last 6 months @ $75/trade
+=======================================================
+  Wallets : workhorse (GrizzliesSuck), fbf-safe (VPenguin), sentrio, sunguyen86
+  Period  : 2026-01-17 → 2026-07-18
+  Trades  : 1366
+  Win rate: 83.4%
+  Starting capital: $2,000
+  Flat $75/trade → ending balance : $106,992
+  Compounding     → ending balance : $676,317
+  Total PnL (flat): $104,992
+
+  --- Weekly ---
+  Avg/week   : $3,889
+  Median/week: $1,899
+  Best week  : $31,896
+  Worst week : $214
+  Positive weeks: 27/27
+
+  --- Risk ---
+  Avg win per trade : $94
+  Avg loss per trade: $-10
+  Max drawdown      : $-284
+=======================================================

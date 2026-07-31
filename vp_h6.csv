@@ -1,0 +1,37 @@
+wallet_name,entry_ts,exit_ts,entry_price,exit_price,size,hold_hrs,title,topic
+?,2024-09-28 03:48:04,2024-10-04 05:28:26,0.4183608031,0.998,1585.0,145.67277777777778,Solana above $155 on October 4?,other
+?,2024-09-30 09:43:23,2024-10-04 05:27:48,0.4412079841,0.993,0.23,91.74027777777778,"Ethereum above $2,600 on October 4?",crypto
+?,2024-10-16 16:43:37,2024-10-18 00:23:38,0.019,0.005,15789.473683,31.666944444444443,Will Trump launch a coin before the election?,election
+?,2024-10-16 16:51:09,2024-10-27 22:13:08,0.08,0.0627634,1000.0,269.3663888888889,Will the Florida Panthers win the 2025 Stanley Cup?,other
+?,2024-10-16 16:51:21,2024-10-27 22:13:26,0.07,0.06,630.0,269.36805555555554,Will the New Jersey Devils win the 2025 Stanley Cup?,other
+?,2024-10-16 16:51:55,2024-10-27 22:13:30,0.0701156031,0.06,998.35,269.3597222222222,Will the New York Rangers win the 2025 Stanley Cup?,other
+?,2024-10-16 16:52:09,2024-10-27 22:13:36,0.06,0.06,540.0,269.3575,Will the Toronto Maple Leafs win the 2025 Stanley Cup?,other
+?,2024-10-16 16:52:21,2024-10-27 22:15:38,0.06,0.05,1000.0,269.3880555555556,Will the Colorado Avalanche win the 2025 Stanley Cup?,other
+?,2024-10-16 16:54:05,2024-10-27 22:14:24,0.014,0.015,5.0,269.3386111111111,Will the Detroit Red Wings win the 2025 Stanley Cup?,other
+?,2024-10-16 16:55:35,2024-10-27 22:14:36,0.013,0.0232884445,5.0,269.31694444444446,Will the Minnesota Wild win the 2025 Stanley Cup?,other
+?,2024-10-16 17:04:27,2024-10-18 00:23:38,0.02,0.005,4989.5,31.31972222222222,Will Trump launch a coin before the election?,election
+?,2024-10-16 18:11:39,2024-10-20 13:22:18,0.3338662416,0.49,86.8611,91.1775,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:25:25,2024-10-20 13:22:18,0.22,0.49,400.0,90.94805555555556,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:28:13,2024-10-20 13:22:18,0.23,0.49,400.0,90.90138888888889,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:31:49,2024-10-20 13:22:18,0.23,0.49,400.0,90.84138888888889,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:35:31,2024-10-20 13:22:18,0.24,0.49,24.62889999999993,90.77972222222222,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 23:45:09,2024-10-18 00:23:38,0.0129897985,0.005,14703.846152,24.64138888888889,Will Trump launch a coin before the election?,election
+?,2024-10-16 23:45:21,2024-10-18 00:23:38,0.014,0.005,15.0,24.638055555555557,Will Trump launch a coin before the election?,election
+?,2024-10-17 19:06:54,2024-10-19 09:58:00,0.56,0.64,20.0,38.85166666666667,Will Lando Norris win the United States Grand Prix?,other
+?,2024-10-17 19:16:22,2024-10-27 21:51:08,0.41,0.2826723448,171.0,242.57944444444445,Will Russia recapture Sudzha before December?,geopol_other
+?,2024-10-21 16:15:48,2024-10-22 18:33:36,0.2668291608,0.3077509287,3477.88,26.296666666666667,Will Pump.fun launch a token in 2024?,other
+?,2024-10-22 21:00:08,2024-10-27 21:51:08,0.3090116893,0.2826723448,1517.741934,120.85,Will Russia recapture Sudzha before December?,geopol_other
+?,2024-10-22 21:43:50,2024-10-24 00:50:57,0.6999999998,0.7788656285,352.53,27.11861111111111,"Will Gold close over $3,000 at the end of 2024?",other
+?,2024-10-23 22:10:08,2024-10-25 14:27:56,0.5051926287,0.57,117.24,40.29666666666667,Will Trump do better in Florida or Alaska?,trump_admin
+?,2024-10-23 22:32:29,2024-10-27 20:52:02,0.26,0.01,100.0,94.32583333333334,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2024-10-23 22:48:45,2024-10-27 20:52:02,0.31,0.01,500.0,94.05472222222222,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2024-10-24 13:59:39,2024-10-27 20:52:02,0.23,0.01,143.07000000000005,78.87305555555555,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2025-01-18 03:58:17,2025-01-18 13:30:33,0.107791716,0.0402718967,28284.27,9.537777777777778,Was Trump hacked?,trump_admin
+?,2025-01-18 04:50:13,2025-01-18 13:30:33,0.0612136462,0.0402718967,16330.835713,8.672222222222222,Was Trump hacked?,trump_admin
+?,2025-01-18 05:42:31,2025-01-18 13:30:33,0.08,0.0402718967,2999.9942869999977,7.8005555555555555,Was Trump hacked?,trump_admin
+?,2026-02-17 16:52:17,2026-02-18 00:43:33,0.6098288931,0.999,584.43,7.854444444444445,LoL: Senshi Esports Club vs The Bandits (BO5) - Road Of Legends Playof,other
+?,2026-02-17 16:53:13,2026-02-18 00:43:33,0.6199737464,0.999,3809.0,7.838888888888889,LoL: Senshi Esports Club vs The Bandits (BO5) - Road Of Legends Playof,other
+?,2026-02-17 16:53:35,2026-02-17 22:58:27,0.56,0.999,500.0,6.081111111111111,LoL: Senshi Esports Club vs The Bandits - Game 1 Winner,other
+?,2026-02-18 02:12:35,2026-02-18 14:15:50,0.86,0.999,794.86,12.054166666666667,T20 World Cup: Namibia vs Pakistan (Game 1),sports
+?,2026-03-06 03:08:01,2026-03-06 12:18:31,0.6093303859,0.5,2501.59,9.175,Counter-Strike: WW Team vs Eternal Fire (BO3) - CCT Europe Closed Qual,other
+?,2026-07-11 11:28:17,2026-07-11 23:01:49,0.38,0.999,1547.98,11.55888888888889,Norway to score first vs. England?,other

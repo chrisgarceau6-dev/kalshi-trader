@@ -1,0 +1,101 @@
+wallet_name,entry_ts,exit_ts,entry_price,exit_price,size,hold_hrs,title,topic
+?,2024-09-28 03:48:04,2024-10-04 05:28:26,0.4183608031,0.998,1585.0,145.67277777777778,Solana above $155 on October 4?,other
+?,2024-09-30 09:43:23,2024-10-04 05:27:48,0.4412079841,0.993,0.23,91.74027777777778,"Ethereum above $2,600 on October 4?",crypto
+?,2024-10-16 16:43:37,2024-10-18 00:23:38,0.019,0.005,15789.473683,31.666944444444443,Will Trump launch a coin before the election?,election
+?,2024-10-16 16:51:09,2024-10-27 22:13:08,0.08,0.0627634,1000.0,269.3663888888889,Will the Florida Panthers win the 2025 Stanley Cup?,other
+?,2024-10-16 16:51:21,2024-10-27 22:13:26,0.07,0.06,630.0,269.36805555555554,Will the New Jersey Devils win the 2025 Stanley Cup?,other
+?,2024-10-16 16:51:55,2024-10-27 22:13:30,0.0701156031,0.06,998.35,269.3597222222222,Will the New York Rangers win the 2025 Stanley Cup?,other
+?,2024-10-16 16:52:09,2024-10-27 22:13:36,0.06,0.06,540.0,269.3575,Will the Toronto Maple Leafs win the 2025 Stanley Cup?,other
+?,2024-10-16 16:52:21,2024-10-27 22:15:38,0.06,0.05,1000.0,269.3880555555556,Will the Colorado Avalanche win the 2025 Stanley Cup?,other
+?,2024-10-16 16:54:05,2024-10-27 22:14:24,0.014,0.015,5.0,269.3386111111111,Will the Detroit Red Wings win the 2025 Stanley Cup?,other
+?,2024-10-16 16:55:35,2024-10-27 22:14:36,0.013,0.0232884445,5.0,269.31694444444446,Will the Minnesota Wild win the 2025 Stanley Cup?,other
+?,2024-10-16 17:04:27,2024-10-18 00:23:38,0.02,0.005,4989.5,31.31972222222222,Will Trump launch a coin before the election?,election
+?,2024-10-16 18:11:39,2024-10-20 13:22:18,0.3338662416,0.49,86.8611,91.1775,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:25:25,2024-10-20 13:22:18,0.22,0.49,400.0,90.94805555555556,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:28:13,2024-10-20 13:22:18,0.23,0.49,400.0,90.90138888888889,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:31:49,2024-10-20 13:22:18,0.23,0.49,400.0,90.84138888888889,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 18:35:31,2024-10-20 13:22:18,0.24,0.49,24.62889999999993,90.77972222222222,Will Max Verstappen win the United States Grand Prix?,sports
+?,2024-10-16 23:45:09,2024-10-18 00:23:38,0.0129897985,0.005,14703.846152,24.64138888888889,Will Trump launch a coin before the election?,election
+?,2024-10-16 23:45:21,2024-10-18 00:23:38,0.014,0.005,15.0,24.638055555555557,Will Trump launch a coin before the election?,election
+?,2024-10-17 19:06:54,2024-10-19 09:58:00,0.56,0.64,20.0,38.85166666666667,Will Lando Norris win the United States Grand Prix?,other
+?,2024-10-17 19:16:22,2024-10-27 21:51:08,0.41,0.2826723448,171.0,242.57944444444445,Will Russia recapture Sudzha before December?,geopol_other
+?,2024-10-21 16:15:48,2024-10-22 18:33:36,0.2668291608,0.3077509287,3477.88,26.296666666666667,Will Pump.fun launch a token in 2024?,other
+?,2024-10-22 21:00:08,2024-10-27 21:51:08,0.3090116893,0.2826723448,1517.741934,120.85,Will Russia recapture Sudzha before December?,geopol_other
+?,2024-10-22 21:43:50,2024-10-24 00:50:57,0.6999999998,0.7788656285,352.53,27.11861111111111,"Will Gold close over $3,000 at the end of 2024?",other
+?,2024-10-23 22:10:08,2024-10-25 14:27:56,0.5051926287,0.57,117.24,40.29666666666667,Will Trump do better in Florida or Alaska?,trump_admin
+?,2024-10-23 22:32:29,2024-10-27 20:52:02,0.26,0.01,100.0,94.32583333333334,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2024-10-23 22:48:45,2024-10-27 20:52:02,0.31,0.01,500.0,94.05472222222222,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2024-10-24 13:59:39,2024-10-27 20:52:02,0.23,0.01,143.07000000000005,78.87305555555555,Will Max Verstappen win the Mexico City Grand Prix?,sports
+?,2025-01-18 03:58:17,2025-01-18 13:30:33,0.107791716,0.0402718967,28284.27,9.537777777777778,Was Trump hacked?,trump_admin
+?,2025-01-18 04:50:13,2025-01-18 13:30:33,0.0612136462,0.0402718967,16330.835713,8.672222222222222,Was Trump hacked?,trump_admin
+?,2025-01-18 05:42:31,2025-01-18 13:30:33,0.08,0.0402718967,2999.9942869999977,7.8005555555555555,Was Trump hacked?,trump_admin
+?,2025-12-27 20:07:11,2025-12-28 00:09:35,0.6776666667,0.999,620.0,4.04,Connecticut vs. Army,other
+?,2025-12-27 20:08:35,2025-12-28 00:09:35,0.6499947458,0.999,479.99,4.016666666666667,Connecticut vs. Army,other
+?,2026-01-14 19:05:26,2026-01-14 23:25:22,0.75,0.999,5.0,4.332222222222223,Will TSG 1899 Hoffenheim vs. Borussia Mönchengladbach end in a draw?,geopol_other
+?,2026-01-14 19:05:26,2026-01-14 23:28:48,0.75,0.999,27995.0,4.389444444444444,Will TSG 1899 Hoffenheim vs. Borussia Mönchengladbach end in a draw?,geopol_other
+?,2026-01-14 19:12:22,2026-01-14 23:28:48,0.75,0.999,44000.0,4.273888888888889,Will TSG 1899 Hoffenheim vs. Borussia Mönchengladbach end in a draw?,geopol_other
+?,2026-02-10 09:22:11,2026-02-10 14:09:25,0.51,0.999,45.98,4.787222222222222,Counter-Strike: ENCE vs CYBERSHOKE Esports (BO3) - IEM Atlanta: Global,other
+?,2026-02-11 01:05:41,2026-02-11 05:57:13,0.4592882625,0.999,2164.0,4.858888888888889,Spread: Rockets (-7.5),other
+?,2026-02-11 01:07:57,2026-02-11 05:57:13,0.46,0.999,2704.0,4.821111111111111,Spread: Rockets (-7.5),other
+?,2026-02-13 06:25:59,2026-02-13 10:39:41,0.18,0.999,52.74,4.2283333333333335,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:26:39,2026-02-13 10:39:41,0.2077383709,0.999,2414.41,4.217222222222222,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:27:17,2026-02-13 10:39:41,0.2,0.999,2386.25,4.206666666666667,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:27:57,2026-02-13 10:39:41,0.2291459097,0.999,2575.84,4.195555555555556,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:28:57,2026-02-13 10:39:41,0.22,0.999,2356.0,4.178888888888889,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:29:05,2026-02-13 10:39:41,0.22,0.999,2582.18,4.176666666666667,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:29:39,2026-02-13 10:39:41,0.23,0.999,421.0,4.167222222222223,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:32:53,2026-02-13 10:39:41,0.2395546238,0.999,1478.75,4.113333333333333,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:35:53,2026-02-13 10:39:41,0.25,0.999,658.0,4.0633333333333335,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:37:11,2026-02-13 10:39:41,0.25,0.999,1636.35,4.041666666666667,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:37:53,2026-02-13 10:39:41,0.25,0.999,650.0,4.03,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-13 06:38:25,2026-02-13 10:39:41,0.24,0.999,771.25,4.021111111111111,T20 World Cup: Australia vs Zimbabwe (Game 1),sports
+?,2026-02-15 18:08:29,2026-02-15 22:19:17,0.46,0.999,2117.37,4.18,Spread: Marist Red Foxes (-1.5),other
+?,2026-02-17 16:52:17,2026-02-18 00:43:33,0.6098288931,0.999,584.43,7.854444444444445,LoL: Senshi Esports Club vs The Bandits (BO5) - Road Of Legends Playof,other
+?,2026-02-17 16:53:13,2026-02-18 00:43:33,0.6199737464,0.999,3809.0,7.838888888888889,LoL: Senshi Esports Club vs The Bandits (BO5) - Road Of Legends Playof,other
+?,2026-02-17 16:53:35,2026-02-17 22:58:27,0.56,0.999,500.0,6.081111111111111,LoL: Senshi Esports Club vs The Bandits - Game 1 Winner,other
+?,2026-02-18 02:12:35,2026-02-18 14:15:50,0.86,0.999,794.86,12.054166666666667,T20 World Cup: Namibia vs Pakistan (Game 1),sports
+?,2026-02-19 11:09:28,2026-02-19 17:04:48,0.3065615142,0.999,317.0,5.9222222222222225,Women's Knockout - Switzerland vs. Sweden,other
+?,2026-02-20 22:15:08,2026-02-21 02:23:32,0.6596689479,0.999,5503.96,4.14,Call of Duty: Toronto KOI vs Los Angeles Thieves - Game 2 Winner,other
+?,2026-02-20 22:15:08,2026-02-21 02:25:00,0.6596689479,0.999,969.04,4.164444444444444,Call of Duty: Toronto KOI vs Los Angeles Thieves - Game 2 Winner,other
+?,2026-02-20 22:16:38,2026-02-21 02:25:00,0.659229584,0.999,649.0,4.139444444444444,Call of Duty: Toronto KOI vs Los Angeles Thieves - Game 2 Winner,other
+?,2026-03-06 03:08:01,2026-03-06 12:18:31,0.6093303859,0.5,2501.59,9.175,Counter-Strike: WW Team vs Eternal Fire (BO3) - CCT Europe Closed Qual,other
+?,2026-03-09 14:47:13,2026-03-09 18:55:27,0.53,0.999,37.32,4.137222222222222,Counter-Strike: Astralis vs FaZe (BO3) - ESL Pro League Stage 2,other
+?,2026-03-20 09:59:15,2026-03-20 15:55:31,0.35,0.999,25800.32,5.937777777777778,Game Handicap: BFX (-1.5) vs G2 Esports (+1.5),other
+?,2026-03-20 10:00:53,2026-03-20 15:55:17,0.18,0.999,62146.83,5.906666666666666,LoL: G2 Esports vs BNK FEARX (BO5) - First Stand Group A,other
+?,2026-04-04 14:18:43,2026-04-04 18:56:03,0.37,0.999,47147.8,4.622222222222222,Will Real Madrid CF win on 2026-04-04?,other
+?,2026-04-04 14:20:17,2026-04-04 18:56:03,0.37,0.999,15664.616,4.596111111111111,Will Real Madrid CF win on 2026-04-04?,other
+?,2026-04-04 14:21:07,2026-04-04 18:56:03,0.37,0.999,3175.26,4.582222222222223,Will Real Madrid CF win on 2026-04-04?,other
+?,2026-04-04 14:22:33,2026-04-04 18:56:03,0.3681653139,0.999,3034.43162,4.558333333333334,Will Real Madrid CF win on 2026-04-04?,other
+?,2026-04-04 14:32:59,2026-04-04 18:56:03,0.41,0.999,1303.39646,4.384444444444444,Will Real Madrid CF win on 2026-04-04?,other
+?,2026-04-24 15:16:52,2026-04-24 19:45:28,0.65,0.999,118.12614,4.476666666666667,LoL: Shifters vs Fnatic (BO3) - LEC Regular Season,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:40,0.5399964554,0.999,550.0,4.668611111111111,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:40,0.5399964554,0.999,590.0,4.668611111111111,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:41,0.5399964554,0.999,455.0,4.668888888888889,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:41,0.5399964554,0.999,550.0,4.668888888888889,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:43,0.5399964554,0.999,415.0,4.669444444444444,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:48,0.5399964554,0.999,397.0599999999998,4.670833333333333,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:45,0.5399964554,0.999,575.0,4.67,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:47,0.5399964554,0.999,420.0,4.670555555555556,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:47,0.5399964554,0.999,335.0,4.670555555555556,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:48,0.5399964554,0.999,258.93,4.670833333333333,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:38,0.5399964554,0.999,725.0,4.668055555555555,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:45,0.5399964554,0.999,520.0,4.67,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:36,0.5399964554,0.999,595.0,4.6675,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:36,0.5399964554,0.999,505.0,4.6675,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:22,0.5399964554,0.999,370.01,4.663611111111111,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:34,0.5399964554,0.999,555.0,4.666944444444445,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:24,0.5399964554,0.999,590.0,4.664166666666667,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:26,0.5399964554,0.999,565.0,4.664722222222222,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:26,0.5399964554,0.999,575.0,4.664722222222222,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:27,0.5399964554,0.999,525.0,4.665,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:24,0.5399964554,0.999,935.0,4.664166666666667,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:29,0.5399964554,0.999,525.0,4.665555555555556,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:31,0.5399964554,0.999,395.0,4.666111111111111,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:33,0.5399964554,0.999,625.0,4.666666666666667,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:33,0.5399964554,0.999,625.0,4.666666666666667,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:34,0.5399964554,0.999,445.0,4.666944444444445,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:00:33,2026-05-08 22:40:29,0.5399964554,0.999,485.0,4.665555555555556,Call of Duty: Riyadh Falcons vs Miami Heretics - Game 2 Winner,other
+?,2026-05-08 18:01:53,2026-05-08 22:40:08,0.59,0.999,8223.05,4.6375,Call of Duty: Paris Gentle Mates vs OpTic Texas - Game 2 Winner,other
+?,2026-07-06 21:43:47,2026-07-07 01:50:16,0.43,0.999,2543.48,4.108055555555556,United States vs. Belgium: Belgium O/U 1.5,other
+?,2026-07-06 21:44:17,2026-07-07 01:50:13,0.17,0.8024212801,7691.51,4.098888888888889,Spread: Belgium (-1.5),other
+?,2026-07-11 11:28:17,2026-07-11 23:01:49,0.38,0.999,1547.98,11.55888888888889,Norway to score first vs. England?,other

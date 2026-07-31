@@ -1,0 +1,2665 @@
+thresholds: bet=$100.0  min_hold=2.0h  max_concurrent=40
+
+======================================================================
+0x006cc834cc092684f1b56626e23bedb3835c16ea
+======================================================================
+  raw @0c: n=167 pnl=$-685
+  raw @3c: n=167 pnl=$-2577
+  corrected: n=167 pnl=$-2256 sharpe=-0.711 t_stat=-9.19 median_hold=0.6h open_positions=3 months=10 top_month_share=0.58
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x00ae52b00d6747ffe069361b5b3e6f00059a9e99
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x00c8ef6895e2fb38b538cac8c08edd6b82289ccd
+======================================================================
+  raw @0c: n=1027 pnl=$32262
+  raw @3c: n=1027 pnl=$3852
+  corrected: n=4195 pnl=$-311159 sharpe=-0.95 t_stat=-61.53 median_hold=0.2h open_positions=3224 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x0124dab2abf41958c501e2c71f655b31dab6473a
+======================================================================
+  raw @0c: n=9 pnl=$304
+  raw @3c: n=9 pnl=$64
+  corrected: n=40 pnl=$-3022 sharpe=-1.203 t_stat=-7.61 median_hold=3.4h open_positions=34 months=2 top_month_share=0.64
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x02b4a1cdb7a8bf4f83743ec4ffd86a06f53e826c
+======================================================================
+  raw @0c: n=40 pnl=$809
+  raw @3c: n=40 pnl=$60
+  corrected: n=175 pnl=$-13363 sharpe=-1.138 t_stat=-15.05 median_hold=0.0h open_positions=135 months=2 top_month_share=0.57
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x0346afae2603313d2bbee96b628536c8cbe352a5
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x040ce3b71dd7d4fa8e7f0c7285794da1814efa38
+======================================================================
+  raw @0c: n=41 pnl=$1086
+  raw @3c: n=41 pnl=$334
+  corrected: n=42 pnl=$389 sharpe=0.083 t_stat=0.54 median_hold=0.3h open_positions=2 months=4 top_month_share=0.61
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x040d8677d088056b672dbe6c7d49ad73a42f1a5e
+======================================================================
+  raw @0c: n=252 pnl=$3429
+  raw @3c: n=252 pnl=$-1760
+  corrected: n=1449 pnl=$-121014 sharpe=-1.878 t_stat=-71.49 median_hold=96.8h open_positions=1202 months=7 top_month_share=0.3
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x0504ae3a387407a9a478e6fa8c749608c948bde5
+======================================================================
+  raw @0c: n=372 pnl=$27557
+  raw @3c: n=372 pnl=$17893
+  corrected: n=595 pnl=$-3687 sharpe=-0.056 t_stat=-1.37 median_hold=0.0h open_positions=224 months=3 top_month_share=0.57
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x076daa87c4fe1a85402a9b6b8e0a866224388d4c
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x095fbca2e0eaf0c9841005135427e1e0117190b2
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x09b428f7c2b469786286214aa5c90dd9015f7320
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x0c0e270cf879583d6a0142fc817e05b768d0434e
+======================================================================
+  raw @0c: n=714 pnl=$1028
+  raw @3c: n=714 pnl=$-6088
+  corrected: n=837 pnl=$-17285 sharpe=-0.41 t_stat=-11.86 median_hold=627.5h open_positions=148 months=33 top_month_share=0.15
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x1353db5778ac0cffc42bae6fee912a8648b83726
+======================================================================
+  raw @0c: n=10 pnl=$2476
+  raw @3c: n=10 pnl=$1402
+  corrected: n=18 pnl=$635 sharpe=0.162 t_stat=0.69 median_hold=0.5h open_positions=8 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x1579ccf50aac20ed6c3d92a8667e93d59fd02336
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x18f180c0a438687f44cfbf5b79dea79c5f290bc2
+======================================================================
+  raw @0c: n=20 pnl=$1043
+  raw @3c: n=20 pnl=$541
+  corrected: n=21 pnl=$482 sharpe=0.193 t_stat=0.88 median_hold=0.0h open_positions=1 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x196e9d0d3b34f40c78404658d0fd1536ed271b86
+======================================================================
+  raw @0c: n=12 pnl=$-480
+  raw @3c: n=12 pnl=$-850
+  corrected: n=38 pnl=$-3455 sharpe=-2.912 t_stat=-17.95 median_hold=1390.9h open_positions=31 months=4 top_month_share=0.44
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x1cc16713196d456f86fa9c7387dd326a7f73b8df
+======================================================================
+  raw @0c: n=733 pnl=$88935
+  raw @3c: n=733 pnl=$31472
+  corrected: n=765 pnl=$27363 sharpe=0.169 t_stat=4.67 median_hold=61.4h open_positions=37 months=16 top_month_share=0.36
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x1e1f17412069c0736adfaadf8ee7f46e5612c855
+======================================================================
+  raw @0c: n=201 pnl=$383
+  raw @3c: n=201 pnl=$-2975
+  corrected: n=418 pnl=$-24631 sharpe=-1.069 t_stat=-21.86 median_hold=25.6h open_positions=250 months=24 top_month_share=0.24
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x1f1fce17b95e07d2aaf8b60c729e2f6ebbc800a7
+======================================================================
+  raw @0c: n=213 pnl=$23113
+  raw @3c: n=213 pnl=$7926
+  corrected: n=243 pnl=$5279 sharpe=0.122 t_stat=1.90 median_hold=0.5h open_positions=31 months=4 top_month_share=0.84
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x1f9e15f39bbd5d163b0eacf0fbef647ced9e4f1a
+======================================================================
+  raw @0c: n=401 pnl=$34437
+  raw @3c: n=401 pnl=$8747
+  corrected: n=487 pnl=$3955 sharpe=0.065 t_stat=1.43 median_hold=63.2h open_positions=472 months=6 top_month_share=0.57
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x2005d16a84ceefa912d4e380cd32e7ff827875ea
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x204f72f35326db932158cba6adff0b9a1da95e14
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x23c8a4c266d10ba5846837eac391fea89ed6f293
+======================================================================
+  raw @0c: n=276 pnl=$16839
+  raw @3c: n=276 pnl=$11709
+  corrected: n=307 pnl=$8935 sharpe=0.33 t_stat=5.78 median_hold=1.0h open_positions=31 months=8 top_month_share=0.22
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x2499753627007c604b2099d55b634fef9e53bbcc
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x25d4405bf9ffa230091fb3cfb9d582f4339911bd
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x2892ea81ccc646db98819a1c7ac03c56227d71dd
+======================================================================
+  raw @0c: n=2279 pnl=$51321
+  raw @3c: n=2279 pnl=$-15118
+  corrected: n=2298 pnl=$-13732 sharpe=-0.06 t_stat=-2.88 median_hold=35.4h open_positions=44 months=8 top_month_share=0.44
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x2a2c53bd278c04da9962fcf96490e17f3dfb9bc1
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x2ada299aaaf27c806424ec6dcb0c169d1a9c2f28
+======================================================================
+  raw @0c: n=17 pnl=$-244
+  raw @3c: n=17 pnl=$-409
+  corrected: n=34 pnl=$-2105 sharpe=-1.096 t_stat=-6.39 median_hold=0.3h open_positions=17 months=5 top_month_share=0.46
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x2be2f3854c5029357d4486c6f78d8d8e3c4582fa
+======================================================================
+  raw @0c: n=102 pnl=$10998
+  raw @3c: n=102 pnl=$1074
+  corrected: n=111 pnl=$370 sharpe=0.012 t_stat=0.13 median_hold=14.6h open_positions=10 months=4 top_month_share=0.65
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x2c335066fe58fe9237c3d3dc7b275c2a034a0563
+======================================================================
+  raw @0c: n=4 pnl=$141
+  raw @3c: n=4 pnl=$98
+  corrected: n=393 pnl=$-38666 sharpe=-6.884 t_stat=-136.47 median_hold=1.9h open_positions=405 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x2d978d3a9d5a5eeac9bad10aedb8593039969283
+======================================================================
+  raw @0c: n=581 pnl=$16909
+  raw @3c: n=581 pnl=$8372
+  corrected: n=878 pnl=$-20549 sharpe=-0.274 t_stat=-8.12 median_hold=0.9h open_positions=307 months=7 top_month_share=0.6
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x2d99e29c4f066ba32098c65e4c7454b277d94ca3
+======================================================================
+  raw @0c: n=355 pnl=$-3272
+  raw @3c: n=355 pnl=$-8366
+  corrected: n=356 pnl=$-8351 sharpe=-0.59 t_stat=-11.13 median_hold=29.5h open_positions=6 months=19 top_month_share=0.57
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x2ef2887692386bebad6ef3df9fd3d0e223047f72
+======================================================================
+  raw @0c: n=211 pnl=$-2869
+  raw @3c: n=211 pnl=$-8019
+  corrected: n=1280 pnl=$-111562 sharpe=-1.495 t_stat=-53.49 median_hold=3.0h open_positions=1094 months=7 top_month_share=0.33
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x328dc4b82869856f3e1a1eae904e67957641f7a9
+======================================================================
+  raw @0c: n=61 pnl=$-1365
+  raw @3c: n=61 pnl=$-2205
+  corrected: n=70 pnl=$-2866 sharpe=-0.804 t_stat=-6.73 median_hold=68.0h open_positions=36 months=5 top_month_share=0.44
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x336bf6f91a4619d54f0711a20fe468adf4d71233
+======================================================================
+  raw @0c: n=143 pnl=$6142
+  raw @3c: n=143 pnl=$2295
+  corrected: n=288 pnl=$-12012 sharpe=-0.484 t_stat=-8.21 median_hold=1.9h open_positions=152 months=14 top_month_share=0.68
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x33e27ac64a453337cfcea8345c705a407c573a1b
+======================================================================
+  raw @0c: n=882 pnl=$14359
+  raw @3c: n=882 pnl=$-3319
+  corrected: n=895 pnl=$-4548 sharpe=-0.086 t_stat=-2.57 median_hold=0.8h open_positions=24 months=3 top_month_share=0.71
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x345faac52112404d96d0eeb1f3d62e330a1f16e7
+======================================================================
+  raw @0c: n=1 pnl=$59
+  raw @3c: n=1 pnl=$47
+  corrected: n=1 pnl=$47 sharpe=None t_stat=n/a median_hold=0.1h open_positions=0 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 1/2 HARD criteria met
+
+======================================================================
+0x35bbbad2415fe5e39b12da9a316cdc80b022009b
+======================================================================
+  raw @0c: n=2989 pnl=$43990
+  raw @3c: n=2989 pnl=$-11553
+  corrected: n=2999 pnl=$-16667 sharpe=-0.084 t_stat=-4.60 median_hold=24.1h open_positions=47 months=6 top_month_share=0.33
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x377ca9bf46ae2e3a08c03631730edcbc86b8f934
+======================================================================
+  raw @0c: n=5 pnl=$659
+  raw @3c: n=5 pnl=$365
+  corrected: n=9 pnl=$-30 sharpe=-0.014 t_stat=-0.04 median_hold=0.4h open_positions=4 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x3844f28115f2f23c9aece1402a0f2be78d187285
+======================================================================
+  raw @0c: n=330 pnl=$5853
+  raw @3c: n=330 pnl=$-12092
+  corrected: n=433 pnl=$-22000 sharpe=-0.399 t_stat=-8.30 median_hold=28.5h open_positions=104 months=14 top_month_share=0.25
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x3913ff940bb03b487d1690aa1120d6a943039462
+======================================================================
+  raw @0c: n=41 pnl=$2728
+  raw @3c: n=41 pnl=$1919
+  corrected: n=76 pnl=$-759 sharpe=-0.082 t_stat=-0.71 median_hold=0.9h open_positions=35 months=2 top_month_share=0.96
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x392543e363a6b4b816d57f36eb643e2ed7b6d2f2
+======================================================================
+  raw @0c: n=36 pnl=$16506
+  raw @3c: n=36 pnl=$6958
+  corrected: n=299 pnl=$-19427 sharpe=-0.38 t_stat=-6.57 median_hold=1.3h open_positions=268 months=6 top_month_share=0.29
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x39d3c773be30fcc73161fc6768f46d563a779ef0
+======================================================================
+  raw @0c: n=195 pnl=$13842
+  raw @3c: n=195 pnl=$10418
+  corrected: n=220 pnl=$8112 sharpe=0.449 t_stat=6.66 median_hold=5.3h open_positions=26 months=7 top_month_share=0.49
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x3a6a2e7a7707c720219228eb8efa7398bc0e458e
+======================================================================
+  raw @0c: n=22 pnl=$10323
+  raw @3c: n=22 pnl=$7503
+  corrected: n=34 pnl=$6412 sharpe=0.799 t_stat=4.66 median_hold=389.8h open_positions=12 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x3be0be4051c9ff8dd6831bf15493cbb73edd7269
+======================================================================
+  raw @0c: n=68 pnl=$641
+  raw @3c: n=68 pnl=$277
+  corrected: n=91 pnl=$-2011 sharpe=-0.436 t_stat=-4.16 median_hold=0.4h open_positions=23 months=3 top_month_share=0.83
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf
+======================================================================
+  raw @0c: n=707 pnl=$74201
+  raw @3c: n=707 pnl=$59466
+  corrected: n=720 pnl=$58762 sharpe=1.029 t_stat=27.61 median_hold=2.3h open_positions=14 months=5 top_month_share=0.57
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x3e03c1da55971460944881173b7bb82ba5a9c97b
+======================================================================
+  raw @0c: n=5 pnl=$448
+  raw @3c: n=5 pnl=$238
+  corrected: n=22 pnl=$-1444 sharpe=-0.71 t_stat=-3.33 median_hold=191.1h open_positions=20 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x3f6e93d1e2c2846a357276e29e7e9147e29c18d9
+======================================================================
+  raw @0c: n=47 pnl=$635
+  raw @3c: n=47 pnl=$-1575
+  corrected: n=47 pnl=$-1443 sharpe=-0.669 t_stat=-4.59 median_hold=223.7h open_positions=0 months=2 top_month_share=0.87
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x401ee31e9ebf9ab9f6315cd95faca5f950436fc9
+======================================================================
+  raw @0c: n=2489 pnl=$90068
+  raw @3c: n=2489 pnl=$16677
+  corrected: n=2490 pnl=$11525 sharpe=0.042 t_stat=2.10 median_hold=10.5h open_positions=3 months=6 top_month_share=0.38
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x40ae660cdfd5da3d997aea5a576016b69831fbf3
+======================================================================
+  raw @0c: n=10 pnl=$-152
+  raw @3c: n=10 pnl=$-330
+  corrected: n=14 pnl=$-718 sharpe=-1.106 t_stat=-4.14 median_hold=0.0h open_positions=4 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x412fe1a101554f0b382181c3af932e4b2d8030fa
+======================================================================
+  raw @0c: n=466 pnl=$49258
+  raw @3c: n=466 pnl=$29418
+  corrected: n=466 pnl=$29921 sharpe=0.422 t_stat=9.11 median_hold=2.1h open_positions=0 months=8 top_month_share=0.2
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x42f1ab1afbf004423542915503b6384da79fbac2
+======================================================================
+  raw @0c: n=96 pnl=$6036
+  raw @3c: n=96 pnl=$3588
+  corrected: n=126 pnl=$1162 sharpe=0.065 t_stat=0.73 median_hold=0.5h open_positions=30 months=2 top_month_share=0.96
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x43820a8ff6780f5f1c0e80cc708deea83c807011
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x45f15178ce9baf1e4f651d98f75e3b01a412d904
+======================================================================
+  raw @0c: n=26 pnl=$-682
+  raw @3c: n=26 pnl=$-1092
+  corrected: n=32 pnl=$-1654 sharpe=-1.225 t_stat=-6.93 median_hold=59.9h open_positions=6 months=2 top_month_share=0.75
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x476e1322d1a412fa0325527b8c3bc5e707b1396d
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x4c224de10a3b74c979b14a1645453a76e0e10960
+======================================================================
+  raw @0c: n=297 pnl=$-4048
+  raw @3c: n=297 pnl=$-15065
+  corrected: n=373 pnl=$-22449 sharpe=-0.627 t_stat=-12.11 median_hold=73.5h open_positions=80 months=6 top_month_share=0.44
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x4f423d4ad987215b20b95f788f83c250e9628bbc
+======================================================================
+  raw @0c: n=1127 pnl=$102179
+  raw @3c: n=1127 pnl=$64102
+  corrected: n=1939 pnl=$-15867 sharpe=-0.062 t_stat=-2.73 median_hold=1.4h open_positions=812 months=6 top_month_share=0.28
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x4fd7679b4597ea4173cc616155baf26ef18e1c90
+======================================================================
+  raw @0c: n=130 pnl=$-362
+  raw @3c: n=130 pnl=$-3112
+  corrected: n=133 pnl=$-3368 sharpe=-0.363 t_stat=-4.19 median_hold=2.7h open_positions=3 months=7 top_month_share=0.29
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x50f0a0fc7364d3c10fc4578b9b1d955368335355
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x511f9c771449162349795d17becf8b37031acbe1
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x5268527977f700f9bf9b6d5cd843859e4e70135d
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x528d9d4cc288368157ccb4d393a98bdc31dc8a30
+======================================================================
+  raw @0c: n=137 pnl=$-2805
+  raw @3c: n=137 pnl=$-8315
+  corrected: n=159 pnl=$-10303 sharpe=-1.439 t_stat=-18.15 median_hold=46.1h open_positions=22 months=4 top_month_share=0.62
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x52ecea7b3159f09db589e4f4ee64872fd0bba6f3
+======================================================================
+  raw @0c: n=111 pnl=$6775
+  raw @3c: n=111 pnl=$4596
+  corrected: n=680 pnl=$-51773 sharpe=-1.054 t_stat=-27.48 median_hold=0.9h open_positions=569 months=6 top_month_share=0.47
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x54bab0bc94667af224e21528804d49c1b87e04e4
+======================================================================
+  raw @0c: n=457 pnl=$40230
+  raw @3c: n=457 pnl=$29240
+  corrected: n=790 pnl=$-3499 sharpe=-0.039 t_stat=-1.10 median_hold=0.8h open_positions=335 months=4 top_month_share=0.56
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x55be7aa03ecfbe37aa5460db791205f7ac9ddca3
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x58af8928a7fd4b1d5f49ee7220f0ecea4f563b0a
+======================================================================
+  raw @0c: n=119 pnl=$-4123
+  raw @3c: n=119 pnl=$-5740
+  corrected: n=176 pnl=$-11105 sharpe=-1.452 t_stat=-19.26 median_hold=0.6h open_positions=58 months=2 top_month_share=0.75
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x58b3380f71bd6c706dd398a5e60bde55fa3a653c
+======================================================================
+  raw @0c: n=472 pnl=$21104
+  raw @3c: n=472 pnl=$8114
+  corrected: n=1168 pnl=$-60727 sharpe=-0.598 t_stat=-20.44 median_hold=1.9h open_positions=710 months=6 top_month_share=0.28
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x5966db1fe50763c9e3c014d756369bad07e1f804
+======================================================================
+  raw @0c: n=42 pnl=$3707
+  raw @3c: n=42 pnl=$3033
+  corrected: n=109 pnl=$-3655 sharpe=-0.379 t_stat=-3.96 median_hold=3.6h open_positions=67 months=3 top_month_share=0.82
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x59e31f05ae21868dad67a7f4c38a941dadfbc96b
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x5a7b3328e8756579bfd364ba92c5c589c7bae9eb
+======================================================================
+  raw @0c: n=6 pnl=$375
+  raw @3c: n=6 pnl=$240
+  corrected: n=15 pnl=$-382 sharpe=-0.301 t_stat=-1.17 median_hold=854.2h open_positions=36 months=3 top_month_share=0.48
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x5b4ec9c06b284ee52c41a761974d836992880232
+======================================================================
+  raw @0c: n=10 pnl=$-252
+  raw @3c: n=10 pnl=$-346
+  corrected: n=40 pnl=$-3327 sharpe=-2.479 t_stat=-15.68 median_hold=0.1h open_positions=30 months=2 top_month_share=0.95
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x5b6331e7ff0831a3fe2ed12004747db1a9c911a4
+======================================================================
+  raw @0c: n=882 pnl=$33778
+  raw @3c: n=882 pnl=$14271
+  corrected: n=4750 pnl=$-371048 sharpe=-1.262 t_stat=-86.98 median_hold=0.2h open_positions=4000 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x5ccf62ac8155e49bc7d021a1a66e9ef18f5579d7
+======================================================================
+  raw @0c: n=2392 pnl=$32170
+  raw @3c: n=2392 pnl=$-38085
+  corrected: n=2399 pnl=$-42652 sharpe=-0.236 t_stat=-11.56 median_hold=4.4h open_positions=21 months=7 top_month_share=0.51
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x5e83c9db1593a9113fffa791797cf9655b383bb7
+======================================================================
+  raw @0c: n=1539 pnl=$143682
+  raw @3c: n=1539 pnl=$46520
+  corrected: n=2292 pnl=$-25247 sharpe=-0.071 t_stat=-3.40 median_hold=11.8h open_positions=794 months=2 top_month_share=0.88
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x65018f9fc473f6e920b8929a375d39c26a461220
+======================================================================
+  raw @0c: n=56 pnl=$2910
+  raw @3c: n=56 pnl=$2183
+  corrected: n=83 pnl=$-486 sharpe=-0.082 t_stat=-0.75 median_hold=6.6h open_positions=27 months=3 top_month_share=0.86
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x658b6ba5418d9e1e0ee52088369b0214cde401b8
+======================================================================
+  raw @0c: n=520 pnl=$-12379
+  raw @3c: n=520 pnl=$-43819
+  corrected: n=548 pnl=$-46271 sharpe=-1.545 t_stat=-36.17 median_hold=4.7h open_positions=29 months=7 top_month_share=0.39
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x67542c3219b37fd1610aad290676ff91cdbfe3bc
+======================================================================
+  raw @0c: n=21 pnl=$-79
+  raw @3c: n=21 pnl=$-306
+  corrected: n=21 pnl=$-267 sharpe=-2.175 t_stat=-9.97 median_hold=0.4h open_positions=0 months=2 top_month_share=0.7
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x695592ec786d39aadf4ada4e67c49d1f4f1d867a
+======================================================================
+  raw @0c: n=333 pnl=$11399
+  raw @3c: n=333 pnl=$4348
+  corrected: n=334 pnl=$4666 sharpe=0.153 t_stat=2.80 median_hold=0.9h open_positions=1 months=11 top_month_share=0.36
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x6bab41a0dc40d6dd4c1a915b8c01969479fd1292
+======================================================================
+  raw @0c: n=1153 pnl=$12388
+  raw @3c: n=1153 pnl=$-18061
+  corrected: n=1162 pnl=$-18122 sharpe=-0.182 t_stat=-6.20 median_hold=12.4h open_positions=19 months=22 top_month_share=0.25
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x6d20c35f65d9899b6d6b74f8466e824580f9a165
+======================================================================
+  raw @0c: n=233 pnl=$17253
+  raw @3c: n=233 pnl=$13207
+  corrected: n=243 pnl=$12392 sharpe=0.653 t_stat=10.18 median_hold=2.1h open_positions=12 months=2 top_month_share=0.59
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c
+======================================================================
+  raw @0c: n=27 pnl=$-137
+  raw @3c: n=27 pnl=$-387
+  corrected: n=475 pnl=$-44989 sharpe=-4.401 t_stat=-95.92 median_hold=0.4h open_positions=458 months=7 top_month_share=0.36
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x6f969a8efb18dd115e597f0bde016aa3812387f3
+======================================================================
+  raw @0c: n=630 pnl=$10731
+  raw @3c: n=630 pnl=$-4257
+  corrected: n=670 pnl=$-6824 sharpe=-0.152 t_stat=-3.93 median_hold=0.6h open_positions=40 months=6 top_month_share=0.64
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x714a685b5454ea4d52979563bbafa77b8168ab2f
+======================================================================
+  raw @0c: n=367 pnl=$-5103
+  raw @3c: n=367 pnl=$-20563
+  corrected: n=372 pnl=$-20705 sharpe=-1.146 t_stat=-22.10 median_hold=125.2h open_positions=9 months=8 top_month_share=0.43
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x73836f35d84a6080ebe035195be41ba114d4bd0b
+======================================================================
+  raw @0c: n=25 pnl=$26
+  raw @3c: n=25 pnl=$-1073
+  corrected: n=29 pnl=$-1272 sharpe=-0.912 t_stat=-4.91 median_hold=54.9h open_positions=11 months=2 top_month_share=0.9
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x76078561b3382e99cebfdbbf7d7d5512d36fc74b
+======================================================================
+  raw @0c: n=1 pnl=$431
+  raw @3c: n=1 pnl=$316
+  corrected: n=18 pnl=$-1378 sharpe=-0.769 t_stat=-3.26 median_hold=236.2h open_positions=21 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x77c344e1715c35d1424881c14e5a9f6911dd00c8
+======================================================================
+  raw @0c: n=410 pnl=$9080
+  raw @3c: n=410 pnl=$-2138
+  corrected: n=432 pnl=$-4128 sharpe=-0.126 t_stat=-2.62 median_hold=34.0h open_positions=38 months=8 top_month_share=0.37
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x77eff0e4df1ac0cc7f8efe42e4084d4725b69f6a
+======================================================================
+  raw @0c: n=104 pnl=$2121
+  raw @3c: n=104 pnl=$-423
+  corrected: n=115 pnl=$-1382 sharpe=-0.173 t_stat=-1.86 median_hold=2.3h open_positions=11 months=6 top_month_share=0.39
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x7a4ab54f561ac306480541456d89fe91660ce7e7
+======================================================================
+  raw @0c: n=54 pnl=$1505
+  raw @3c: n=54 pnl=$221
+  corrected: n=61 pnl=$-356 sharpe=-0.079 t_stat=-0.62 median_hold=0.0h open_positions=7 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x7a7419776882ebb0ced11857db858dc234cfb74c
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x7a80aaaf68a10690c141563665064e9b7d752f8b
+======================================================================
+  raw @0c: n=2 pnl=$38
+  raw @3c: n=2 pnl=$18
+  corrected: n=4 pnl=$-180 sharpe=-0.705 t_stat=-1.41 median_hold=1.6h open_positions=3 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x7af5797efdfd75618932e26a56f2ef9840c5cfc4
+======================================================================
+  raw @0c: n=1 pnl=$1250
+  raw @3c: n=1 pnl=$816
+  corrected: n=1 pnl=$818 sharpe=None t_stat=n/a median_hold=10.9h open_positions=3 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/4 total | 1/2 HARD criteria met
+
+======================================================================
+0x7c1ee865a785de4c00ee90ed86a38489fb8bbab3
+======================================================================
+  raw @0c: n=2 pnl=$-19
+  raw @3c: n=2 pnl=$-110
+  corrected: n=116 pnl=$-11509 sharpe=-11.714 t_stat=-126.16 median_hold=0.3h open_positions=114 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b
+======================================================================
+  raw @0c: n=1589 pnl=$59464
+  raw @3c: n=1589 pnl=$-2092
+  corrected: n=1604 pnl=$-5822 sharpe=-0.032 t_stat=-1.28 median_hold=24.6h open_positions=92 months=5 top_month_share=0.34
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x7c78a509baaee79d0553f63b13341fd2926caba1
+======================================================================
+  raw @0c: n=17 pnl=$-286
+  raw @3c: n=17 pnl=$-396
+  corrected: n=48 pnl=$-3278 sharpe=-1.669 t_stat=-11.56 median_hold=0.3h open_positions=31 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x7d709fa61861add157cc51734237bf13192beac0
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x7d83c905cb7b0e790499392ce641bb867bd7be92
+======================================================================
+  raw @0c: n=154 pnl=$16236
+  raw @3c: n=154 pnl=$9826
+  corrected: n=155 pnl=$10534 sharpe=4.055 t_stat=50.48 median_hold=250.2h open_positions=1 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x7e3a15fcdd6b27b98e7d3cf6a1f4cb2decc6194e
+======================================================================
+  raw @0c: n=426 pnl=$1802
+  raw @3c: n=426 pnl=$-3533
+  corrected: n=1101 pnl=$-70545 sharpe=-1.162 t_stat=-38.56 median_hold=0.0h open_positions=675 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x7ea571c40408f340c1c8fc8eaacebab53c1bde7b
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x7f715d846bf2c90ed319d7e2e7005c725434513d
+======================================================================
+  raw @0c: n=61 pnl=$2696
+  raw @3c: n=61 pnl=$1217
+  corrected: n=67 pnl=$780 sharpe=0.128 t_stat=1.05 median_hold=0.0h open_positions=6 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x81f83d250a1163c1c1f312f41f24e538caba4078
+======================================================================
+  raw @0c: n=148 pnl=$26133
+  raw @3c: n=148 pnl=$10045
+  corrected: n=169 pnl=$8450 sharpe=0.329 t_stat=4.28 median_hold=0.0h open_positions=21 months=3 top_month_share=0.62
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x82cf2b31d18fca19830e216b98cffa5dbc6c0998
+======================================================================
+  raw @0c: n=72 pnl=$7057
+  raw @3c: n=72 pnl=$-142
+  corrected: n=102 pnl=$-3019 sharpe=-0.21 t_stat=-2.12 median_hold=6.3h open_positions=33 months=11 top_month_share=0.26
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x83720820a8aa6c3f20ad71850e7a1a17d16c5223
+======================================================================
+  raw @0c: n=6 pnl=$-19
+  raw @3c: n=6 pnl=$-78
+  corrected: n=66 pnl=$-6066 sharpe=-3.559 t_stat=-28.91 median_hold=607.4h open_positions=61 months=2 top_month_share=0.82
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x84cfffc3f16dcc353094de30d4a45226eccd2f63
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x8725197d72d38e0560beb79736fa6ed32d344806
+======================================================================
+  raw @0c: n=57 pnl=$3696
+  raw @3c: n=57 pnl=$2962
+  corrected: n=154 pnl=$-6581 sharpe=-0.566 t_stat=-7.02 median_hold=0.5h open_positions=97 months=6 top_month_share=0.35
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x87da2f16cf98af9b3e2f6ba6d9c4c470815b53d1
+======================================================================
+  raw @0c: n=1606 pnl=$147575
+  raw @3c: n=1606 pnl=$115371
+  corrected: n=2249 pnl=$51935 sharpe=0.214 t_stat=10.15 median_hold=0.7h open_positions=645 months=6 top_month_share=0.35
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x886028ba7c0b212b508d7e10cbd2a68e15d46e7e
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x891809ccbe713b313eb3de55915f0235e75b8824
+======================================================================
+  raw @0c: n=132 pnl=$-1387
+  raw @3c: n=132 pnl=$-2990
+  corrected: n=182 pnl=$-7713 sharpe=-0.729 t_stat=-9.83 median_hold=24.2h open_positions=52 months=13 top_month_share=0.41
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x89a758df8e06126b39aab96a19f696f0361a0dd4
+======================================================================
+  raw @0c: n=339 pnl=$18437
+  raw @3c: n=339 pnl=$9030
+  corrected: n=427 pnl=$893 sharpe=0.021 t_stat=0.43 median_hold=0.0h open_positions=88 months=3 top_month_share=0.61
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x8b63388f15cceb3b93c8a4aeaabe76c8b878bdd3
+======================================================================
+  raw @0c: n=225 pnl=$15534
+  raw @3c: n=225 pnl=$4350
+  corrected: n=358 pnl=$-8467 sharpe=-0.164 t_stat=-3.10 median_hold=0.6h open_positions=134 months=4 top_month_share=0.47
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x8f59af6942275bcf59c2593ee0aa67ae3ad36a33
+======================================================================
+  raw @0c: n=16 pnl=$315
+  raw @3c: n=16 pnl=$-152
+  corrected: n=34 pnl=$-1408 sharpe=-0.391 t_stat=-2.28 median_hold=1.9h open_positions=19 months=4 top_month_share=0.46
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x915f74ab431126a36401862d922d13113f976c05
+======================================================================
+  raw @0c: n=89 pnl=$-894
+  raw @3c: n=89 pnl=$-1908
+  corrected: n=103 pnl=$-3157 sharpe=-0.62 t_stat=-6.29 median_hold=33.7h open_positions=14 months=2 top_month_share=0.83
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x92a6294cd55b9c6ccd57efaffc365ad943118b84
+======================================================================
+  raw @0c: n=528 pnl=$-5954
+  raw @3c: n=528 pnl=$-8570
+  corrected: n=531 pnl=$-8825 sharpe=-0.442 t_stat=-10.19 median_hold=13.6h open_positions=3 months=7 top_month_share=0.58
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x92d8a88f0a9fef812bdf5628770d6a0ecee39762
+======================================================================
+  raw @0c: n=122 pnl=$18351
+  raw @3c: n=122 pnl=$6974
+  corrected: n=139 pnl=$5502 sharpe=0.172 t_stat=2.03 median_hold=0.1h open_positions=17 months=7 top_month_share=0.52
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x95074f700f93bdf6e62fc965e0832064c0877b04
+======================================================================
+  raw @0c: n=374 pnl=$9195
+  raw @3c: n=374 pnl=$-1861
+  corrected: n=430 pnl=$-2366 sharpe=-0.087 t_stat=-1.80 median_hold=14.9h open_positions=180 months=5 top_month_share=0.4
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x95ab7a59d6be7ee5db648cbae93eb57f3b349d6c
+======================================================================
+  raw @0c: n=1 pnl=$-14
+  raw @3c: n=1 pnl=$-27
+  corrected: n=8 pnl=$-626 sharpe=-1.926 t_stat=-5.45 median_hold=25.5h open_positions=8 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0x983d792afa66c9f63658a85d20c89386652bbecf
+======================================================================
+  raw @0c: n=218 pnl=$1564
+  raw @3c: n=218 pnl=$-2497
+  corrected: n=247 pnl=$-5230 sharpe=-0.309 t_stat=-4.86 median_hold=16.8h open_positions=44 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x98b003bbc73c7b84dd1f0d94e120c05c79e643c2
+======================================================================
+  raw @0c: n=141 pnl=$5756
+  raw @3c: n=141 pnl=$1097
+  corrected: n=147 pnl=$873 sharpe=0.053 t_stat=0.64 median_hold=91.0h open_positions=6 months=8 top_month_share=0.49
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0x997329ff3e5ed79b12e845a2f036e34aa152bd7f
+======================================================================
+  raw @0c: n=218 pnl=$9754
+  raw @3c: n=218 pnl=$4428
+  corrected: n=219 pnl=$4657 sharpe=0.187 t_stat=2.77 median_hold=0.2h open_positions=1 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x9b898179dfdf29a88feb550771e19fd02b01c3cb
+======================================================================
+  raw @0c: n=1 pnl=$-90
+  raw @3c: n=1 pnl=$-100
+  corrected: n=3 pnl=$-300 sharpe=None t_stat=n/a median_hold=0.0h open_positions=2 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/3 total | 0/1 HARD criteria met
+
+======================================================================
+0x9bf11c645d2e51c2b4f0d92f76c12154a3bedf74
+======================================================================
+  raw @0c: n=8 pnl=$160
+  raw @3c: n=8 pnl=$86
+  corrected: n=11 pnl=$-209 sharpe=-0.301 t_stat=-1.00 median_hold=15.8h open_positions=3 months=2 top_month_share=0.59
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x9cb990f1862568a63d8601efeebe0304225c32f2
+======================================================================
+  raw @0c: n=473 pnl=$14243
+  raw @3c: n=473 pnl=$4080
+  corrected: n=477 pnl=$4830 sharpe=0.108 t_stat=2.36 median_hold=1.7h open_positions=6 months=14 top_month_share=0.22
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 2/3 HARD criteria met
+
+======================================================================
+0x9e94e2769c3a0ec3776c425c6a178668f09f4af3
+======================================================================
+  raw @0c: n=6 pnl=$531
+  raw @3c: n=6 pnl=$380
+  corrected: n=10 pnl=$-4 sharpe=-0.004 t_stat=-0.01 median_hold=0.0h open_positions=4 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x9ee8bbc36d378af72e5f6b8e2ea2eb67c05a89de
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0x9f6e25aa9457dd8e194265419a5d762191d1b0e0
+======================================================================
+  raw @0c: n=21 pnl=$1399
+  raw @3c: n=21 pnl=$898
+  corrected: n=30 pnl=$30 sharpe=0.009 t_stat=0.05 median_hold=4.8h open_positions=9 months=6 top_month_share=0.46
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0x9fb234c86bdde457f6affe35de721a6d2389af7b
+======================================================================
+  raw @0c: n=1271 pnl=$1674
+  raw @3c: n=1271 pnl=$-5988
+  corrected: n=1275 pnl=$-6062 sharpe=-0.188 t_stat=-6.71 median_hold=0.4h open_positions=4 months=5 top_month_share=0.61
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xa022ba0a68e11a78348382ff168601012d4d77f8
+======================================================================
+  raw @0c: n=507 pnl=$10561
+  raw @3c: n=507 pnl=$-5298
+  corrected: n=585 pnl=$-13806 sharpe=-0.288 t_stat=-6.97 median_hold=134.8h open_positions=103 months=5 top_month_share=0.42
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xa0f21e6d351baa9185716b5c00c2925ed9621848
+======================================================================
+  raw @0c: n=1323 pnl=$15379
+  raw @3c: n=1323 pnl=$-8260
+  corrected: n=1365 pnl=$-9175 sharpe=-0.09 t_stat=-3.33 median_hold=1.0h open_positions=125 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xa18c5cf2bc6eec389d2d512582ae14654b99d792
+======================================================================
+  raw @0c: n=28 pnl=$155
+  raw @3c: n=28 pnl=$-97
+  corrected: n=35 pnl=$-191 sharpe=-0.086 t_stat=-0.51 median_hold=9.7h open_positions=49 months=2 top_month_share=0.67
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xa65c87d5fa12469300aaa71e6237af2f2d147997
+======================================================================
+  raw @0c: n=725 pnl=$-17756
+  raw @3c: n=725 pnl=$-30232
+  corrected: n=726 pnl=$-31193 sharpe=-0.484 t_stat=-13.04 median_hold=23.2h open_positions=6 months=4 top_month_share=0.78
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xa77105bb4d2d4d200b0133a2036222353831162d
+======================================================================
+  raw @0c: n=3 pnl=$-38
+  raw @3c: n=3 pnl=$-300
+  corrected: n=35 pnl=$-3402 sharpe=-5.872 t_stat=-34.74 median_hold=253.0h open_positions=38 months=2 top_month_share=0.67
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xabf4cd74e59bfaf1c301203c720656ac122643f7
+======================================================================
+  raw @0c: n=49 pnl=$3304
+  raw @3c: n=49 pnl=$2554
+  corrected: n=71 pnl=$375 sharpe=0.064 t_stat=0.54 median_hold=1.3h open_positions=23 months=4 top_month_share=0.46
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xad6092f0ab7cda2a84977d18cabecbdbe4e397f4
+======================================================================
+  raw @0c: n=145 pnl=$-123
+  raw @3c: n=145 pnl=$-1220
+  corrected: n=149 pnl=$-1163 sharpe=-0.397 t_stat=-4.85 median_hold=1074.7h open_positions=63 months=8 top_month_share=0.39
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xADDRESS_HERE
+======================================================================
+  raw @0c: n=1077 pnl=$318
+  raw @3c: n=1077 pnl=$-13661
+  corrected: n=1077 pnl=$-12073 sharpe=-0.269 t_stat=-8.83 median_hold=0.0h open_positions=0 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xb340ecd9e8b681562affbafe4a87514b31261ad1
+======================================================================
+  raw @0c: n=330 pnl=$702
+  raw @3c: n=330 pnl=$-1723
+  corrected: n=350 pnl=$-3551 sharpe=-0.281 t_stat=-5.26 median_hold=0.7h open_positions=20 months=2 top_month_share=0.94
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xb61b2079b95f6b7476fd3203e0274ffb93308a06
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xb687f00464e33934f5d591f224e71c3559ecaee5
+======================================================================
+  raw @0c: n=1 pnl=$-91
+  raw @3c: n=1 pnl=$-100
+  corrected: n=797 pnl=$-79700 sharpe=-1.5744822619308864e+16 t_stat=-444495054115183040.00 median_hold=0.0h open_positions=825 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xb6c83e346ab31df6e24bc53ecb6e15c03b75b9e6
+======================================================================
+  raw @0c: n=168 pnl=$-1230
+  raw @3c: n=168 pnl=$-2732
+  corrected: n=283 pnl=$-14130 sharpe=-1.081 t_stat=-18.19 median_hold=56.9h open_positions=121 months=6 top_month_share=0.4
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xb7cbe58a758da80b67acceac3b7ef824fe54a29e
+======================================================================
+  raw @0c: n=9 pnl=$355
+  raw @3c: n=9 pnl=$136
+  corrected: n=11 pnl=$-42 sharpe=-0.053 t_stat=-0.18 median_hold=114.7h open_positions=8 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xb8cd551fc6eaaee81d04a0f6d0fc437455b502cd
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xb98b176859c2b375cf06c1c4974e46ed69cd7e18
+======================================================================
+  raw @0c: n=164 pnl=$19893
+  raw @3c: n=164 pnl=$12069
+  corrected: n=263 pnl=$5284 sharpe=0.086 t_stat=1.39 median_hold=37.4h open_positions=105 months=19 top_month_share=0.27
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  3/5 total | 2/3 HARD criteria met
+
+======================================================================
+0xba1d8825141394a00f14c82c03aa68b1f20cd326
+======================================================================
+  raw @0c: n=788 pnl=$11643
+  raw @3c: n=788 pnl=$-2372
+  corrected: n=832 pnl=$-5288 sharpe=-0.089 t_stat=-2.57 median_hold=0.0h open_positions=44 months=2 top_month_share=0.9
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xba711bbdf3be1e53791c2514a2c78af2c12b725b
+======================================================================
+  raw @0c: n=49 pnl=$2255
+  raw @3c: n=49 pnl=$-1444
+  corrected: n=112 pnl=$-7612 sharpe=-0.998 t_stat=-10.56 median_hold=46.3h open_positions=63 months=3 top_month_share=0.62
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xba802ad693999777b28b21c5fb9ad02d91267084
+======================================================================
+  raw @0c: n=439 pnl=$-499
+  raw @3c: n=439 pnl=$-5848
+  corrected: n=541 pnl=$-15512 sharpe=-0.385 t_stat=-8.95 median_hold=0.0h open_positions=102 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xbb5fbe810633ab08d106b82db84418a0e2ca2e21
+======================================================================
+  raw @0c: n=1 pnl=$-13
+  raw @3c: n=1 pnl=$-20
+  corrected: n=6 pnl=$-519 sharpe=-2.612 t_stat=-6.40 median_hold=0.2h open_positions=5 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xbbe3fb94608928651123d69231c0213ef6e75b92
+======================================================================
+  raw @0c: n=556 pnl=$-12317
+  raw @3c: n=556 pnl=$-25131
+  corrected: n=592 pnl=$-28468 sharpe=-1.13 t_stat=-27.49 median_hold=1.0h open_positions=52 months=7 top_month_share=0.46
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xbc8c61c1de7c31a8ff68aebf55256c028db9273f
+======================================================================
+  raw @0c: n=395 pnl=$17979
+  raw @3c: n=395 pnl=$4583
+  corrected: n=759 pnl=$-31333 sharpe=-0.38 t_stat=-10.47 median_hold=0.4h open_positions=364 months=9 top_month_share=0.28
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xbca08c1bc204a34f2fddbe47b438b9bd42ac9705
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xbcbb17aa61a74125add38d0b472422a34fdd5913
+======================================================================
+  raw @0c: n=17 pnl=$425
+  raw @3c: n=17 pnl=$-215
+  corrected: n=17 pnl=$-174 sharpe=-0.147 t_stat=-0.61 median_hold=28.9h open_positions=2 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xc02147dee42356b7a4edbb1c35ac4ffa95f61fa8
+======================================================================
+  raw @0c: n=1638 pnl=$50835
+  raw @3c: n=1638 pnl=$-15856
+  corrected: n=1761 pnl=$-28127 sharpe=-0.151 t_stat=-6.34 median_hold=254.0h open_positions=190 months=12 top_month_share=0.18
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xc1c7bb8761105f6d33fc8d71dec31b5688a0f0a7
+======================================================================
+  raw @0c: n=28 pnl=$906
+  raw @3c: n=28 pnl=$639
+  corrected: n=33 pnl=$271 sharpe=0.176 t_stat=1.01 median_hold=0.7h open_positions=5 months=2 top_month_share=0.99
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xc41d736bded9ed1accd6a44235039266219774fd
+======================================================================
+  raw @0c: n=12 pnl=$-253
+  raw @3c: n=12 pnl=$-356
+  corrected: n=141 pnl=$-13247 sharpe=-3.467 t_stat=-41.17 median_hold=1.2h open_positions=129 months=3 top_month_share=0.88
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xc6a63ad5a788a576d4acc9911c50fef9fde49458
+======================================================================
+  raw @0c: n=28 pnl=$-335
+  raw @3c: n=28 pnl=$-793
+  corrected: n=40 pnl=$-1930 sharpe=-1.25 t_stat=-7.91 median_hold=1.5h open_positions=12 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xc8ec6d4cef5c5fe8409ef69303c37f05b678e8f1
+======================================================================
+  raw @0c: n=187 pnl=$19811
+  raw @3c: n=187 pnl=$13678
+  corrected: n=228 pnl=$9788 sharpe=0.291 t_stat=4.39 median_hold=17.6h open_positions=42 months=12 top_month_share=0.21
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  4/5 total | 3/3 HARD criteria met
+
+======================================================================
+0xc96e5287ab294ac0388c2ddb00180fc464cff1f9
+======================================================================
+  raw @0c: n=156 pnl=$-1441
+  raw @3c: n=156 pnl=$-3260
+  corrected: n=157 pnl=$-3452 sharpe=-0.264 t_stat=-3.31 median_hold=5.5h open_positions=8 months=4 top_month_share=0.45
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xc98b99ed7f9748fb3eb8d13d0e4531d023286430
+======================================================================
+  raw @0c: n=609 pnl=$8955
+  raw @3c: n=609 pnl=$-3712
+  corrected: n=611 pnl=$-3014 sharpe=-0.059 t_stat=-1.46 median_hold=2.3h open_positions=2 months=9 top_month_share=0.31
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xcae693bcf9696a2ebf0a62de767719b45f354f85
+======================================================================
+  raw @0c: n=3425 pnl=$59740
+  raw @3c: n=3425 pnl=$14937
+  corrected: n=3447 pnl=$16895 sharpe=0.086 t_stat=5.05 median_hold=0.1h open_positions=22 months=3 top_month_share=0.58
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xcc500cbcc8b7cf5bd21975ebbea34f21b5644c82
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xce203519c2db8a050042ded95f9c6bde2ac80b7b
+======================================================================
+  raw @0c: n=300 pnl=$17901
+  raw @3c: n=300 pnl=$12864
+  corrected: n=301 pnl=$12907 sharpe=0.484 t_stat=8.40 median_hold=0.6h open_positions=1 months=2 top_month_share=0.58
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 2/3 HARD criteria met
+
+======================================================================
+0xcfb3fc509377f7dfdef5c2db7dd431c3b1aa2da3
+======================================================================
+  raw @0c: n=23 pnl=$177
+  raw @3c: n=23 pnl=$-671
+  corrected: n=34 pnl=$-1742 sharpe=-0.614 t_stat=-3.58 median_hold=9.0h open_positions=11 months=8 top_month_share=0.33
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xd0c5b4198d4273ac2038bc813cebb1006bee8c8a
+======================================================================
+  raw @0c: n=46 pnl=$28961
+  raw @3c: n=46 pnl=$10333
+  corrected: n=211 pnl=$-5949 sharpe=-0.104 t_stat=-1.51 median_hold=1.6h open_positions=165 months=9 top_month_share=0.67
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xd0cfef5e3bcb831681c64b41242dd82230c36f28
+======================================================================
+  raw @0c: n=38 pnl=$-198
+  raw @3c: n=38 pnl=$-562
+  corrected: n=46 pnl=$-1290 sharpe=-0.835 t_stat=-5.66 median_hold=0.0h open_positions=10 months=2 top_month_share=0.96
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xd185fbaa23f9a31d781e7af94b7f6634ab930343
+======================================================================
+  raw @0c: n=149 pnl=$371
+  raw @3c: n=149 pnl=$-847
+  corrected: n=153 pnl=$-1033 sharpe=-0.197 t_stat=-2.44 median_hold=44.6h open_positions=4 months=6 top_month_share=0.44
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xd1c537b2a7cba8d365e111bffb9de7b205e2cbd0
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xd218e474776403a330142299f7796e8ba32eb5c9
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xd2ba1a9ddc92f5111b63d0e82ca0d93a1c78da65
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xd38ad20037839959d89165cf448568d584b28d26
+======================================================================
+  raw @0c: n=289 pnl=$21338
+  raw @3c: n=289 pnl=$16753
+  corrected: n=410 pnl=$4847 sharpe=0.139 t_stat=2.81 median_hold=2.7h open_positions=121 months=9 top_month_share=0.23
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  3/5 total | 2/3 HARD criteria met
+
+======================================================================
+0xd3bc202269d0bbd1a158264be8f7e1e0f9e45bd2
+======================================================================
+  raw @0c: n=69 pnl=$2996
+  raw @3c: n=69 pnl=$2100
+  corrected: n=105 pnl=$-1464 sharpe=-0.172 t_stat=-1.76 median_hold=0.9h open_positions=37 months=3 top_month_share=0.71
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xd82be05d610840156d4c08a5d352ef43fe12f0c1
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xd8d5289c35124b5353f5a10a28b8cc29aec38935
+======================================================================
+  raw @0c: n=1134 pnl=$30128
+  raw @3c: n=1134 pnl=$1505
+  corrected: n=1183 pnl=$552 sharpe=0.006 t_stat=0.21 median_hold=54.0h open_positions=311 months=4 top_month_share=0.58
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xd9e0aaca471f489be338fd0f91a26e8669a805f2
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xda3a9b7afff7b44ad4fd75308723194e0a11381f
+======================================================================
+  raw @0c: n=64 pnl=$9570
+  raw @3c: n=64 pnl=$6241
+  corrected: n=257 pnl=$-13025 sharpe=-0.375 t_stat=-6.01 median_hold=5.3h open_positions=196 months=6 top_month_share=0.58
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xda63be80f2dbf1d737e18a6f0fb5a23038e6a0b1
+======================================================================
+  raw @0c: n=7 pnl=$12
+  raw @3c: n=7 pnl=$-26
+  corrected: n=16 pnl=$-928 sharpe=-1.177 t_stat=-4.71 median_hold=174.6h open_positions=13 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xda9d766c3a37e0f768e20e6b3641b430b997e1f5
+======================================================================
+  raw @0c: n=4 pnl=$-150
+  raw @3c: n=4 pnl=$-286
+  corrected: n=6 pnl=$-481 sharpe=-2.94 t_stat=-7.20 median_hold=538.1h open_positions=6 months=3 top_month_share=0.53
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xdb83e85ffd22faa4009273034770f96ffc5b1e50
+======================================================================
+  raw @0c: n=408 pnl=$36261
+  raw @3c: n=408 pnl=$28010
+  corrected: n=4308 pnl=$-359859 sharpe=-1.405 t_stat=-92.22 median_hold=1.8h open_positions=4000 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xddacd71c8083f8332e7bd89319f9e4d5ceb3a818
+======================================================================
+  raw @0c: n=64 pnl=$-2360
+  raw @3c: n=64 pnl=$-3451
+  corrected: n=89 pnl=$-5933 sharpe=-1.477 t_stat=-13.93 median_hold=1.0h open_positions=25 months=3 top_month_share=0.86
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xde7be6d489bce070a959e0cb813128ae659b5f4b
+======================================================================
+  raw @0c: n=280 pnl=$13780
+  raw @3c: n=280 pnl=$5136
+  corrected: n=500 pnl=$-17436 sharpe=-0.382 t_stat=-8.54 median_hold=52.5h open_positions=262 months=5 top_month_share=0.43
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xdf2738be74505c16478107128fb2081e451f026f
+======================================================================
+  raw @0c: n=32 pnl=$369
+  raw @3c: n=32 pnl=$191
+  corrected: n=346 pnl=$-31202 sharpe=-2.886 t_stat=-53.68 median_hold=3.7h open_positions=314 months=4 top_month_share=0.41
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xdfe3fedc5c7679be42c3d393e99d4b55247b73c4
+======================================================================
+  raw @0c: n=383 pnl=$1248
+  raw @3c: n=383 pnl=$-3806
+  corrected: n=394 pnl=$-4897 sharpe=-0.271 t_stat=-5.38 median_hold=356.6h open_positions=26 months=23 top_month_share=0.17
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xe15fe7ebe78bcf45203887513ca39d2192d48649
+======================================================================
+  raw @0c: n=12 pnl=$331
+  raw @3c: n=12 pnl=$-578
+  corrected: n=67 pnl=$-6056 sharpe=-2.192 t_stat=-17.94 median_hold=0.0h open_positions=55 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe22f1c9e4d5984fd0b2e849b9be273c21ea81076
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xe2f28a32da8391d658f0b06935f766db000dc864
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xe337f5a28e9c530a676c959a1888ba5368664ad6
+======================================================================
+  raw @0c: n=1930 pnl=$58826
+  raw @3c: n=1930 pnl=$5176
+  corrected: n=2017 pnl=$-515 sharpe=-0.003 t_stat=-0.13 median_hold=0.0h open_positions=87 months=3 top_month_share=0.56
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe3f1fb88b9eabc743e2a2d947e2efdba5e99bd92
+======================================================================
+  raw @0c: n=6 pnl=$397
+  raw @3c: n=6 pnl=$320
+  corrected: n=6 pnl=$321 sharpe=68.454 t_stat=167.68 median_hold=11.0h open_positions=0 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  4/5 total | 2/3 HARD criteria met
+
+======================================================================
+0xe4acbffbce6c37b2b2b3af2585014e42b1423c81
+======================================================================
+  raw @0c: n=284 pnl=$31315
+  raw @3c: n=284 pnl=$22029
+  corrected: n=618 pnl=$-10777 sharpe=-0.142 t_stat=-3.53 median_hold=0.0h open_positions=334 months=4 top_month_share=0.64
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xe52c0a1327a12edc7bd54ea6f37ce00a4ca96924
+======================================================================
+  raw @0c: n=171 pnl=$-1607
+  raw @3c: n=171 pnl=$-3903
+  corrected: n=174 pnl=$-3760 sharpe=-0.754 t_stat=-9.95 median_hold=148.4h open_positions=9 months=12 top_month_share=0.29
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xe549581668a5751c1972d3ad2d1991d900bd2d54
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xe59733d803e19b28e69556ece2adc8c37947abb9
+======================================================================
+  raw @0c: n=11 pnl=$1702
+  raw @3c: n=11 pnl=$102
+  corrected: n=61 pnl=$-4857 sharpe=-1.044 t_stat=-8.15 median_hold=17.6h open_positions=51 months=3 top_month_share=0.57
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe734e7bf7cfb9e464681f71822f6c2f6be514f0c
+======================================================================
+  raw @0c: n=1899 pnl=$41587
+  raw @3c: n=1899 pnl=$-14160
+  corrected: n=1937 pnl=$-13417 sharpe=-0.077 t_stat=-3.39 median_hold=90.3h open_positions=48 months=5 top_month_share=0.32
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe8a68017820cc850b4d13cfd8a165eb438b4644b
+======================================================================
+  raw @0c: n=743 pnl=$53537
+  raw @3c: n=743 pnl=$2043
+  corrected: n=805 pnl=$-3780 sharpe=-0.035 t_stat=-0.99 median_hold=7.6h open_positions=180 months=6 top_month_share=0.5
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe8d6d5df813ed89f8ac988ce7f906371c845e410
+======================================================================
+  raw @0c: n=138 pnl=$1333
+  raw @3c: n=138 pnl=$-2087
+  corrected: n=148 pnl=$-2894 sharpe=-0.212 t_stat=-2.58 median_hold=3.2h open_positions=26 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe9076a87c5ed90ef16e6fe6529c943baeca0cff6
+======================================================================
+  raw @0c: n=1985 pnl=$64844
+  raw @3c: n=1985 pnl=$26928
+  corrected: n=2347 pnl=$4601 sharpe=0.022 t_stat=1.07 median_hold=0.7h open_positions=1527 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe962dfbaed113be79c38e122e67a431231a9663a
+======================================================================
+  raw @0c: n=10 pnl=$8
+  raw @3c: n=10 pnl=$-186
+  corrected: n=96 pnl=$-8774 sharpe=-3.239 t_stat=-31.74 median_hold=16.9h open_positions=94 months=5 top_month_share=0.46
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xe9a5803eae83f92d5e0a335c46157fc1a6cd63bb
+======================================================================
+  raw @0c: n=6 pnl=$6
+  raw @3c: n=6 pnl=$-383
+  corrected: n=7 pnl=$-478 sharpe=-0.813 t_stat=-2.15 median_hold=205.8h open_positions=1 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xeca0c0888e34df59589c67fbe53dc7f298b5e8f8
+======================================================================
+  raw @0c: n=2225 pnl=$15934
+  raw @3c: n=2225 pnl=$-23587
+  corrected: n=2245 pnl=$-26023 sharpe=-0.194 t_stat=-9.19 median_hold=26.3h open_positions=159 months=5 top_month_share=0.36
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xed107a85a4585a381e48c7f7ca4144909e7dd2e5
+======================================================================
+  raw @0c: n=330 pnl=$-2947
+  raw @3c: n=330 pnl=$-4993
+  corrected: n=355 pnl=$-4952 sharpe=-0.336 t_stat=-6.33 median_hold=140.3h open_positions=84 months=25 top_month_share=0.14
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/4 total | 1/2 HARD criteria met
+
+======================================================================
+0xedecaebfbbdc95aad807df6b6c8f7fd65b2bd967
+======================================================================
+  raw @0c: n=54 pnl=$1568
+  raw @3c: n=54 pnl=$695
+  corrected: n=271 pnl=$-20674 sharpe=-1.304 t_stat=-21.47 median_hold=0.0h open_positions=226 months=3 top_month_share=0.85
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  0/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xee00ba338c59557141789b127927a55f5cc5cea1
+======================================================================
+  raw @0c: n=21 pnl=$-510
+  raw @3c: n=21 pnl=$-670
+  corrected: n=21 pnl=$-644 sharpe=-0.762 t_stat=-3.49 median_hold=1.2h open_positions=1 months=8 top_month_share=0.78
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xeebde7a0e019a63e6b476eb425505b7b3e6eba30
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xefbec584e71807e655004838050cc5b7eececb39
+======================================================================
+  raw @0c: n=24 pnl=$-661
+  raw @3c: n=24 pnl=$-996
+  corrected: n=40 pnl=$-2600 sharpe=-1.41 t_stat=-8.92 median_hold=1.5h open_positions=16 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xf0318c32136c2db7fec88b84869aee6a1106c80c
+======================================================================
+  raw @0c: n=2 pnl=$-59
+  raw @3c: n=2 pnl=$-119
+  corrected: n=290 pnl=$-28917 sharpe=-20.385 t_stat=-347.14 median_hold=73.2h open_positions=288 months=2 top_month_share=0.86
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xf05931960ac60a3d78c35f6d8939e93e45dde97c
+======================================================================
+  raw @0c: n=89 pnl=$647
+  raw @3c: n=89 pnl=$-652
+  corrected: n=92 pnl=$-811 sharpe=-0.141 t_stat=-1.35 median_hold=2.7h open_positions=3 months=7 top_month_share=0.27
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xf0b6a8ebfa3a626337cc45e8eed30eaafb182fef
+======================================================================
+  raw @0c: n=28 pnl=$-481
+  raw @3c: n=28 pnl=$-705
+  corrected: n=57 pnl=$-3565 sharpe=-1.396 t_stat=-10.54 median_hold=8.0h open_positions=29 months=3 top_month_share=0.82
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xf32a44b612a60f2b0c0f23c419876ec1c89c06fd
+======================================================================
+  raw @0c: n=1626 pnl=$1527
+  raw @3c: n=1626 pnl=$-8874
+  corrected: n=1723 pnl=$-14146 sharpe=-0.36 t_stat=-14.94 median_hold=148.4h open_positions=115 months=7 top_month_share=0.36
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xf37bd93206203525a515c6863e60eaa7d9154eda
+======================================================================
+  raw @0c: n=402 pnl=$32396
+  raw @3c: n=402 pnl=$7694
+  corrected: n=414 pnl=$7648 sharpe=0.139 t_stat=2.83 median_hold=0.2h open_positions=19 months=9 top_month_share=0.39
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xf5c49ad254b1d53ea0b86fb285dd3f11dc800926
+======================================================================
+  raw @0c: n=147 pnl=$1912
+  raw @3c: n=147 pnl=$-901
+  corrected: n=151 pnl=$-834 sharpe=-0.076 t_stat=-0.93 median_hold=23.7h open_positions=17 months=9 top_month_share=0.23
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xf5fabdcdc6eb6d9765a228824f16cca9c91f62df
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xf70f2ba870efc32d07b366c2d685804dfa683c97
+======================================================================
+  raw @0c: n=1111 pnl=$12711
+  raw @3c: n=1111 pnl=$3460
+  corrected: n=1143 pnl=$665 sharpe=0.012 t_stat=0.41 median_hold=0.5h open_positions=32 months=10 top_month_share=0.22
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xf794ef90e0b3b9b753d6a477f0652eeb300215c1
+======================================================================
+  raw @0c: n=1 pnl=$0
+  raw @3c: n=1 pnl=$-3
+  corrected: n=2 pnl=$-5 sharpe=-5.538 t_stat=-7.83 median_hold=385.2h open_positions=1 months=1 top_month_share=1.0
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  2/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xf7bd9f758e100426a134ebf6d7f0b2eec90f2a37
+======================================================================
+  raw @0c: n=110 pnl=$-1159
+  raw @3c: n=110 pnl=$-2323
+  corrected: n=238 pnl=$-14088 sharpe=-1.117 t_stat=-17.23 median_hold=2.2h open_positions=129 months=16 top_month_share=0.26
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: PASS
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/4 total | 1/2 HARD criteria met
+
+======================================================================
+0xf989bd9c62b1eae2c388515fcc766527a8b147cc
+======================================================================
+  raw @0c: n=16 pnl=$1211
+  raw @3c: n=16 pnl=$919
+  corrected: n=56 pnl=$-3135 sharpe=-0.71 t_stat=-5.31 median_hold=2803.9h open_positions=51 months=3 top_month_share=0.96
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xfaf680c17a9cca24ff0773ae2d9f7db49c02cc47
+======================================================================
+  raw @0c: n=8 pnl=$178
+  raw @3c: n=8 pnl=$89
+  corrected: n=20 pnl=$84 sharpe=0.1 t_stat=0.45 median_hold=27.3h open_positions=36 months=2 top_month_share=0.71
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  3/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xfb64650bccbf4804c9db00b10abb7fb205db5e23
+======================================================================
+  raw @0c: n=394 pnl=$22719
+  raw @3c: n=394 pnl=$12293
+  corrected: n=670 pnl=$-14187 sharpe=-0.185 t_stat=-4.79 median_hold=1.3h open_positions=280 months=7 top_month_share=0.47
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xfba121e711af0f8e68f187977622dea19a7e1733
+======================================================================
+  raw @0c: n=7 pnl=$660
+  raw @3c: n=7 pnl=$516
+  corrected: n=271 pnl=$-25881 sharpe=-3.185 t_stat=-52.43 median_hold=0.2h open_positions=270 months=1 top_month_share=1.0
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/5 total | 1/3 HARD criteria met
+
+======================================================================
+0xfbf3d501e88815464642d0e913f15379c3eeb218
+======================================================================
+  raw @0c: n=810 pnl=$62639
+  raw @3c: n=810 pnl=$46057
+  corrected: n=877 pnl=$39975 sharpe=0.468 t_stat=13.86 median_hold=1.1h open_positions=67 months=11 top_month_share=0.26
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: PASS
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: PASS
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  2/5 total | 2/3 HARD criteria met
+
+======================================================================
+0xfc25f141ed27bb1787338d2c4e7f51e3a15e1f7f
+======================================================================
+  raw @0c: n=118 pnl=$279
+  raw @3c: n=118 pnl=$-907
+  corrected: n=122 pnl=$-823 sharpe=-0.344 t_stat=-3.80 median_hold=0.2h open_positions=5 months=6 top_month_share=0.5
+  --- scorecard ---
+    1_edge_vs_spread [HARD]: FAIL
+    2_hold_ge_2.0h [SOFT]: FAIL
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: PASS
+  1/5 total | 0/3 HARD criteria met
+
+======================================================================
+0xfcfffe1598b7f24b6d8082c93c7b786b51be701b
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xfe787d2da716d60e8acff57fb87eb13cd4d10319
+======================================================================
+  no round-trips at 0c -- can't score
+
+======================================================================
+0xfea31bc088000ff909be1dfd8d0e3f2c7ef2d227
+======================================================================
+  raw @0c: n=360 pnl=$-3367
+  raw @3c: n=360 pnl=$-7658
+  corrected: n=368 pnl=$-7341 sharpe=-0.488 t_stat=-9.36 median_hold=149.9h open_positions=64 months=4 top_month_share=0.67
+  --- scorecard ---
+    2_hold_ge_2.0h [SOFT]: PASS
+    3_significant_edge_p05 [HARD]: FAIL
+    4_sample_and_spread [HARD]: FAIL
+    5_concurrent_le_40 [SOFT]: FAIL
+  1/4 total | 0/2 HARD criteria met
+
+======================================================================
+0xffb424058931a4b29cfa6a6906cadc52b665d6b5
+======================================================================
+  no round-trips at 0c -- can't score
+
+saved -> wallet_5point_results.csv
+
+best: 0xc8ec6d4cef5c5fe8409ef69303c37f05b678e8f1 (3/3 HARD, 4 total)

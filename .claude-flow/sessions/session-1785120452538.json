@@ -1,0 +1,14 @@
+{
+  "id": "session-1785120452538",
+  "startedAt": "2026-07-27T02:47:32.538Z",
+  "cwd": "/Users/chrisgarceau/pm",
+  "context": {},
+  "metrics": {
+    "edits": 12,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-07-27T03:45:18.309Z",
+  "duration": 3465772
+}

@@ -1,0 +1,156 @@
+city,hr,obs_max,band,ceil,yes_bid,yes_ask,no_ask,edge_buy_no,edge_sell_yes,event,best
+istanbul,20,26.0,24°C,24.49,0.995,0.999,0.005,0.995,0.995,Highest temperature in Istanbul on July 23?,0.995
+paris,19,25.1,14°C,14.49,0.99,0.998,0.01,0.99,0.99,Lowest temperature in Paris on July 23?,0.99
+london,18,25.6,17°C,17.49,0.984,0.998,0.016,0.984,0.984,Lowest temperature in London on July 23?,0.984
+sao paulo,14,24.5,24°C,24.49,0.887,0.939,0.113,0.887,0.887,Highest temperature in Sao Paulo on July 23?,0.887
+paris,19,25.1,15°C,15.49,0.6,0.62,0.4,0.6,0.6,Lowest temperature in Paris on July 24?,0.6
+ankara,20,29.0,28°C,28.49,0.45,0.46,0.55,0.45,0.45,Highest temperature in Ankara on July 24?,0.45
+paris,19,25.1,16°C,16.49,0.44,0.46,0.56,0.44,0.44,Lowest temperature in Paris on July 25?,0.44
+istanbul,20,26.0,25°C,25.49,0.41,0.42,0.59,0.41,0.41,Highest temperature in Istanbul on July 24?,0.41
+london,18,25.6,19°C,19.49,0.4,0.59,0.6,0.4,0.4,Lowest temperature in London on July 24?,0.4
+milan,19,30.2,29°C,29.49,0.33,0.36,0.67,0.33,0.33,Highest temperature in Milan on July 24?,0.33
+sao paulo,14,24.5,17°C,17.49,0.33,0.35,0.67,0.33,0.33,Highest temperature in Sao Paulo on July 24?,0.33
+sao paulo,14,24.5,18°C,18.49,0.32,0.33,0.68,0.32,0.32,Highest temperature in Sao Paulo on July 24?,0.32
+milan,19,30.2,29°C,29.49,0.31,0.32,0.69,0.31,0.31,Highest temperature in Milan on July 25?,0.31
+istanbul,20,26.0,23°C,23.49,0.3,0.31,0.7,0.3,0.3,Highest temperature in Istanbul on July 25?,0.3
+istanbul,20,26.0,22°C,22.49,0.29,0.32,0.71,0.29,0.29,Highest temperature in Istanbul on July 25?,0.29
+milan,19,30.2,28°C or below,28.49,0.282,0.285,0.718,0.282,0.282,Highest temperature in Milan on July 25?,0.282
+ankara,20,29.0,27°C,27.49,0.28,0.29,0.72,0.28,0.28,Highest temperature in Ankara on July 24?,0.28
+london,18,25.6,17°C,17.49,0.26,0.27,0.74,0.26,0.26,Lowest temperature in London on July 25?,0.26
+paris,19,25.1,17°C,17.49,0.26,0.27,0.74,0.26,0.26,Lowest temperature in Paris on July 25?,0.26
+ankara,20,29.0,20°C,20.49,0.24,0.27,0.76,0.24,0.24,Highest temperature in Ankara on July 25?,0.24
+paris,19,25.1,14°C,14.49,0.24,0.28,0.76,0.24,0.24,Lowest temperature in Paris on July 24?,0.24
+london,18,25.6,16°C,16.49,0.23,0.25,0.77,0.23,0.23,Lowest temperature in London on July 25?,0.23
+london,18,25.6,18°C,18.49,0.22,0.23,0.78,0.22,0.22,Lowest temperature in London on July 25?,0.22
+ankara,20,29.0,19°C,19.49,0.21,0.22,0.79,0.21,0.21,Highest temperature in Ankara on July 25?,0.21
+ankara,20,29.0,21°C,21.49,0.21,0.22,0.79,0.21,0.21,Highest temperature in Ankara on July 25?,0.21
+sao paulo,14,24.5,16°C,16.49,0.182,0.187,0.818,0.182,0.182,Highest temperature in Sao Paulo on July 24?,0.182
+paris,19,25.1,15°C,15.49,0.18,0.19,0.82,0.18,0.18,Lowest temperature in Paris on July 25?,0.18
+london,18,25.6,18°C,18.49,0.17,0.22,0.83,0.17,0.17,Lowest temperature in London on July 24?,0.17
+istanbul,20,26.0,24°C,24.49,0.16,0.19,0.84,0.16,0.16,Highest temperature in Istanbul on July 25?,0.16
+istanbul,20,26.0,24°C,24.49,0.16,0.17,0.84,0.16,0.16,Highest temperature in Istanbul on July 24?,0.16
+london,18,25.6,20°C,20.49,0.153,0.169,0.847,0.153,0.153,Lowest temperature in London on July 24?,0.153
+moscow,20,21.3,20°C,20.49,0.15,0.16,0.85,0.15,0.15,Highest temperature in Moscow on July 25?,0.15
+ankara,20,29.0,22°C,22.49,0.14,0.16,0.86,0.14,0.14,Highest temperature in Ankara on July 25?,0.14
+istanbul,20,26.0,21°C,21.49,0.13,0.15,0.87,0.13,0.13,Highest temperature in Istanbul on July 25?,0.13
+sao paulo,14,24.5,19°C,19.49,0.11,0.14,0.89,0.11,0.11,Highest temperature in Sao Paulo on July 24?,0.11
+london,18,25.6,17°C,17.49,0.1,0.24,0.9,0.1,0.1,Lowest temperature in London on July 24?,0.1
+milan,19,30.2,28°C or below,28.49,0.1,0.109,0.9,0.1,0.1,Highest temperature in Milan on July 24?,0.1
+paris,19,25.1,16°C,16.49,0.09,0.13,0.91,0.09,0.09,Lowest temperature in Paris on July 24?,0.09
+ankara,20,29.0,23°C,23.49,0.08,0.09,0.92,0.08,0.08,Highest temperature in Ankara on July 25?,0.08
+ankara,20,29.0,18°C,18.49,0.055,0.089,0.945,0.055,0.055,Highest temperature in Ankara on July 25?,0.055
+ankara,20,29.0,26°C,26.49,0.05,0.075,0.95,0.05,0.05,Highest temperature in Ankara on July 24?,0.05
+istanbul,20,26.0,25°C,25.49,0.043,0.074,0.957,0.043,0.043,Highest temperature in Istanbul on July 25?,0.043
+paris,19,25.1,14°C,14.49,0.04,0.1,0.96,0.04,0.04,Lowest temperature in Paris on July 25?,0.04
+london,18,25.6,25°C or below,25.49,0.032,0.068,0.968,0.032,0.032,Highest temperature in London on July 25?,0.032
+london,18,25.6,25°C or below,25.49,0.032,0.072,0.968,0.032,0.032,Highest temperature in London on July 25?,0.032
+moscow,20,21.3,19°C,19.49,0.03,0.04,0.97,0.03,0.03,Highest temperature in Moscow on July 25?,0.03
+paris,19,25.1,18°C,18.49,0.03,0.09,0.97,0.03,0.03,Lowest temperature in Paris on July 25?,0.03
+paris,19,25.1,13°C,13.49,0.021,0.05,0.979,0.021,0.021,Lowest temperature in Paris on July 24?,0.021
+moscow,20,21.3,18°C,18.49,0.021,0.038,0.979,0.021,0.021,Highest temperature in Moscow on July 25?,0.021
+istanbul,20,26.0,20°C,20.49,0.02,0.05,0.98,0.02,0.02,Highest temperature in Istanbul on July 25?,0.02
+london,18,25.6,25°C,25.49,0.02,0.028,0.98,0.02,0.02,Highest temperature in London on July 24?,0.02
+london,18,25.6,15°C,15.49,0.019,0.18,0.981,0.019,0.019,Lowest temperature in London on July 25?,0.019
+istanbul,20,26.0,23°C,23.49,0.016,0.03,0.984,0.016,0.016,Highest temperature in Istanbul on July 24?,0.016
+moscow,20,21.3,20°C,20.49,0.013,0.02,0.987,0.013,0.013,Highest temperature in Moscow on July 24?,0.013
+ankara,20,29.0,17°C,17.49,0.013,0.025,0.987,0.013,0.013,Highest temperature in Ankara on July 25?,0.013
+sao paulo,14,24.5,20°C,20.49,0.012,0.028,0.988,0.012,0.012,Highest temperature in Sao Paulo on July 24?,0.012
+london,18,25.6,19°C,19.49,0.011,0.09,0.989,0.011,0.011,Lowest temperature in London on July 25?,0.011
+sao paulo,14,24.5,15°C,15.49,0.011,0.015,0.989,0.011,0.011,Highest temperature in Sao Paulo on July 24?,0.011
+london,18,25.6,16°C,16.49,0.011,0.022,0.989,0.011,0.011,Lowest temperature in London on July 24?,0.011
+sao paulo,14,24.5,21°C,21.49,0.01,0.016,0.99,0.01,0.01,Highest temperature in Sao Paulo on July 24?,0.01
+london,18,25.6,21°C,21.49,0.01,0.017,0.99,0.01,0.01,Lowest temperature in London on July 24?,0.01
+ankara,20,29.0,24°C,24.49,0.01,0.021,0.99,0.01,0.01,Highest temperature in Ankara on July 25?,0.01
+london,18,25.6,14°C or below,14.49,0.008,0.009,0.992,0.008,0.008,Lowest temperature in London on July 25?,0.008
+istanbul,20,26.0,22°C,22.49,0.007,0.009,0.993,0.007,0.007,Highest temperature in Istanbul on July 24?,0.007
+sao paulo,14,24.5,14°C,14.49,0.006,0.015,0.994,0.006,0.006,Highest temperature in Sao Paulo on July 24?,0.006
+istanbul,20,26.0,19°C,19.49,0.005,0.014,0.995,0.005,0.005,Highest temperature in Istanbul on July 25?,0.005
+ankara,20,29.0,25°C,25.49,0.005,0.009,0.995,0.005,0.005,Highest temperature in Ankara on July 24?,0.005
+moscow,20,21.3,17°C or below,17.49,0.005,0.011,0.995,0.005,0.005,Highest temperature in Moscow on July 25?,0.005
+paris,19,25.1,19°C,19.49,0.004,0.028,0.996,0.004,0.004,Lowest temperature in Paris on July 25?,0.004
+moscow,20,21.3,19°C or below,19.49,0.003,0.01,0.997,0.003,0.003,Highest temperature in Moscow on July 24?,0.003
+paris,19,25.1,20°C,20.49,0.003,0.008,0.997,0.003,0.003,Lowest temperature in Paris on July 25?,0.003
+london,18,25.6,15°C,15.49,0.003,0.014,0.997,0.003,0.003,Lowest temperature in London on July 24?,0.003
+london,18,25.6,22°C,22.49,0.003,0.004,0.997,0.003,0.003,Lowest temperature in London on July 25?,0.003
+sao paulo,14,24.5,13°C or below,13.49,0.003,0.007,0.997,0.003,0.003,Highest temperature in Sao Paulo on July 24?,0.003
+paris,19,25.1,17°C,17.49,0.003,0.006,0.997,0.003,0.003,Lowest temperature in Paris on July 24?,0.003
+paris,19,25.1,13°C or below,13.49,0.002,0.011,0.998,0.002,0.002,Lowest temperature in Paris on July 25?,0.002
+london,18,25.6,16°C,16.49,0.002,0.008,0.998,0.002,0.002,Lowest temperature in London on July 23?,0.002
+london,18,25.6,14°C,14.49,0.002,0.004,0.998,0.002,0.002,Lowest temperature in London on July 24?,0.002
+london,18,25.6,21°C,21.49,0.002,0.004,0.998,0.002,0.002,Lowest temperature in London on July 25?,0.002
+sao paulo,14,24.5,22°C,22.49,0.002,0.004,0.998,0.002,0.002,Highest temperature in Sao Paulo on July 24?,0.002
+london,18,25.6,20°C,20.49,0.002,0.003,0.998,0.002,0.002,Lowest temperature in London on July 25?,0.002
+paris,19,25.1,12°C,12.49,0.002,0.046,0.998,0.002,0.002,Lowest temperature in Paris on July 24?,0.002
+paris,19,25.1,11°C,11.49,0.002,0.007,0.998,0.002,0.002,Lowest temperature in Paris on July 24?,0.002
+ankara,20,29.0,24°C or below,24.49,0.002,0.006,0.998,0.002,0.002,Highest temperature in Ankara on July 24?,0.002
+ankara,20,29.0,25°C,25.49,0.002,0.004,0.998,0.002,0.002,Highest temperature in Ankara on July 25?,0.002
+paris,19,25.1,18°C,18.49,0.002,0.008,0.998,0.002,0.002,Lowest temperature in Paris on July 24?,0.002
+paris,19,25.1,13°C,13.49,0.001,0.005,0.999,0.001,0.001,Lowest temperature in Paris on July 23?,0.001
+istanbul,20,26.0,21°C or below,21.49,0.001,0.002,0.999,0.001,0.001,Highest temperature in Istanbul on July 24?,0.001
+london,18,25.6,13°C or below,13.49,0.001,0.003,0.999,0.001,0.001,Lowest temperature in London on July 24?,0.001
+ankara,20,29.0,16°C or below,16.49,0.001,0.004,0.999,0.001,0.001,Highest temperature in Ankara on July 25?,0.001
+paris,19,25.1,19°C,19.49,0.001,0.006,0.999,0.001,0.001,Lowest temperature in Paris on July 24?,0.001
+istanbul,20,26.0,18°C or below,18.49,0.001,0.004,0.999,0.001,0.001,Highest temperature in Istanbul on July 25?,0.001
+paris,19,25.1,21°C,21.49,0.001,0.004,0.999,0.001,0.001,Lowest temperature in Paris on July 25?,0.001
+paris,19,25.1,10°C or below,10.49,0.001,0.006,0.999,0.001,0.001,Lowest temperature in Paris on July 24?,0.001
+london,18,25.6,22°C,22.49,0.001,0.006,0.999,0.001,0.001,Lowest temperature in London on July 24?,0.001
+london,18,25.6,23°C,23.49,0.001,0.004,0.999,0.001,0.001,Lowest temperature in London on July 25?,0.001
+paris,19,25.1,22°C,22.49,0.001,0.004,0.999,0.001,0.001,Lowest temperature in Paris on July 25?,0.001
+london,18,25.6,21°C or below,21.49,,0.001,,,,Highest temperature in London on July 23?,
+london,18,25.6,22°C,22.49,,0.001,,,,Highest temperature in London on July 23?,
+london,18,25.6,23°C,23.49,,0.001,,,,Highest temperature in London on July 23?,
+london,18,25.6,24°C,24.49,,0.001,,,,Highest temperature in London on July 23?,
+london,18,25.6,25°C,25.49,,0.001,,,,Highest temperature in London on July 23?,
+paris,19,25.1,21°C or below,21.49,,0.001,,,,Highest temperature in Paris on July 23?,
+paris,19,25.1,22°C,22.49,,0.001,,,,Highest temperature in Paris on July 23?,
+paris,19,25.1,23°C,23.49,,0.001,,,,Highest temperature in Paris on July 23?,
+paris,19,25.1,24°C,24.49,,0.001,,,,Highest temperature in Paris on July 23?,
+munich,19,22.2,18°C or below,18.49,,0.001,,,,Highest temperature in Munich on July 23?,
+munich,19,22.2,19°C,19.49,,0.001,,,,Highest temperature in Munich on July 23?,
+munich,19,22.2,20°C,20.49,,0.001,,,,Highest temperature in Munich on July 23?,
+munich,19,22.2,21°C,21.49,,0.001,,,,Highest temperature in Munich on July 23?,
+london,18,25.6,24°C or below,24.49,,0.001,,,,Highest temperature in London on July 24?,
+ankara,20,29.0,26°C or below,26.49,,0.001,,,,Highest temperature in Ankara on July 23?,
+ankara,20,29.0,27°C,27.49,,0.001,,,,Highest temperature in Ankara on July 23?,
+ankara,20,29.0,28°C,28.49,,0.001,,,,Highest temperature in Ankara on July 23?,
+istanbul,20,26.0,20°C or below,20.49,,0.001,,,,Highest temperature in Istanbul on July 23?,
+istanbul,20,26.0,21°C,21.49,,0.001,,,,Highest temperature in Istanbul on July 23?,
+istanbul,20,26.0,22°C,22.49,,0.001,,,,Highest temperature in Istanbul on July 23?,
+istanbul,20,26.0,23°C,23.49,,0.001,,,,Highest temperature in Istanbul on July 23?,
+istanbul,20,26.0,25°C,25.49,,0.001,,,,Highest temperature in Istanbul on July 23?,
+sao paulo,14,24.5,17°C or below,17.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,18°C,18.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,19°C,19.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,20°C,20.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,21°C,21.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,22°C,22.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+sao paulo,14,24.5,23°C,23.49,,0.001,,,,Highest temperature in Sao Paulo on July 23?,
+milan,19,30.2,29°C or below,29.49,,0.001,,,,Highest temperature in Milan on July 23?,
+buenos aires,14,11.8,9°C or below,9.49,,0.001,,,,Highest temperature in Buenos Aires on July ,
+buenos aires,14,11.8,10°C,10.49,,0.001,,,,Highest temperature in Buenos Aires on July ,
+buenos aires,14,11.8,11°C,11.49,,0.001,,,,Highest temperature in Buenos Aires on July ,
+moscow,20,21.3,18°C or below,18.49,,0.001,,,,Highest temperature in Moscow on July 23?,
+moscow,20,21.3,19°C,19.49,,0.001,,,,Highest temperature in Moscow on July 23?,
+moscow,20,21.3,20°C,20.49,,0.001,,,,Highest temperature in Moscow on July 23?,
+toronto,13,20.1,18°C or below,18.49,,0.001,,,,Highest temperature in Toronto on July 23?,
+toronto,13,20.1,19°C,19.49,,0.001,,,,Highest temperature in Toronto on July 23?,
+buenos aires,14,11.8,11°C or below,11.49,,0.003,,,,Highest temperature in Buenos Aires on July ,
+munich,19,22.2,20°C or below,20.49,,0.001,,,,Highest temperature in Munich on July 24?,
+munich,19,22.2,21°C,21.49,,0.001,,,,Highest temperature in Munich on July 24?,
+paris,19,25.1,24°C or below,24.49,,0.001,,,,Highest temperature in Paris on July 24?,
+london,18,25.6,11°C or below,11.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,12°C,12.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,13°C,13.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,14°C,14.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,15°C,15.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,18°C,18.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,19°C,19.49,,0.001,,,,Lowest temperature in London on July 23?,
+london,18,25.6,20°C,20.49,,0.001,,,,Lowest temperature in London on July 23?,
+paris,19,25.1,11°C or below,11.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,12°C,12.49,,0.003,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,15°C,15.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,16°C,16.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,17°C,17.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,18°C,18.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,19°C,19.49,,0.001,,,,Lowest temperature in Paris on July 23?,
+paris,19,25.1,20°C,20.49,,0.001,,,,Lowest temperature in Paris on July 23?,

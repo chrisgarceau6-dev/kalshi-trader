@@ -1,0 +1,13 @@
+wallet,name,archetype,n_pos,n_resolved,edge_c,roi_pct,invested,pnl,top_pnl_share,persist,verdict,why,pnl_h1,pnl_h2
+0x1f9e15f39bbd5d163b0eacf0fbef647ced9e4f1a,SlobodaIliSmrt,,472.0,82.0,-7.2,-14.3,11047.0,-1574.0,19.0,False,REJECT,edge -7.2c < 8c; 472 positions > 60,-1919.0,345.0
+0x7d83c905cb7b0e790499392ce641bb867bd7be92,Sunguyen86,,1.0,1.0,-18.9,-100.0,155881.0,-155881.0,,,REJECT,edge -18.9c < 8c; only 1 resolved; 1 positions < 10,,
+0x92d8a88f0a9fef812bdf5628770d6a0ecee39762,pfk.bgd,,17.0,17.0,-19.3,-100.0,26020.0,-26020.0,,,REJECT,edge -19.3c < 8c; only 17 resolved,,
+0xfbf3d501e88815464642d0e913f15379c3eeb218,VPenguin,,67.0,67.0,-21.4,-100.0,135673.0,-135673.0,,False,REJECT,edge -21.4c < 8c; 67 positions > 60,-117843.0,-17830.0
+0x39d3c773be30fcc73161fc6768f46d563a779ef0,matanovik,,24.0,24.0,-27.3,-100.0,144462.0,-144441.0,100.0,,REJECT,edge -27.3c < 8c; only 24 resolved; top position = 100% of wins,,
+0x23c8a4c266d10ba5846837eac391fea89ed6f293,Netrol,,31.0,31.0,-35.1,-100.0,49712.0,-49712.0,,False,REJECT,edge -35.1c < 8c,-14094.0,-35619.0
+0xdb83e85ffd22faa4009273034770f96ffc5b1e50,sentrio,,3000.0,2930.0,-36.0,-99.5,1115429.0,-1109506.0,40.0,False,REJECT,edge -36.0c < 8c; 3000 positions > 60,-490771.0,-618735.0
+0x336bf6f91a4619d54f0711a20fe468adf4d71233,ArturitoFilito,,149.0,144.0,-38.3,-100.0,684717.0,-684717.0,,False,REJECT,edge -38.3c < 8c; 149 positions > 60,-309783.0,-374934.0
+0x87da2f16cf98af9b3e2f6ba6d9c4c470815b53d1,GeorgeRe,,632.0,631.0,-45.2,-100.0,2507557.0,-2507557.0,,False,REJECT,edge -45.2c < 8c; 632 positions > 60,-721449.0,-1786108.0
+0x6d20c35f65d9899b6d6b74f8466e824580f9a165,Djdjdjekekek,,7.0,7.0,-54.3,-100.0,74877.0,-74877.0,,,REJECT,edge -54.3c < 8c; only 7 resolved; 7 positions < 10,,
+0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf,0x3DFb153c197D4C19D3B31c1ecD2c7B6860eeabAf-1722957908185,,9.0,0.0,,,,,,,REJECT,no resolved positions,,
+0x412fe1a101554f0b382181c3af932e4b2d8030fa,GrizzliesSuck,,,,,,,,,,SKIP,no positions,,

@@ -1,0 +1,217 @@
+wallet_name,entry_ts,exit_ts,entry_price,exit_price,size,hold_hrs,title,topic
+?,2025-10-21 17:55:51,2025-10-21 18:41:33,0.3175257324,0.2956183195,404.16,0.7616666666666667,Will Jason Miyares win the 2025 Virginia Attorney General election?,election
+?,2025-10-21 17:56:17,2025-10-21 18:41:25,0.3165040023,0.28500125,699.6,0.7522222222222222,Will Jay Jones win the 2025 Virginia Attorney General election?,election
+?,2025-11-16 21:43:43,2025-11-16 21:53:15,0.1315485871,0.1274488933,7000.0,0.15888888888888889,Will Evelyn Matthei win the Chilean presidential election?,election
+?,2025-11-16 21:45:43,2025-11-16 21:53:15,0.11993802,0.1274488933,3000.0,0.12555555555555556,Will Evelyn Matthei win the Chilean presidential election?,election
+?,2025-11-16 21:46:47,2025-11-16 21:53:15,0.12,0.1274488933,130.95999999999913,0.10777777777777778,Will Evelyn Matthei win the Chilean presidential election?,election
+?,2025-11-16 21:46:47,2025-11-16 21:56:37,0.12,0.1189185391,266.14,0.1638888888888889,Will Evelyn Matthei win the Chilean presidential election?,election
+?,2025-11-20 14:12:49,2025-11-20 14:19:09,0.13,0.1485106383,235.0,0.10555555555555556,Will Kast win by at least 25%?,other
+?,2025-12-07 09:20:27,2025-12-07 20:26:37,0.4560719553,0.2345660956,3831.27,11.102777777777778,Will Anca Alexandrescu finish third in the 2025 Bucharest mayoral by-e,election
+?,2025-12-07 09:27:15,2025-12-07 20:26:37,0.44,0.2345660956,40.0,10.989444444444445,Will Anca Alexandrescu finish third in the 2025 Bucharest mayoral by-e,election
+?,2025-12-17 16:21:42,2026-01-18 18:53:06,0.0381572043,0.1792662052,1108.43,770.5233333333333,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2025-12-20 14:53:46,2026-01-18 18:53:06,0.0701802792,0.1792662052,4049.83,699.9888888888889,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2025-12-20 14:53:58,2026-01-18 18:53:06,0.0679160839,0.1792662052,143.0,699.9855555555556,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-03 08:17:47,2026-01-18 18:53:06,0.0409480327,0.1792662052,1136.1,370.5886111111111,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-03 15:59:33,2026-01-15 13:15:24,0.08,0.26,871.3,285.26416666666665,Will João Cotrim de Figueiredo qualify for the second round of the 202,other
+?,2026-01-03 16:20:57,2026-01-18 18:53:06,0.0419261743,0.1792662052,1476.45,362.53583333333336,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-04 09:43:41,2026-01-18 18:53:06,0.042,0.1792662052,615.8499999999997,345.15694444444443,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-04 09:43:41,2026-01-18 18:53:18,0.042,0.1820523461,55.790000000000305,345.16027777777776,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-05 21:41:07,2026-01-15 13:15:24,0.13,0.26,221.82,231.5713888888889,Will João Cotrim de Figueiredo qualify for the second round of the 202,other
+?,2026-01-05 21:46:59,2026-01-15 13:15:24,0.13,0.26,239.77,231.4736111111111,Will João Cotrim de Figueiredo qualify for the second round of the 202,other
+?,2026-01-06 20:04:35,2026-01-09 19:00:34,0.2152205598,0.3365451061,3352.54,70.93305555555555,Will António José Seguro win the 2026 Portugal presidential election?,election
+?,2026-01-06 20:04:35,2026-01-09 19:03:50,0.2152205598,0.3351523179,67.44000000000005,70.9875,Will António José Seguro win the 2026 Portugal presidential election?,election
+?,2026-01-08 19:35:50,2026-01-10 20:28:48,0.3437559343,0.3411427818,1798.86,48.882777777777775,Will Luís Marques Mendes win the 2026 Portugal presidential election?,election
+?,2026-01-08 19:37:32,2026-01-11 20:16:20,0.5135854361,0.4085799294,3012.66,72.64666666666666,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-08 19:38:40,2026-01-11 20:16:20,0.5194633274,0.4085799294,559.0,72.62777777777778,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-08 19:38:54,2026-01-11 20:16:20,0.52,0.4085799294,221.0,72.62388888888889,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-08 20:04:52,2026-01-10 20:28:48,0.33,0.3411427818,250.0,48.39888888888889,Will Luís Marques Mendes win the 2026 Portugal presidential election?,election
+?,2026-01-08 21:00:36,2026-01-11 20:16:20,0.4987850867,0.4085799294,1637.73,71.26222222222222,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 10:51:10,2026-01-11 20:16:20,0.4899415468,0.4085799294,798.93,57.419444444444444,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 10:51:22,2026-01-11 20:16:20,0.49,0.4085799294,477.0,57.416111111111114,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 11:54:26,2026-01-11 20:16:20,0.49,0.4085799294,971.11,56.365,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 18:59:22,2026-01-14 15:14:48,0.4990167964,0.39,600.0,116.25722222222223,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 18:59:22,2026-01-15 21:19:50,0.4990167964,0.46,1640.77,146.3411111111111,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 18:59:22,2026-01-16 18:01:44,0.4990167964,0.43,0.85,167.03944444444446,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-09 18:59:22,2026-01-11 20:16:20,0.4990167964,0.4085799294,2224.12,49.28277777777778,Will André Ventura win the 1st round of the 2026 Portugal presidential,election
+?,2026-01-15 21:21:56,2026-01-18 18:53:18,0.1233720999,0.1820523461,2571.5299999999997,69.52277777777778,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-15 21:21:56,2026-01-18 18:57:18,0.1233720999,0.188,3209.17,69.58944444444444,Will João Cotrim Figueiredo win the 2026 Portugal presidential electio,election
+?,2026-01-28 22:50:34,2026-02-07 12:28:53,0.1,0.1705263158,672.4,229.63861111111112,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-01-29 21:26:50,2026-02-07 12:28:53,0.12,0.1705263158,400.0,207.03416666666666,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 08:00:18,2026-02-07 12:28:53,0.13,0.1705263158,827.5999999999999,148.4763888888889,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 08:00:18,2026-02-14 14:33:29,0.13,0.2000052013,148.57000000000005,318.55305555555555,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 08:00:30,2026-02-14 14:33:29,0.13,0.2000052013,334.0,318.5497222222222,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 08:00:40,2026-02-14 14:33:29,0.13,0.2000052013,277.0,318.5469444444444,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 17:06:56,2026-02-14 14:33:29,0.14,0.2000052013,1009.2199999999998,309.4425,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-01 17:06:56,2026-02-14 14:35:15,0.14,0.1901923077,304.7800000000002,309.47194444444443,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-03 18:49:26,2026-02-10 13:56:53,0.006,0.001,2513.3,163.12416666666667,Will France win the most gold medals in the 2026 Winter Olympics?,other
+?,2026-02-04 19:48:17,2026-02-10 13:53:03,0.0138671802,0.004074373,150.58,138.07944444444445,Will Canada win the most gold medals in the 2026 Winter Olympics?,other
+?,2026-02-04 21:03:49,2026-02-10 13:53:03,0.015,0.004074373,3744.26,136.82055555555556,Will Canada win the most gold medals in the 2026 Winter Olympics?,other
+?,2026-02-05 18:01:25,2026-02-14 14:35:15,0.15,0.1901923077,1206.66,212.5638888888889,Will the United States win the most medals in the 2026 Winter Olympics,other
+?,2026-02-06 13:31:25,2026-02-10 13:56:53,0.005,0.001,5200.0,96.42444444444445,Will France win the most gold medals in the 2026 Winter Olympics?,other
+?,2026-02-10 13:58:19,2026-02-10 18:38:21,0.85,0.86,48.0,4.667222222222223,Will Norway win the most gold medals in the 2026 Winter Olympics?,other
+?,2026-02-12 21:17:33,2026-02-13 15:41:55,0.09,0.2002789929,20.0,18.406111111111112,Will Vladimir Semirunniy (POL) win the gold medal for Winter Olympics ,other
+?,2026-02-13 11:17:51,2026-02-13 11:30:01,0.1120830856,0.02,66.57999999999998,0.20277777777777778,Will Harald Oestberg Amundsen (NOR) win the gold medal for Winter Olym,other
+?,2026-02-13 11:17:51,2026-02-13 11:28:47,0.1120830856,0.0363941606,411.0,0.18222222222222223,Will Harald Oestberg Amundsen (NOR) win the gold medal for Winter Olym,other
+?,2026-02-13 11:17:59,2026-02-13 11:30:01,0.058,0.02,19.54,0.20055555555555554,Will Harald Oestberg Amundsen (NOR) win the gold medal for Winter Olym,other
+?,2026-02-13 15:06:39,2026-02-13 15:41:55,0.09,0.2002789929,54.7,0.5877777777777777,Will Vladimir Semirunniy (POL) win the gold medal for Winter Olympics ,other
+?,2026-02-15 16:42:47,2026-02-15 16:55:21,0.8217996159,0.999,1082.92,0.20944444444444443,Will Jutta Leerdam (NED) win the gold medal for Winter Olympics 2026: ,other
+?,2026-02-23 20:18:16,2026-03-02 17:36:41,0.5,0.69,26.46,165.30694444444444,Will Tom Sell be the Republican Nominee for TX-19?,other
+?,2026-02-24 11:36:24,2026-03-04 03:04:37,0.21,0.0050185158,2826.94,183.47027777777777,Will James Talarico be the Democratic nominee for Senate in Texas?,election
+?,2026-02-27 20:05:13,2026-03-04 01:13:55,0.32,0.15,749.46,101.145,Will Jasmine Crockett be the Democratic nominee for Senate in Texas?,election
+?,2026-02-27 20:26:59,2026-03-04 01:13:55,0.33,0.15,13251.03,100.78222222222222,Will Jasmine Crockett be the Democratic nominee for Senate in Texas?,election
+?,2026-03-03 18:09:29,2026-03-03 22:37:55,0.3802627119,0.3909100509,472.0,4.473888888888889,Will Ken Paxton win the Texas Republican Senate Primary by 9% or more?,election
+?,2026-03-03 23:23:39,2026-03-04 18:55:31,0.21,0.88,6099.99,19.531111111111112,Will John Cornyn win the 2026 Texas Republican Primary?,other
+?,2026-03-03 23:23:39,2026-03-04 18:32:37,0.21,0.87,748.55,19.149444444444445,Will John Cornyn win the 2026 Texas Republican Primary?,other
+?,2026-03-04 02:38:51,2026-03-04 03:12:41,0.0888455705,0.1,2960.86,0.5638888888888889,Will James Talarico win the Texas Democratic Senate Primary by between,election
+?,2026-03-04 02:38:51,2026-03-04 03:17:41,0.0888455705,0.0827879862,372.57,0.6472222222222223,Will James Talarico win the Texas Democratic Senate Primary by between,election
+?,2026-03-04 02:40:11,2026-03-04 07:48:21,0.7594594595,0.05,11.73,5.136111111111111,Will Ken Paxton win the first round of the Republican Senate primary e,election
+?,2026-03-04 02:40:11,2026-03-04 07:29:33,0.7594594595,0.062247191,40.05,4.822777777777778,Will Ken Paxton win the first round of the Republican Senate primary e,election
+?,2026-03-04 02:40:11,2026-03-04 08:15:33,0.7594594595,0.0402915452,102.9,5.589444444444444,Will Ken Paxton win the first round of the Republican Senate primary e,election
+?,2026-03-04 02:46:17,2026-03-04 03:04:37,0.0082012382,0.0050185158,31634.41,0.3055555555555556,Will James Talarico be the Democratic nominee for Senate in Texas?,election
+?,2026-03-04 02:46:31,2026-03-04 03:16:31,0.0065111763,0.003,1389.2999999999993,0.5,Will Jasmine Crockett be the Democratic nominee for Senate in Texas?,election
+?,2026-03-04 02:46:31,2026-03-04 03:09:21,0.0065111763,0.003,14976.52,0.38055555555555554,Will Jasmine Crockett be the Democratic nominee for Senate in Texas?,election
+?,2026-03-04 03:18:13,2026-03-04 05:31:51,0.25,0.0363858247,832.01,2.227222222222222,Will James Talarico win the Texas Democratic Senate Primary by between,election
+?,2026-03-11 21:10:59,2026-03-12 11:57:13,0.0736427551,0.088,126.02,14.770555555555555,Will Tom Steyer win the California Governor Election in 2026?,election
+?,2026-04-08 11:56:07,2026-04-11 21:20:37,0.1687188342,0.2563885762,9745.46,81.40833333333333,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-08 11:57:07,2026-04-11 21:20:37,0.1655454339,0.2563885762,219.99,81.39166666666667,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-08 14:41:15,2026-04-11 21:20:37,0.169668201,0.2563885762,714.77,78.65611111111112,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-08 16:06:21,2026-04-11 21:20:37,0.1695832755,0.2563885762,215.97,77.23777777777778,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-08 16:33:11,2026-04-11 21:20:37,0.1691301746,0.2563885762,1017.71,76.79055555555556,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-09 07:38:19,2026-04-14 12:03:47,0.0473936125,0.001,70.45,124.42444444444445,Will another outcome occur in the the first round of the 2026 Peruvian,other
+?,2026-04-09 11:08:49,2026-04-10 18:03:45,0.1486877444,0.1818046885,4413.98,30.915555555555557,Will Carlos Álvarez win the 2026 Peruvian presidential election?,election
+?,2026-04-09 20:11:47,2026-04-10 18:03:45,0.205,0.1818046885,2261.05,21.86611111111111,Will Carlos Álvarez win the 2026 Peruvian presidential election?,election
+?,2026-04-09 21:24:53,2026-04-10 18:03:45,0.188946628,0.1818046885,4955.78,20.647777777777776,Will Carlos Álvarez win the 2026 Peruvian presidential election?,election
+?,2026-04-10 15:22:33,2026-04-11 21:20:37,0.2303624849,0.2563885762,7724.46,29.967777777777776,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-10 17:48:35,2026-04-11 21:22:49,0.6599012527,0.7543412634,593.94,27.570555555555554,Will Carlos Álvarez finish in second place in the first round of the 2,other
+?,2026-04-10 17:54:43,2026-04-11 21:21:49,0.1372969287,0.1805010492,629.04,27.451666666666668,Will Ricardo Belmont finish in first place in the first round of the 2,other
+?,2026-04-11 21:23:25,2026-04-12 10:21:21,0.1522396725,0.1052737749,13155.91,12.965555555555556,Will Carlos Álvarez win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:24:37,2026-04-12 10:21:21,0.1529672897,0.1052737749,214.0,12.945555555555556,Will Carlos Álvarez win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:29:35,2026-04-12 23:27:31,0.0542101737,0.1088605998,2084.43,25.965555555555557,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:29:35,2026-04-12 23:33:23,0.0542101737,0.1070322603,3690.0800000000004,26.063333333333333,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:52:41,2026-04-12 23:33:23,0.059,0.1070322603,2050.1,25.678333333333335,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:52:41,2026-04-12 23:38:07,0.059,0.114,3822.47,25.75722222222222,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 21:52:41,2026-04-13 00:22:29,0.059,0.1418985864,2149.93,26.496666666666666,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:07,2026-04-13 00:22:29,0.0652912677,0.1418985864,3479.1,24.789444444444445,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:07,2026-04-14 10:37:25,0.0652912677,0.015,60.0,59.038333333333334,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:07,2026-04-13 19:57:59,0.0652912677,0.047,59.24,44.38111111111111,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:07,2026-04-13 16:26:37,0.0652912677,0.045,3020.0,40.858333333333334,Will Jorge Nieto win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 16:12:41,0.1966548797,0.4501308507,6092.44,40.61555555555555,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 16:09:49,0.1966548797,0.46,2468.66,40.56777777777778,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 16:06:43,0.1966548797,0.47,1211.0,40.51611111111111,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 15:48:01,0.1966548797,0.46,2947.0,40.20444444444445,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 16:01:07,0.1966548797,0.48,48.99,40.422777777777775,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-14 11:03:27,0.1966548797,0.25,447.0,59.461666666666666,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-22 19:58:56,0.1966548797,0.06,2816.2,260.3863888888889,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-22 20:00:46,0.1966548797,0.0545337998,9280.09,260.4169444444444,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-13 16:02:01,0.1966548797,0.46,1659.86,40.437777777777775,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:35:45,2026-04-14 11:01:09,0.1966548797,0.25,816.67,59.42333333333333,Will Rafael López Aliaga win the 2026 Peruvian presidential election?,election
+?,2026-04-11 23:40:15,2026-04-14 20:38:00,0.1866282864,0.25,59.9,68.9625,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:40:15,2026-04-14 20:38:30,0.1866282864,0.2549506641,527.0,68.97083333333333,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:40:15,2026-04-14 20:39:52,0.1866282864,0.25,1572.0500000000002,68.99361111111111,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:40:15,2026-04-14 20:37:46,0.1866282864,0.2530136922,427.98,68.95861111111111,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:40:15,2026-04-14 20:37:00,0.1866282864,0.2460075402,366.04,68.94583333333334,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:40:15,2026-04-14 20:25:14,0.1866282864,0.2604837431,1261.0,68.74972222222222,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-11 23:42:11,2026-04-14 10:42:15,0.0544528863,0.096195459,280.92999999999995,59.00111111111111,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-11 23:42:11,2026-04-13 15:46:29,0.0544528863,0.8505901226,899.83,40.071666666666665,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-12 00:00:07,2026-04-14 10:42:15,0.0544979495,0.096195459,151.18,58.702222222222225,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-12 00:00:13,2026-04-14 10:42:15,0.0546633274,0.096195459,55.9,58.70055555555555,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-12 00:00:17,2026-04-14 10:42:15,0.056,0.096195459,20.0,58.699444444444445,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-12 07:52:45,2026-04-14 10:39:05,0.0116922835,0.018671882,3803.69,50.772222222222226,Will Keiko Fujimori and Jorge Nieto advance to the runoff?,trump_admin
+?,2026-04-12 07:52:45,2026-04-13 14:21:35,0.0116922835,0.1063075029,617.36,30.480555555555554,Will Keiko Fujimori and Jorge Nieto advance to the runoff?,trump_admin
+?,2026-04-12 17:56:17,2026-04-14 10:42:15,0.0670563658,0.096195459,1130.65,40.76611111111111,Will Jorge Nieto finish in third place in the first round of the 2026 ,other
+?,2026-04-12 19:30:33,2026-04-12 19:41:51,0.8081845489,0.84,8.82,0.18833333333333332,Will Fidesz-KDNP win 36-40% of the national list votes in the 2026 Hun,other
+?,2026-04-13 00:29:11,2026-04-22 19:58:20,0.303,0.8169168197,410.0,235.48583333333335,Will Roberto Sánchez Palomino finish in second place in the first roun,other
+?,2026-04-13 00:30:43,2026-04-22 19:58:20,0.3388521127,0.8169168197,1420.0,235.46027777777778,Will Roberto Sánchez Palomino finish in second place in the first roun,other
+?,2026-04-13 03:00:03,2026-04-22 19:55:00,0.9130085669,0.9710088818,1858.31,232.91583333333332,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 03:35:41,2026-04-22 19:55:00,0.94,0.9710088818,26.3,232.32194444444445,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 03:39:53,2026-04-22 19:55:00,0.94,0.9710088818,14.99,232.25194444444443,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 03:40:15,2026-04-22 19:55:00,0.93,0.9710088818,58.94,232.24583333333334,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 03:41:03,2026-04-22 19:55:00,0.94,0.9710088818,59.3,232.2325,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 03:44:49,2026-04-22 19:55:00,0.9400871894,0.9710088818,87.74,232.16972222222222,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:00:45,2026-04-22 19:55:00,0.941517094,0.9710088818,234.0,231.90416666666667,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:00:57,2026-04-22 19:55:00,0.938,0.9710088818,500.0,231.90083333333334,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:13:39,2026-04-22 19:55:00,0.927,0.9710088818,299.52,231.68916666666667,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:13:49,2026-04-22 19:55:00,0.929432567,0.9710088818,337.52,231.6863888888889,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:14:13,2026-04-22 19:55:00,0.9380967742,0.9710088818,496.0,231.6797222222222,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:14:41,2026-04-22 19:55:00,0.9373611111,0.9710088818,180.0,231.67194444444445,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:16:49,2026-04-22 19:55:00,0.9401233083,0.9710088818,464.77,231.6363888888889,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:17:37,2026-04-22 19:55:00,0.9439698475,0.9710088818,144.93,231.62305555555557,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:18:51,2026-04-22 19:55:00,0.9217562314,0.9710088818,167.7,231.6025,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:27:03,2026-04-22 19:55:00,0.9189873418,0.9710088818,158.0,231.46583333333334,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 04:56:17,2026-04-13 05:21:17,0.8116932203,0.81,240.0,0.4166666666666667,Will Keiko Fujimori win the first round of the 2026 Peruvian president,election
+?,2026-04-13 04:56:17,2026-04-13 05:25:45,0.8116932203,0.7757099353,131.35,0.4911111111111111,Will Keiko Fujimori win the first round of the 2026 Peruvian president,election
+?,2026-04-13 04:57:21,2026-04-14 17:16:28,0.9560188658,0.999,12241.17,36.31861111111111,Will Ricardo Belmont win the 2026 Peruvian presidential election?,election
+?,2026-04-13 04:59:25,2026-04-22 19:55:00,0.949,0.9710088818,200.0,230.92638888888888,Will Keiko Fujimori finish in first place in the first round of the 20,other
+?,2026-04-13 15:51:11,2026-05-11 20:28:14,0.0398747296,0.36,50.0,676.6175,Will Roberto Sánchez Palomino win the 2026 Peruvian presidential elect,election
+?,2026-04-13 19:19:09,2026-04-14 20:39:52,0.5856,0.25,75.0,25.345277777777778,Will Rafael López Aliaga finish in second place in the first round of ,other
+?,2026-04-14 11:07:27,2026-04-21 19:44:38,0.8351528634,0.9884343052,105.64,176.6197222222222,Will Jorge Nieto finish in fourth place in the first round of the 2026,other
+?,2026-04-14 11:48:59,2026-04-21 19:44:02,0.9737119735,0.998,33.01,175.9175,Will Rafael López Aliaga finish in fourth place in the first round of ,other
+?,2026-04-16 18:20:42,2026-04-24 20:23:42,0.4348789748,0.4350880286,611.03,194.05,Will Mallory McMorrow win the 2026 Michigan Democratic Primary?,other
+?,2026-04-19 09:44:50,2026-04-19 10:49:58,0.6,0.8,293.88,1.0855555555555556,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 11:33:10,0.6,0.67,44.0,1.8055555555555556,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 11:45:50,0.6,0.6597435897,234.0,2.0166666666666666,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 12:11:54,0.6,0.56,502.0,2.451111111111111,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 12:12:06,0.6,0.55,40.0,2.4544444444444444,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 12:51:44,0.6,0.5552840159,37.85,3.115,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:00:28,0.6,0.4888815789,152.0,3.2605555555555554,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:12:34,0.6,0.4765156562,120.08,3.462222222222222,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:13:32,0.6,0.45,71.0,3.4783333333333335,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:23:30,0.6,0.45125,64.0,3.6444444444444444,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:35:20,0.6,0.547,100.0,3.841666666666667,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:35:48,0.6,0.56,6.23,3.8494444444444444,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-19 09:44:50,2026-04-19 13:00:12,0.6,0.54,32.0,3.256111111111111,Will United Left (BSP) win at least one seat in the 2026 Bulgarian par,other
+?,2026-04-21 18:40:10,2026-04-21 23:55:28,0.87,0.996,9316.99,5.255,Will the Virginia redistricting referendum pass?,other
+?,2026-04-21 23:30:02,2026-05-08 17:28:54,0.4989605325,0.999,5749.8923,401.9811111111111,Will the Virginia constitutional amendment referendum pass by 3-6%?,other
+?,2026-04-21 23:33:08,2026-05-08 17:28:54,0.3,0.999,467.33664,401.92944444444447,Will the Virginia constitutional amendment referendum pass by 3-6%?,other
+?,2026-04-21 23:35:54,2026-05-08 17:28:54,0.3826387045,0.999,1166.9797,401.8833333333333,Will the Virginia constitutional amendment referendum pass by 3-6%?,other
+?,2026-04-21 23:41:40,2026-05-08 17:28:54,0.3585593892,0.999,395.11772,401.7872222222222,Will the Virginia constitutional amendment referendum pass by 3-6%?,other
+?,2026-04-23 07:02:32,2026-05-08 18:29:34,0.6471633127,0.61,29868.96,371.4505555555556,Will Keiko Fujimori win the 2026 Peruvian presidential election?,election
+?,2026-05-01 12:51:54,2026-05-19 18:22:03,0.7803447875,0.99,83.08,437.5025,Will Keisha Lance Bottoms win the 2026 Georgia Governor Democratic pri,other
+?,2026-05-04 15:16:28,2026-05-06 14:40:04,0.2816764459,0.7,488.3,47.39333333333333,Will Momentum win the third-most seats in the House of Representatives,other
+?,2026-05-04 15:16:28,2026-05-09 18:25:44,0.2816764459,0.63,575.19,123.15444444444445,Will Momentum win the third-most seats in the House of Representatives,other
+?,2026-05-04 15:16:28,2026-05-08 07:11:03,0.2816764459,0.7778947368,456.0,87.90972222222223,Will Momentum win the third-most seats in the House of Representatives,other
+?,2026-05-28 18:06:24,2026-06-13 10:32:33,0.989,0.999,1131.1,376.43583333333333,Will Chad Bianco finish first in the 2026 California Governor primary ,other
+?,2026-06-02 18:10:04,2026-06-09 10:34:28,0.1150009464,0.0035610311,158.49,160.40666666666667,Will Xavier Becerra finish first in the 2026 California Governor prima,other
+?,2026-06-03 02:17:02,2026-06-03 02:29:10,0.242855258,0.0902000233,1014.1700000000001,0.20222222222222222,Will Randy Feenstra win the 2026 Iowa Governor Republican primary elec,other
+?,2026-06-03 02:17:02,2026-06-03 02:22:49,0.242855258,0.100568721,3093.96,0.09638888888888889,Will Randy Feenstra win the 2026 Iowa Governor Republican primary elec,other
+?,2026-06-03 02:17:02,2026-06-03 02:28:34,0.242855258,0.12,500.0,0.1922222222222222,Will Randy Feenstra win the 2026 Iowa Governor Republican primary elec,other
+?,2026-06-03 02:17:43,2026-06-03 02:29:10,0.19,0.0902000233,1111.0,0.19083333333333333,Will Randy Feenstra win the 2026 Iowa Governor Republican primary elec,other
+?,2026-06-03 03:19:38,2026-06-03 05:52:12,0.8658514305,0.94,2350.28,2.542777777777778,Will Xavier Becerra finish first in the 2026 California Governor prima,other
+?,2026-06-03 06:51:11,2026-06-13 10:31:24,0.8492739182,0.999,845.8,243.67027777777778,Will Karen Bass win the first round of the 2026 Los Angeles Mayoral El,election
+?,2026-06-03 06:56:48,2026-06-13 10:31:24,0.8831563515,0.999,1108.72,243.57666666666665,Will Karen Bass win the first round of the 2026 Los Angeles Mayoral El,election
+?,2026-06-03 13:20:30,2026-06-03 23:35:52,0.8418466095,0.86,259.99,10.25611111111111,Will Karen Bass win the first round of the 2026 Los Angeles Mayoral El,election
+?,2026-06-03 22:11:27,2026-06-08 09:34:21,0.9090557234,0.989,183.6,107.38166666666666,Will Steve Hilton finish first in the 2026 California Governor primary,other
+?,2026-06-03 22:11:27,2026-06-08 09:04:52,0.9090557234,0.9933229881,1438.35,106.89027777777778,Will Steve Hilton finish first in the 2026 California Governor primary,other
+?,2026-06-03 23:37:24,2026-06-05 23:51:51,0.9276441873,0.9414459157,2141.52,48.240833333333335,Will Karen Bass win the first round of the 2026 Los Angeles Mayoral El,election
+?,2026-06-04 00:09:15,2026-06-05 23:51:51,0.9548549785,0.9414459157,189.75,47.71,Will Karen Bass win the first round of the 2026 Los Angeles Mayoral El,election
+?,2026-06-04 00:17:00,2026-06-04 17:51:00,0.72,0.6812245999,788.6,17.566666666666666,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 00:40:54,2026-06-04 17:51:00,0.7552683671,0.6812245999,2097.5,17.168333333333333,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-05 23:39:12,0.7699922593,0.71,187.6,46.48083333333334,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-05 23:39:24,0.7699922593,0.71,156.0,46.48416666666667,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-05 23:42:04,0.7699922593,0.7,741.51,46.52861111111111,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-05 23:36:03,0.7699922593,0.7338995015,405.18,46.428333333333335,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-05 23:39:00,0.7699922593,0.7130222162,514.49,46.4775,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:21,2026-06-04 17:51:00,0.7699922593,0.6812245999,5211.32,16.6775,Will Tom Steyer advance from the 2026 California Governor primary elec,trump_admin
+?,2026-06-04 01:10:40,2026-06-04 17:52:15,0.7396171201,0.68,129.45,16.693055555555556,Will Steve Hilton advance from the 2026 California Governor primary el,trump_admin
+?,2026-06-04 01:10:40,2026-06-04 17:51:27,0.7396171201,0.6909258456,3664.65,16.67972222222222,Will Steve Hilton advance from the 2026 California Governor primary el,trump_admin
+?,2026-06-04 08:18:36,2026-06-04 08:18:48,0.999,0.996,5.0,0.0033333333333333335,Will Iván Cepeda Castro win the 1st round of the 2026 Colombian presid,other
+?,2026-06-06 20:01:28,2026-06-08 09:11:00,0.0854172171,0.0027573916,997.3499999999999,37.15888888888889,Will Fujimori win the 2nd round of the 2026 Peru presidential election,election
+?,2026-06-06 20:01:28,2026-06-08 04:49:54,0.0854172171,0.008,1303.85,32.80722222222222,Will Fujimori win the 2nd round of the 2026 Peru presidential election,election
+?,2026-06-08 01:37:12,2026-06-08 03:46:34,0.6526680185,0.59,188.56,2.156111111111111,Will Keiko Fujimori win the 2026 Peruvian presidential election?,election
+?,2026-06-10 06:36:01,2026-06-10 14:36:03,0.3729814668,0.2339504475,8291.82,8.000555555555556,Will Fujimori win the 2nd round of the 2026 Peru presidential election,election
+?,2026-06-16 20:27:11,2026-06-17 00:38:05,0.2984574129,0.88,50.0,4.181666666666667,Will Burt Jones win the 2026 Georgia Governor Republican primary elect,other
+?,2026-06-16 20:27:11,2026-06-17 00:33:02,0.2984574129,0.8928730914,243.64,4.0975,Will Burt Jones win the 2026 Georgia Governor Republican primary elect,other
+?,2026-06-16 20:27:11,2026-06-17 00:07:16,0.2984574129,0.907290965,136.58,3.6680555555555556,Will Burt Jones win the 2026 Georgia Governor Republican primary elect,other
+?,2026-06-16 20:27:11,2026-06-17 00:16:16,0.2984574129,0.8574074074,270.0,3.8180555555555555,Will Burt Jones win the 2026 Georgia Governor Republican primary elect,other
+?,2026-06-16 20:27:11,2026-06-17 00:23:40,0.2984574129,0.8816805324,601.0,3.941388888888889,Will Burt Jones win the 2026 Georgia Governor Republican primary elect,other
+?,2026-06-18 17:54:53,2026-06-22 15:21:29,0.792011063,0.8886436123,9882.13,93.44333333333333,Will Cait Conley be the Democratic nominee for NY-17?,other
+?,2026-06-22 08:14:46,2026-06-22 13:25:47,0.61,0.57,36.0,5.183611111111111,Will Brad Lander win the NY-10 Democratic Primary by more than 30%?,other
+?,2026-06-24 18:49:34,2026-06-25 08:24:58,0.32,0.48,588.92,13.59,Will Phil Weiser win the 2026 Colorado Governor Democratic primary ele,other
+?,2026-06-24 18:49:34,2026-06-25 08:31:23,0.32,0.5599371321,87.08000000000004,13.696944444444444,Will Phil Weiser win the 2026 Colorado Governor Democratic primary ele,other
+?,2026-06-24 18:49:34,2026-06-25 08:31:23,0.2940302498,0.5599371321,237.40999999999997,13.696944444444444,Will Phil Weiser win the 2026 Colorado Governor Democratic primary ele,other
+?,2026-06-25 08:32:07,2026-06-25 17:44:08,0.4607386209,0.5927918283,256.83,9.200277777777778,Will Michael Bennet win the 2026 Colorado Governor Democratic primary ,other
+?,2026-06-25 08:41:59,2026-06-25 17:44:08,0.5040626955,0.5927918283,1199.13,9.035833333333333,Will Michael Bennet win the 2026 Colorado Governor Democratic primary ,other
+?,2026-07-01 01:39:22,2026-07-01 02:50:14,0.8689317173,0.9007259288,74.57000000000005,1.181111111111111,Will Barbara Kirkmeyer win the 2026 Colorado Governor Republican prima,other
+?,2026-07-01 01:39:22,2026-07-01 02:30:49,0.8689317173,0.8372309587,576.38,0.8575,Will Barbara Kirkmeyer win the 2026 Colorado Governor Republican prima,other
+?,2026-07-01 01:39:22,2026-07-01 02:48:52,0.8689317173,0.8924254693,816.04,1.1583333333333334,Will Barbara Kirkmeyer win the 2026 Colorado Governor Republican prima,other
+?,2026-07-01 01:42:13,2026-07-01 02:50:14,0.803,0.9007259288,29.59999999999995,1.1336111111111111,Will Barbara Kirkmeyer win the 2026 Colorado Governor Republican prima,other

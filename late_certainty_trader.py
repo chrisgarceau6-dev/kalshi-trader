@@ -38,11 +38,9 @@ LOG_FILE   = BASE / "certainty.log"
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
 
-MIN_ASK_CENTS   = 88     # min price we'll consider entering at
-MAX_ASK_CENTS   = 93     # max price we'll consider entering at
+MIN_ASK_CENTS   = 88     # min price we'll consider entering at (below = thinner WR margin)
+MAX_ASK_CENTS   = 95     # max price we'll consider entering at (95 has 100% WR too)
 # Once we decide to enter, be aggressive with the limit so we actually fill.
-# The MAX_FILL_LIMIT is our absolute worst acceptable price. Actual fill will
-# be determined by the market's current best resting order (usually near ask).
 MAX_FILL_LIMIT  = 97     # willing to pay up to 97c to guarantee fill
 
 MIN_SECS_LEFT   = 60     # skip final <60s (per-data, NO side has 84% WR there)
@@ -54,6 +52,8 @@ BET_DOLLARS     = 2      # ultra-conservative validation start
 STOP_BALANCE       = 300      # halt if balance drops below this
 DAILY_LOSS_LIMIT   = 25       # halt for the day if -$25+ today
 CONSEC_LOSS_LIMIT  = 3        # halt for 60 min after 3 consecutive losses
+MAX_TRADES_PER_DAY = 200      # safety cap on total trades per UTC day
+MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
 
 
 # ── infrastructure (reused from crypto15m_trader pattern) ─────────────────────
@@ -160,6 +160,10 @@ def check_halts(state, balance):
     daily = state.get("daily", {})
     if daily.get("date") == today and daily.get("pnl", 0) <= -DAILY_LOSS_LIMIT:
         return True, f"today's P&L ${daily['pnl']:+.2f} <= -${DAILY_LOSS_LIMIT}"
+    # Trades-per-day cap
+    daily_trades = daily.get("trades_today", 0) if daily.get("date") == today else 0
+    if daily_trades >= MAX_TRADES_PER_DAY:
+        return True, f"{daily_trades} trades today >= cap {MAX_TRADES_PER_DAY}"
     # 60-min cooldown after N consecutive losses
     cl  = state.get("consec_losses", 0)
     ts  = state.get("last_loss_ts", 0)
@@ -170,7 +174,48 @@ def check_halts(state, balance):
     return False, ""
 
 
+def cleanup_state(state):
+    """Prune old settled positions to keep state file small."""
+    positions = state.get("positions", {})
+    settled_items = [(k, v) for k, v in positions.items() if v.get("settled")]
+    if len(settled_items) <= MAX_POSITIONS_STATE:
+        return
+    # Keep the most recent MAX_POSITIONS_STATE
+    settled_items.sort(key=lambda x: x[1].get("opened_at", ""), reverse=True)
+    keep_tickers = set(k for k, _ in settled_items[:MAX_POSITIONS_STATE])
+    keep_tickers |= set(k for k, v in positions.items() if not v.get("settled"))
+    state["positions"] = {k: v for k, v in positions.items() if k in keep_tickers}
+
+
 # ── order placement ───────────────────────────────────────────────────────────
+
+def query_actual_fill(ticker, side):
+    """After placing an order, query fills to get real filled count + cost.
+    Returns (total_contracts, total_cost) — both 0 if no fills yet."""
+    import time
+    time.sleep(1.5)   # give Kalshi a moment to process
+    code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 20})
+    if code != 200:
+        return 0, 0
+    total_ct   = 0.0
+    total_cost = 0.0
+    for f in r.get("fills", []):
+        if f.get("ticker") != ticker: continue
+        if f.get("outcome_side") != side: continue
+        try:
+            ct = float(f.get("count_fp", "0"))
+        except Exception:
+            continue
+        if ct <= 0: continue
+        price_str = f.get("yes_price_dollars") if side == "yes" else f.get("no_price_dollars")
+        try:
+            price = float(price_str or 0)
+        except Exception:
+            continue
+        total_ct   += ct
+        total_cost += ct * price
+    return total_ct, total_cost
+
 
 def try_trade(market, state, dry_run):
     ticker = market.get("ticker", "")
@@ -192,14 +237,17 @@ def try_trade(market, state, dry_run):
     # Use aggressive limit to guarantee fill. Kalshi matches at best available
     # price, so posting a max-97c limit means "fill anywhere up to 97c."
     limit_cents = MAX_FILL_LIMIT
-    # Size contracts based on the observed ask (what we'll likely actually pay),
-    # not the aggressive limit — otherwise a rare 97c fill would spend way more.
+    # Size contracts based on the observed ask (what we'll likely actually pay).
     contracts   = max(1, int(BET_DOLLARS * 100 / ask_cents) + 1)
-    est_cost    = contracts * limit_cents / 100
-    est_profit  = contracts * (100 - limit_cents) / 100 * (1 - 0.07)  # after 7% fee on profit
+    # Cost estimates use the observed ask (most realistic).
+    # Store BOTH estimated and worst-case in state so we can reconcile later.
+    est_cost         = contracts * ask_cents / 100        # expected fill cost
+    worst_case_cost  = contracts * limit_cents / 100      # if fill happens at limit
+    est_profit       = contracts * (100 - ask_cents) / 100 * (1 - 0.07)
 
     log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} ask={ask_cents}c "
-        f"limit={limit_cents}c  {contracts} contracts  cost=${est_cost:.2f}  est.win=+${est_profit:.2f}")
+        f"limit={limit_cents}c  {contracts} contracts  est.cost=${est_cost:.2f} "
+        f"(worst ${worst_case_cost:.2f})  est.win=+${est_profit:.2f}")
 
     if dry_run:
         log(f"    [dry-run] skipped")
@@ -216,15 +264,35 @@ def try_trade(market, state, dry_run):
     )
     if code in (200, 201):
         log(f"    order accepted")
+        # After order, immediately query fills to get REAL cost + contract count.
+        # This corrects for partial fills, better-than-limit prices, etc.
+        actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        if actual_contracts > 0:
+            log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}")
+            final_contracts = actual_contracts
+            final_cost      = actual_cost
+        else:
+            log(f"    no fill data available yet — using estimates")
+            final_contracts = contracts
+            final_cost      = est_cost
         state["positions"][ticker] = {
             "side":        side,
             "limit_cents": limit_cents,
-            "contracts":   contracts,
-            "cost":        est_cost,
+            "ask_at_entry": ask_cents,
+            "contracts":   final_contracts,
+            "cost":        final_cost,
             "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":     False,
         }
         state["stats"]["trades"] += 1
+        # track trades per day
+        today = datetime.now(timezone.utc).date().isoformat()
+        daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
+        if daily.get("date") != today:
+            daily["date"] = today
+            daily["pnl"]  = 0.0
+            daily["trades_today"] = 0
+        daily["trades_today"] = daily.get("trades_today", 0) + 1
         save_state(state)
         send_email(
             f"[Kalshi-C] Trade {ticker} {side.upper()} @ {limit_cents}c",
@@ -335,6 +403,10 @@ def run_once(dry_run=False):
     wr = stats["wins"] / stats["trades"] if stats["trades"] else 0
     log(f"  scanned {n_scanned} near-close markets, new trades: {n_tradeable}")
     log(f"  cumulative: {stats['wins']}/{stats['trades']} = {wr*100:.1f}% WR  P&L=${stats['pnl']:+.2f}")
+
+    # Prune old settled positions to keep state file compact
+    cleanup_state(state)
+    save_state(state)
     log(f"=== done ===")
 
 

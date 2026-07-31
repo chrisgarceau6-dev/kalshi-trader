@@ -1,0 +1,2 @@
+wallet,passed,hard_passed,1_edge_vs_spread [HARD],2_hold_ge_24.0h [SOFT],3_significant_edge_p05 [HARD],4_sample_and_spread [HARD],5_concurrent_le_20 [SOFT],corrected_n,corrected_pnl,corrected_sharpe,median_hold_hrs,n_open_positions,n_dead_added,n_won_added,n_months,top_month_share
+0xdfe8ed88a7cdf6d245e58af54af80c86276d9f16,1,1,True,False,False,False,False,1771,-123731.06,-0.993,0.1,1458,1447,0,4,0.83

@@ -23,10 +23,17 @@ STRATEGY V2 (2-year validated):
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, os, smtplib
+import argparse, base64, json, os, smtplib, sys
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
+
+# HARD SAFETY GUARD — this strategy lost money in live trading (-$92 in 40 hours).
+# Refuses to run unless explicitly enabled via env var. Prevents accidental
+# firing from cron-job.org still hitting the old workflow URL.
+if os.environ.get("ENABLE_LEGACY_CRYPTO15M") != "yes":
+    print("crypto15m_trader.py is HALTED. Set ENABLE_LEGACY_CRYPTO15M=yes to override.")
+    sys.exit(0)
 
 from kalshi_auth import get as _get, place_order
 

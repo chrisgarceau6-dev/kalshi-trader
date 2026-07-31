@@ -1,15 +1,14 @@
 name: Crypto 15-Min Trader (BTC+ETH+SOL+DOGE+BNB)
 
 on:
-  # HALTED — disabled by user request 2026-07-30 (strategy losing money)
-  # schedule:
-  #   - cron: '*/5 * * * *'
+  # HALTED — both schedule AND workflow_dispatch disabled to prevent accidental
+  # firing from external cron-job.org triggers hitting the old URL.
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'Dry run — detect signals but place no orders (true/false)'
-        required: false
-        default: 'false'
+      confirm_i_really_want_to_run_the_old_broken_strategy:
+        description: 'Type YES to confirm you want to run this (broken) strategy'
+        required: true
+        default: 'NO'
 
 jobs:
   trade:

@@ -1,0 +1,106 @@
+=== EXHAUST OPTIMIZER REPORT — 2026-07-25T13:57:50 ===
+Tested 25865 valid combos (fits $2k bankroll)
+Split: first 70% train, last 30% test (walk-forward)
+
+### TOP 15 BY ROBUST TIME-AVG (min(train, test) weekly $)
+ n  bet   train    test  robust test_med test_%prof test_sharpe wallets
+ 5 $ 35 $  1039 $  2024 $  1039 $    819        84%       0.65  0xaa501f4663.. + 0x412fe1a101.. + 0x9d9346b36b.. + 0x5c6940cefe.. + 0x39d3c773be..
+ 6 $ 35 $  1023 $  2136 $  1023 $   1270        90%       0.70  0xaa501f4663.. + 0x412fe1a101.. + 0x9d9346b36b.. + 0x5c6940cefe.. + 0x23c8a4c266.. + 0x39d3c773be..
+ 4 $ 35 $  1023 $  1920 $  1023 $    880        84%       0.61  0x39d3c773be.. + 0x412fe1a101.. + 0x9d9346b36b.. + 0xaa501f4663..
+ 4 $ 35 $  1022 $  2005 $  1022 $    730        95%       0.64  0x39d3c773be.. + 0x412fe1a101.. + 0x5c6940cefe.. + 0xaa501f4663..
+ 4 $ 35 $  1021 $  1905 $  1021 $    813        90%       0.63  0x412fe1a101.. + 0x9d9346b36b.. + 0x5c6940cefe.. + 0xaa501f4663..
+ 4 $ 35 $  1020 $  1827 $  1020 $    315        79%       0.57  0x39d3c773be.. + 0x9d9346b36b.. + 0x5c6940cefe.. + 0xaa501f4663..
+ 4 $ 35 $  1012 $  1916 $  1012 $    775        90%       0.60  0x39d3c773be.. + 0x412fe1a101.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 4 $ 35 $  1011 $  1816 $  1011 $    863        84%       0.59  0x412fe1a101.. + 0x9d9346b36b.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 4 $ 35 $  1010 $  1901 $  1010 $    714        95%       0.62  0x412fe1a101.. + 0x5c6940cefe.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 4 $ 35 $  1010 $  1738 $  1010 $    360        79%       0.54  0x39d3c773be.. + 0x9d9346b36b.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 4 $ 35 $  1009 $  1823 $  1009 $    323        79%       0.56  0x39d3c773be.. + 0x5c6940cefe.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 4 $ 35 $  1007 $  1737 $  1007 $    299        74%       0.55  0x9d9346b36b.. + 0x5c6940cefe.. + 0xe7dd85e5a9.. + 0xaa501f4663..
+ 5 $ 35 $  1007 $  2031 $  1007 $   1212        84%       0.66  0xaa501f4663.. + 0x412fe1a101.. + 0x9d9346b36b.. + 0x23c8a4c266.. + 0x39d3c773be..
+ 5 $ 35 $  1006 $  2117 $  1006 $   1181        95%       0.69  0xaa501f4663.. + 0x412fe1a101.. + 0x5c6940cefe.. + 0x23c8a4c266.. + 0x39d3c773be..
+ 3 $ 35 $  1006 $  1901 $  1006 $    791        90%       0.60  0x39d3c773be.. + 0x412fe1a101.. + 0xaa501f4663..
+
+### TOP 10 BY TEST-SET p25 (25th percentile week — 'worst typical week')
+ n  bet test_avg test_med test_p25 test_%prof wallets
+ 4 $ 65 $   1440 $   1723 $   1293        80%  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x77f623734a..
+ 4 $ 70 $   1460 $   1599 $   1063        80%  0x412fe1a101.. + 0x87da2f16cf.. + 0x9d9346b36b.. + 0x77f623734a..
+ 4 $ 70 $   1300 $   1515 $    856        80%  0x412fe1a101.. + 0x87da2f16cf.. + 0x77f623734a.. + 0x88d17ad6bf..
+ 4 $ 70 $   1405 $   1515 $    834        80%  0x412fe1a101.. + 0x87da2f16cf.. + 0x77f623734a.. + 0x2b3ff45c91..
+ 3 $ 70 $   1320 $   1515 $    834        80%  0x412fe1a101.. + 0x87da2f16cf.. + 0x77f623734a..
+ 4 $ 65 $   1397 $   1442 $    795        80%  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x88d17ad6bf..
+ 3 $ 65 $   1417 $   1518 $    793        80%  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf..
+ 4 $ 65 $   1414 $   1518 $    793        80%  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x2b3ff45c91..
+ 4 $ 65 $   1550 $   1463 $    763        90%  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x9d9346b36b..
+ 6 $ 35 $   2108 $   1340 $    758        97%  0xaa501f4663.. + 0x412fe1a101.. + 0xaa7a74b8c7.. + 0x9d9346b36b.. + 0x23c8a4c266.. + 0x39d3c773be..
+
+### TOP 10 BY TEST SHARPE (return per unit volatility)
+ n  bet test_avg test_sharpe test_%prof  worst_week wallets
+ 4 $ 65 $   1550       1.44        90% $      -202  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x9d9346b36b..
+ 4 $ 60 $   1329       1.39        90% $      -214  0x23c8a4c266.. + 0x39d3c773be.. + 0x412fe1a101.. + 0x87da2f16cf..
+ 4 $ 65 $   1440       1.32        80% $      -636  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x77f623734a..
+ 4 $ 60 $   1248       1.30        90% $      -201  0x39d3c773be.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x9d9346b36b..
+ 4 $ 65 $   1414       1.29        80% $      -303  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x2b3ff45c91..
+ 3 $ 65 $   1417       1.29        80% $      -303  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf..
+ 4 $ 55 $   1181       1.29        80% $      -256  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0xe7dd85e5a9..
+ 4 $ 25 $    475       1.27        80% $      -157  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0xb64fe08cf7..
+ 4 $ 65 $   1397       1.26        80% $      -331  0x23c8a4c266.. + 0x412fe1a101.. + 0x87da2f16cf.. + 0x88d17ad6bf..
+ 4 $ 70 $   1460       1.26        80% $      -669  0x412fe1a101.. + 0x87da2f16cf.. + 0x9d9346b36b.. + 0x77f623734a..
+
+### TOP 10 BY TEST-SET % PROFITABLE WEEKS (consistency)
+ n  bet test_avg test_med test_%prof wallets
+ 4 $ 30 $   1939 $   1285       100%  0x412fe1a101.. + 0xc8ec6d4cef.. + 0xfbf3d501e8.. + 0xaa501f4663..
+ 4 $ 35 $   1889 $    959       100%  0x412fe1a101.. + 0x77f623734a.. + 0xaa501f4663.. + 0xaa7a74b8c7..
+ 2 $100 $   1044 $    468       100%  0x412fe1a101.. + 0x2b3ff45c91..
+ 3 $ 65 $    968 $    542       100%  0x39d3c773be.. + 0x412fe1a101.. + 0x2b3ff45c91..
+ 4 $ 65 $    947 $    542       100%  0x39d3c773be.. + 0x412fe1a101.. + 0xe7dd85e5a9.. + 0x2b3ff45c91..
+ 1 $100 $    934 $    350       100%  0x412fe1a101..
+ 2 $ 65 $    911 $    402       100%  0x39d3c773be.. + 0x412fe1a101..
+ 3 $ 90 $    910 $    421       100%  0x412fe1a101.. + 0xe7dd85e5a9.. + 0x2b3ff45c91..
+ 4 $ 15 $    116 $     53       100%  0x412fe1a101.. + 0xe7dd85e5a9.. + 0x7177a7f5c2.. + 0x2b3ff45c91..
+ 6 $ 35 $   2384 $   1281        97%  0xaa501f4663.. + 0x1cc1671319.. + 0x412fe1a101.. + 0xaa7a74b8c7.. + 0x23c8a4c266.. + 0x39d3c773be..
+
+### 🏆 OVERALL WINNER
+Criteria: fits bankroll, robust_time_avg >= $250, test_pct_profitable >= 60%, ranked by robust_time_avg
+
+#1: robust $1039.13/wk (train $1039.13, test $2024.39)
+    median test $818.93/wk, 84.2% profitable, sharpe 0.65
+    bet $35/trade, peak 53 concurrent ($1855/$2000)
+      wallet: 0xaa501f4663c454e94fba8907c42dafcc785a3ed5
+      wallet: 0x412fe1a101554f0b382181c3af932e4b2d8030fa
+      wallet: 0x9d9346b36bfacf6858ae06c7401a72ad09162cf1
+      wallet: 0x5c6940cefe1dc0cbcc859b62997cc749baa751ca
+      wallet: 0x39d3c773be30fcc73161fc6768f46d563a779ef0
+
+#2: robust $1023.38/wk (train $1023.38, test $2135.6)
+    median test $1270.19/wk, 89.5% profitable, sharpe 0.7
+    bet $35/trade, peak 53 concurrent ($1855/$2000)
+      wallet: 0xaa501f4663c454e94fba8907c42dafcc785a3ed5
+      wallet: 0x412fe1a101554f0b382181c3af932e4b2d8030fa
+      wallet: 0x9d9346b36bfacf6858ae06c7401a72ad09162cf1
+      wallet: 0x5c6940cefe1dc0cbcc859b62997cc749baa751ca
+      wallet: 0x23c8a4c266d10ba5846837eac391fea89ed6f293
+      wallet: 0x39d3c773be30fcc73161fc6768f46d563a779ef0
+
+#3: robust $1022.96/wk (train $1022.96, test $1920.07)
+    median test $879.65/wk, 84.2% profitable, sharpe 0.61
+    bet $35/trade, peak 52 concurrent ($1820/$2000)
+      wallet: 0x39d3c773be30fcc73161fc6768f46d563a779ef0
+      wallet: 0x412fe1a101554f0b382181c3af932e4b2d8030fa
+      wallet: 0x9d9346b36bfacf6858ae06c7401a72ad09162cf1
+      wallet: 0xaa501f4663c454e94fba8907c42dafcc785a3ed5
+
+#4: robust $1022.04/wk (train $1022.04, test $2005.37)
+    median test $730.21/wk, 94.7% profitable, sharpe 0.64
+    bet $35/trade, peak 53 concurrent ($1855/$2000)
+      wallet: 0x39d3c773be30fcc73161fc6768f46d563a779ef0
+      wallet: 0x412fe1a101554f0b382181c3af932e4b2d8030fa
+      wallet: 0x5c6940cefe1dc0cbcc859b62997cc749baa751ca
+      wallet: 0xaa501f4663c454e94fba8907c42dafcc785a3ed5
+
+#5: robust $1020.87/wk (train $1020.87, test $1905.28)
+    median test $812.6/wk, 89.5% profitable, sharpe 0.63
+    bet $35/trade, peak 53 concurrent ($1855/$2000)
+      wallet: 0x412fe1a101554f0b382181c3af932e4b2d8030fa
+      wallet: 0x9d9346b36bfacf6858ae06c7401a72ad09162cf1
+      wallet: 0x5c6940cefe1dc0cbcc859b62997cc749baa751ca
+      wallet: 0xaa501f4663c454e94fba8907c42dafcc785a3ed5

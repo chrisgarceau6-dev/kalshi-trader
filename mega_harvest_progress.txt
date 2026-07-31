@@ -1,0 +1,118 @@
+=== mega-harvest 2026-07-25T10:15:54 ===
+[2026-07-25T10:15:54] already tested: 750 wallets
+[2026-07-25T10:15:54] === SOURCE 1: leaderboard sweeps ===
+[2026-07-25T10:15:55]   OVERALL/ALL: 150 pulled, 100 new
+[2026-07-25T10:15:56]   OVERALL/MONTH: 150 pulled, 92 new
+[2026-07-25T10:15:57]   OVERALL/WEEK: 150 pulled, 94 new
+[2026-07-25T10:15:58]   POLITICS/ALL: 150 pulled, 92 new
+[2026-07-25T10:15:59]   POLITICS/MONTH: 150 pulled, 99 new
+[2026-07-25T10:16:00]   POLITICS/WEEK: 150 pulled, 64 new
+[2026-07-25T10:16:01]   SPORTS/ALL: 150 pulled, 34 new
+[2026-07-25T10:16:02]   SPORTS/MONTH: 150 pulled, 12 new
+[2026-07-25T10:16:04]   SPORTS/WEEK: 150 pulled, 51 new
+[2026-07-25T10:16:04]   CRYPTO/ALL: 150 pulled, 134 new
+[2026-07-25T10:16:05]   CRYPTO/MONTH: 150 pulled, 115 new
+[2026-07-25T10:16:06]   CRYPTO/WEEK: 150 pulled, 70 new
+[2026-07-25T10:16:07]   WEATHER/ALL: 150 pulled, 138 new
+[2026-07-25T10:16:08]   WEATHER/MONTH: 150 pulled, 93 new
+[2026-07-25T10:16:09]   WEATHER/WEEK: 150 pulled, 55 new
+[2026-07-25T10:16:10]   ECONOMICS/ALL: 150 pulled, 101 new
+[2026-07-25T10:16:11]   ECONOMICS/MONTH: 150 pulled, 82 new
+[2026-07-25T10:16:12]   ECONOMICS/WEEK: 150 pulled, 56 new
+[2026-07-25T10:16:13]   CULTURE/ALL: 150 pulled, 96 new
+[2026-07-25T10:16:14]   CULTURE/MONTH: 150 pulled, 97 new
+[2026-07-25T10:16:15]   CULTURE/WEEK: 150 pulled, 72 new
+[2026-07-25T10:16:15] after leaderboard: 1743 unique new candidates
+[2026-07-25T10:16:15] === SOURCE 2: top holders in hottest current markets ===
+[2026-07-25T10:16:21] after current market holders: 1743 new
+[2026-07-25T10:16:21] === SOURCE 3: winners on recently resolved markets ===
+[2026-07-25T10:16:33] after resolved market winners: 1743 new
+[2026-07-25T10:16:33] === HARVESTED 1743 NEW CANDIDATES ===
+[2026-07-25T10:16:33] candidates saved -> /Users/chrisgarceau/pm/mega_harvest_candidates.txt
+[2026-07-25T10:16:33] === SCREENING 1743 candidates ===
+[2026-07-25T10:16:50]   4/1743 screened. latest hits: 1, latest=0x62e651c3 hard=2 t=5.69
+[2026-07-25T10:18:30]   24/1743 screened. latest hits: 2, latest=0x88f2963c hard=2 t=31.56
+[2026-07-25T10:18:32]   25/1743 screened. latest hits: 2, latest=0x23786fda hard=0 t=0
+[2026-07-25T10:19:46]   40/1743 screened. latest hits: 3, latest=0xc6174a74 hard=2 t=5.0
+[2026-07-25T10:20:39]   50/1743 screened. latest hits: 3, latest=0xf2088ef9 hard=0 t=-12.86
+[2026-07-25T10:23:24]   75/1743 screened. latest hits: 3, latest=0xe904443b hard=0 t=-4.77
+[2026-07-25T10:25:28]   100/1743 screened. latest hits: 3, latest=0x4b4bdc29 hard=0 t=0
+[2026-07-25T10:27:13]   121/1743 screened. latest hits: 4, latest=0xde5d32c2 hard=2 t=3.26
+[2026-07-25T10:27:22]   123/1743 screened. latest hits: 5, latest=0x26437896 hard=2 t=40.98
+[2026-07-25T10:27:35]   125/1743 screened. latest hits: 5, latest=0x0fe40e88 hard=0 t=0
+[2026-07-25T10:29:59]   150/1743 screened. latest hits: 5, latest=0x026985b6 hard=0 t=-4.93
+[2026-07-25T10:30:56]   158/1743 screened. latest hits: 6, latest=0x77f62373 hard=2 t=18.54
+[2026-07-25T10:32:23]   175/1743 screened. latest hits: 6, latest=0x9c261746 hard=0 t=-5.21
+[2026-07-25T10:33:33]   189/1743 screened. latest hits: 7, latest=0x1fee90f3 hard=2 t=1.87
+[2026-07-25T10:34:28]   200/1743 screened. latest hits: 7, latest=0xfc4c47f3 hard=0 t=-1.75
+[2026-07-25T10:34:47]   204/1743 screened. latest hits: 8, latest=0xe7dd85e5 hard=2 t=3.13
+[2026-07-25T10:36:48]   225/1743 screened. latest hits: 8, latest=0x594edb91 hard=0 t=0
+[2026-07-25T10:37:03]   230/1743 screened. latest hits: 9, latest=0x1ba75514 hard=2 t=3.76
+[2026-07-25T10:38:43]   250/1743 screened. latest hits: 9, latest=0xe055d214 hard=0 t=0
+[2026-07-25T10:41:38]   275/1743 screened. latest hits: 9, latest=0x37c94ea1 hard=0 t=-28.07
+[2026-07-25T10:42:30]   281/1743 screened. latest hits: 10, latest=0x9def9524 hard=2 t=1.76
+[2026-07-25T10:42:48]   285/1743 screened. latest hits: 11, latest=0xb64fe08c hard=2 t=3.99
+[2026-07-25T10:43:59]   299/1743 screened. latest hits: 12, latest=0x7caeeadf hard=2 t=39.35
+[2026-07-25T10:44:00]   300/1743 screened. latest hits: 12, latest=0x9ba9dec3 hard=0 t=0
+[2026-07-25T10:45:54]   318/1743 screened. latest hits: 13, latest=0x65e4246d hard=2 t=7.31
+[2026-07-25T10:46:09]   322/1743 screened. latest hits: 14, latest=0xd3a6e523 hard=2 t=3.83
+[2026-07-25T10:46:32]   325/1743 screened. latest hits: 14, latest=0x9d57c42e hard=1 t=-40.82
+[2026-07-25T10:48:16]   342/1743 screened. latest hits: 15, latest=0x7a5bfa76 hard=2 t=14.01
+[2026-07-25T10:48:59]   350/1743 screened. latest hits: 15, latest=0x578780c6 hard=0 t=-2.07
+[2026-07-25T10:49:11]   352/1743 screened. latest hits: 16, latest=0xad7b6b87 hard=2 t=2.45
+[2026-07-25T10:49:21]   353/1743 screened. latest hits: 17, latest=0x0df0515d hard=2 t=12.3
+[2026-07-25T10:51:24]   375/1743 screened. latest hits: 17, latest=0x8791609e hard=1 t=2.53
+[2026-07-25T10:51:39]   378/1743 screened. latest hits: 18, latest=0xbf6755d0 hard=2 t=2.46
+[2026-07-25T10:52:02]   381/1743 screened. latest hits: 19, latest=0xa9900345 hard=2 t=23.77
+[2026-07-25T10:52:41]   387/1743 screened. latest hits: 20, latest=0x1fe319cf hard=2 t=16.1
+[2026-07-25T10:53:38]   400/1743 screened. latest hits: 20, latest=0x5a7c30af hard=0 t=-2.13
+[2026-07-25T10:55:56]   425/1743 screened. latest hits: 20, latest=0xef104cc7 hard=0 t=0
+[2026-07-25T10:56:01]   427/1743 screened. latest hits: 21, latest=0x5257aa84 hard=2 t=2.56
+[2026-07-25T10:58:02]   448/1743 screened. latest hits: 22, latest=0xa3a6fa49 hard=2 t=2.19
+[2026-07-25T10:58:17]   450/1743 screened. latest hits: 22, latest=0x8a4c788f hard=1 t=-2.03
+[2026-07-25T11:00:15]   475/1743 screened. latest hits: 22, latest=0x1b58d3de hard=0 t=0
+[2026-07-25T11:01:17]   485/1743 screened. latest hits: 23, latest=0xd73d208b hard=2 t=10.32
+[2026-07-25T11:01:21]   487/1743 screened. latest hits: 24, latest=0x054ec2f0 hard=2 t=10.04
+[2026-07-25T11:01:31]   488/1743 screened. latest hits: 25, latest=0x3dd1cf05 hard=2 t=9.58
+[2026-07-25T11:02:06]   493/1743 screened. latest hits: 26, latest=0x5e222c56 hard=2 t=5.35
+[2026-07-25T11:02:41]   500/1743 screened. latest hits: 26, latest=0x1941ca5d hard=0 t=-9.54
+[2026-07-25T11:02:44]   501/1743 screened. latest hits: 27, latest=0x7177a7f5 hard=2 t=3.48
+[2026-07-25T11:05:15]   525/1743 screened. latest hits: 27, latest=0xf247584e hard=1 t=1.94
+[2026-07-25T11:07:53]   550/1743 screened. latest hits: 27, latest=0xbd0477e0 hard=1 t=2.28
+[2026-07-25T11:08:03]   554/1743 screened. latest hits: 28, latest=0xab8f49a3 hard=2 t=3.42
+[2026-07-25T11:10:04]   575/1743 screened. latest hits: 28, latest=0x40672269 hard=0 t=-55.52
+[2026-07-25T11:10:20]   579/1743 screened. latest hits: 29, latest=0x000c8cb9 hard=2 t=14.82
+[2026-07-25T11:11:16]   590/1743 screened. latest hits: 30, latest=0x323b1615 hard=2 t=6.7
+[2026-07-25T11:12:07]   600/1743 screened. latest hits: 30, latest=0x2bc776f8 hard=0 t=0
+[2026-07-25T11:12:14]   603/1743 screened. latest hits: 31, latest=0x187a72ba hard=2 t=3.44
+[2026-07-25T11:14:06]   625/1743 screened. latest hits: 31, latest=0x9f208e85 hard=0 t=0
+[2026-07-25T11:14:08]   626/1743 screened. latest hits: 32, latest=0x05cb160a hard=2 t=8.12
+[2026-07-25T11:14:42]   636/1743 screened. latest hits: 33, latest=0xe1f039b6 hard=2 t=2.48
+[2026-07-25T11:16:08]   650/1743 screened. latest hits: 33, latest=0x689ae12e hard=0 t=-14.51
+[2026-07-25T11:16:31]   653/1743 screened. latest hits: 34, latest=0xaa501f46 hard=2 t=8.52
+[2026-07-25T11:16:41]   655/1743 screened. latest hits: 35, latest=0x6fc9e169 hard=2 t=2.23
+[2026-07-25T11:17:58]   670/1743 screened. latest hits: 36, latest=0x5fe14b52 hard=2 t=25.97
+[2026-07-25T11:18:32]   675/1743 screened. latest hits: 36, latest=0x496f76bd hard=0 t=-21.53
+[2026-07-25T11:19:08]   679/1743 screened. latest hits: 37, latest=0xbadb9af9 hard=2 t=5.06
+[2026-07-25T11:19:47]   685/1743 screened. latest hits: 38, latest=0x43395877 hard=2 t=4.57
+[2026-07-25T11:20:44]   691/1743 screened. latest hits: 39, latest=0xf7f0b0b1 hard=2 t=3.17
+[2026-07-25T11:21:28]   700/1743 screened. latest hits: 39, latest=0xdc09c0fd hard=0 t=-0.98
+[2026-07-25T11:21:38]   701/1743 screened. latest hits: 40, latest=0xf1a437dc hard=2 t=15.06
+[2026-07-25T11:24:00]   725/1743 screened. latest hits: 40, latest=0xd1f781ee hard=0 t=-9.09
+[2026-07-25T11:24:05]   727/1743 screened. latest hits: 41, latest=0x9a73373b hard=2 t=2.7
+[2026-07-25T11:25:06]   738/1743 screened. latest hits: 42, latest=0xd6a39cef hard=3 t=10.75
+[2026-07-25T11:25:34]   741/1743 screened. latest hits: 43, latest=0xd3ecb2ae hard=2 t=2.38
+[2026-07-25T11:26:11]   750/1743 screened. latest hits: 43, latest=0xed229d04 hard=0 t=-4.2
+[2026-07-25T11:28:18]   775/1743 screened. latest hits: 43, latest=0x45b39e1f hard=0 t=-6.97
+[2026-07-25T11:31:01]   800/1743 screened. latest hits: 43, latest=0x7e5e420a hard=1 t=-1.04
+[2026-07-25T11:31:06]   802/1743 screened. latest hits: 44, latest=0xffa39447 hard=2 t=2.99
+[2026-07-25T11:32:47]   823/1743 screened. latest hits: 45, latest=0x7adc818e hard=2 t=14.09
+[2026-07-25T11:32:56]   825/1743 screened. latest hits: 45, latest=0x9034d7be hard=1 t=2.2
+[2026-07-25T12:00:14]   850/1743 screened. latest hits: 45, latest=0x54b56146 hard=0 t=0
+[2026-07-25T12:16:43]   875/1743 screened. latest hits: 45, latest=0xfd5c9bbf hard=0 t=0
+[2026-07-25T12:29:30]   900/1743 screened. latest hits: 45, latest=0xcce2b7c7 hard=0 t=-7.08
+[2026-07-25T12:30:10]   909/1743 screened. latest hits: 46, latest=0x8f6924ad hard=2 t=29.98
+[2026-07-25T12:31:42]   925/1743 screened. latest hits: 46, latest=0x229c0a7d hard=0 t=-26.54
+[2026-07-25T12:33:47]   950/1743 screened. latest hits: 46, latest=0xfffe4013 hard=0 t=-12.0
+[2026-07-25T12:35:51]   966/1743 screened. latest hits: 47, latest=0xd0b4c4c0 hard=2 t=2.88
+[2026-07-25T12:36:33]   970/1743 screened. latest hits: 48, latest=0x9b89ef1f hard=2 t=4.22

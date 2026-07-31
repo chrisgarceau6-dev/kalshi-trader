@@ -1,0 +1,88 @@
+wallet_name,entry_ts,exit_ts,entry_price,exit_price,size,hold_hrs,title,topic
+?,2026-05-06 19:17:21,2026-05-10 20:53:53,0.29,0.22,5000.0,97.60888888888888,"US x Iran permanent peace deal by May 31, 2026?",iran_israel
+?,2026-05-06 19:18:08,2026-05-07 15:31:44,0.154509932,0.276,5000.0,20.226666666666667,"US x Iran permanent peace deal by May 15, 2026?",iran_israel
+?,2026-05-07 20:39:39,2026-05-07 21:42:00,0.252434,0.25,1000.0,1.0391666666666666,Iran closes its airspace by May 15?,iran_israel
+?,2026-05-07 21:00:14,2026-07-07 04:12:35,0.911,0.978,15091.33,1447.2058333333334,Hantavirus pandemic in 2026?,other
+?,2026-05-22 17:43:57,2026-05-23 16:44:33,0.76,0.68,47.76,23.01,"US x Iran permanent peace deal by May 31, 2026?",iran_israel
+?,2026-06-02 05:33:47,2026-06-02 06:03:06,0.4,0.39,20.0,0.4886111111111111,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:33:47,2026-06-02 06:04:49,0.27,0.27,20.0,0.5172222222222222,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:34:03,2026-06-02 06:03:06,0.4,0.39,30.0,0.4841666666666667,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:34:03,2026-06-02 06:04:44,0.15,0.14,180.0,0.5113888888888889,"US x Iran permanent peace deal by June 15, 2026?",iran_israel
+?,2026-06-02 05:34:03,2026-06-02 06:04:49,0.27,0.27,180.0,0.5127777777777778,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:34:04,2026-06-02 06:03:06,0.4,0.39,180.0,0.48388888888888887,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:34:29,2026-06-02 06:04:49,0.27,0.27,10.0,0.5055555555555555,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:34:31,2026-06-02 06:03:06,0.4,0.39,10.0,0.47638888888888886,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:37:40,2026-06-02 06:03:06,0.4,0.39,100.0,0.42388888888888887,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:43:33,2026-06-02 06:04:49,0.27,0.27,10.0,0.35444444444444445,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:43:33,2026-06-02 06:03:06,0.4,0.39,10.0,0.3258333333333333,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:44:57,2026-06-02 06:03:06,0.4,0.39,70.0,0.3025,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:46:30,2026-06-02 06:03:06,0.4,0.39,70.0,0.27666666666666667,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:48:27,2026-06-02 06:04:44,0.15,0.14,10.0,0.2713888888888889,"US x Iran permanent peace deal by June 15, 2026?",iran_israel
+?,2026-06-02 05:48:27,2026-06-02 06:04:49,0.27,0.27,10.0,0.2727777777777778,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:48:29,2026-06-02 06:03:06,0.4,0.39,10.0,0.2436111111111111,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:48:36,2026-06-02 06:04:49,0.28,0.27,10.0,0.2702777777777778,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:48:36,2026-06-02 06:03:06,0.4,0.39,10.0,0.24166666666666667,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:51:38,2026-06-02 06:03:06,0.4,0.39,10.0,0.19111111111111112,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:52:16,2026-06-02 06:03:06,0.4,0.39,20.0,0.18055555555555555,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:52:36,2026-06-02 06:04:49,0.28,0.27,20.0,0.2036111111111111,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:52:36,2026-06-02 06:04:44,0.15,0.14,20.0,0.20222222222222222,"US x Iran permanent peace deal by June 15, 2026?",iran_israel
+?,2026-06-02 05:52:37,2026-06-02 06:03:06,0.4,0.39,20.0,0.17472222222222222,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:52:44,2026-06-02 06:04:49,0.28,0.27,10.0,0.2013888888888889,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:52:46,2026-06-02 06:03:06,0.4,0.39,10.0,0.17222222222222222,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:30,2026-06-02 06:03:06,0.4,0.39,10.0,0.16,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:30,2026-06-02 06:04:49,0.28,0.27,10.0,0.18861111111111112,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:53:32,2026-06-02 06:04:49,0.28,0.27,10.0,0.18805555555555556,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:53:32,2026-06-02 06:03:06,0.4,0.39,30.0,0.15944444444444444,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:32,2026-06-02 06:03:06,0.4,0.39,30.0,0.15944444444444444,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:35,2026-06-02 06:04:49,0.28,0.27,10.0,0.18722222222222223,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:53:35,2026-06-02 06:03:06,0.4,0.39,30.0,0.15861111111111112,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:37,2026-06-02 06:03:06,0.4,0.39,10.0,0.15805555555555556,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:39,2026-06-02 06:03:06,0.4,0.39,10.0,0.1575,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:40,2026-06-02 06:03:06,0.4,0.39,10.0,0.15722222222222224,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:42,2026-06-02 06:03:06,0.4,0.39,20.0,0.15666666666666668,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:42,2026-06-02 06:04:49,0.28,0.27,10.0,0.1852777777777778,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:53:44,2026-06-02 06:03:06,0.4,0.39,20.0,0.15611111111111112,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:44,2026-06-02 06:03:06,0.4,0.39,20.0,0.15611111111111112,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:46,2026-06-02 06:03:06,0.4,0.39,10.0,0.15555555555555556,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:46,2026-06-02 06:04:49,0.28,0.27,9.259999999999991,0.18416666666666667,"US x Iran permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-02 05:53:46,2026-06-02 06:03:06,0.4,0.39,20.0,0.15555555555555556,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:47,2026-06-02 06:03:06,0.4,0.39,10.0,0.15527777777777776,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:49,2026-06-02 06:03:06,0.4,0.39,10.0,0.15472222222222223,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:51,2026-06-02 06:03:06,0.4,0.39,10.0,0.15416666666666667,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:53:53,2026-06-02 06:03:06,0.4,0.39,20.0,0.15361111111111111,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:12,2026-06-02 06:03:06,0.4,0.39,10.0,0.14833333333333334,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:12,2026-06-02 06:03:06,0.4,0.39,10.0,0.14833333333333334,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:14,2026-06-02 06:03:06,0.4,0.39,10.0,0.14777777777777779,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:14,2026-06-02 06:03:06,0.4,0.39,20.0,0.14777777777777779,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:15,2026-06-02 06:03:06,0.4,0.39,30.0,0.1475,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:17,2026-06-02 06:03:06,0.4,0.39,30.0,0.14694444444444443,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:19,2026-06-02 06:03:06,0.4,0.39,10.0,0.1463888888888889,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:21,2026-06-02 06:03:06,0.4,0.39,10.0,0.14583333333333334,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:21,2026-06-02 06:03:06,0.4,0.39,10.0,0.14583333333333334,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:24,2026-06-02 06:03:06,0.4,0.39,20.0,0.145,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:35,2026-06-02 06:03:06,0.4,0.39,10.0,0.14194444444444446,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:35,2026-06-02 06:03:06,0.4,0.39,10.0,0.14194444444444446,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:36,2026-06-02 06:03:06,0.4,0.39,20.0,0.14166666666666666,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:36,2026-06-02 06:03:06,0.4,0.39,20.0,0.14166666666666666,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:38,2026-06-02 06:03:06,0.4,0.39,20.0,0.1411111111111111,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:40,2026-06-02 06:03:06,0.4,0.39,10.0,0.14055555555555554,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:42,2026-06-02 06:03:06,0.4,0.39,10.0,0.14,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:42,2026-06-02 06:03:06,0.4,0.39,30.0,0.14,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:43,2026-06-02 06:03:06,0.4,0.39,10.0,0.13972222222222222,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-02 05:54:47,2026-06-02 06:03:06,0.4,0.39,30.0,0.1386111111111111,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-03 03:52:39,2026-06-03 13:15:57,0.05,0.04,1000.0,9.388333333333334,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 03:55:57,2026-06-03 13:15:57,0.05,0.04,160.0,9.333333333333334,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 03:55:57,2026-06-03 13:15:57,0.05,0.04,160.0,9.333333333333334,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 03:55:57,2026-06-03 13:15:57,0.05,0.04,160.0,9.333333333333334,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:21:47,2026-06-03 13:15:57,0.05,0.04,200.0,8.902777777777779,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:23:20,2026-06-03 13:15:57,0.05,0.04,3560.0,8.876944444444444,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:23:25,2026-06-03 13:15:57,0.05,0.04,200.0,8.875555555555556,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:23:58,2026-06-03 13:15:57,0.05,0.04,2010.0,8.866388888888888,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:24:21,2026-06-03 13:15:57,0.05,0.04,2360.0,8.86,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:24:25,2026-06-03 13:15:57,0.06,0.04,190.0,8.858888888888888,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-03 04:24:25,2026-06-04 04:41:57,0.06,0.025,49.74,24.29222222222222,US announces new Iran agreement/ceasefire extension by June 5?,iran_israel
+?,2026-06-11 19:15:24,2026-06-13 23:41:48,0.1771383056,0.2340796997,431.62,52.44,"US x Iran permanent peace deal by June 15, 2026?",iran_israel
+?,2026-06-11 19:30:22,2026-06-12 03:57:10,0.1031468841,0.067,3000.0,8.446666666666667,"Israel x Hezbollah permanent peace deal by June 30, 2026?",iran_israel
+?,2026-06-12 02:32:18,2026-06-13 23:42:00,0.45,0.6,220.0,45.16166666666667,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-12 02:32:21,2026-06-13 23:42:00,0.45,0.6,160.0,45.160833333333336,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
+?,2026-06-12 02:32:22,2026-06-13 23:42:00,0.45,0.6,26.589999999999975,45.160555555555554,"US x Iran permanent peace deal by July 31, 2026?",iran_israel
