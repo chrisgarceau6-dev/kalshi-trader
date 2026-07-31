@@ -38,13 +38,19 @@ LOG_FILE   = BASE / "certainty.log"
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
 
-MIN_ASK_CENTS   = 88     # min price we'll consider entering at (below = thinner WR margin)
-MAX_ASK_CENTS   = 95     # max price we'll consider entering at (95 has 100% WR too)
-# Once we decide to enter, be aggressive with the limit so we actually fill.
-MAX_FILL_LIMIT  = 97     # willing to pay up to 97c to guarantee fill
+MIN_ASK_CENTS   = 88     # min price we'll consider entering at
+MAX_ASK_CENTS   = 95     # max price we'll consider entering at
+# TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
+# way-below-ask prices (which happened in live trading when market crashed
+# between scan and order-execution). If market moves >LIMIT_BUFFER cents up
+# between scan and fill, we DON'T fill — we miss the trade, no harm.
+LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 
-MIN_SECS_LEFT   = 60     # skip final <60s (per-data, NO side has 84% WR there)
-MAX_SECS_LEFT   = 900    # skip if too early (unlikely to see 88c ask yet)
+# Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
+# processing). If scan sees 61s remaining, order might land with <30s left,
+# which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
+MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
+MAX_SECS_LEFT   = 900
 
 BET_DOLLARS     = 2      # ultra-conservative validation start
 
@@ -234,20 +240,18 @@ def try_trade(market, state, dry_run):
     if side is None:
         return
 
-    # Use aggressive limit to guarantee fill. Kalshi matches at best available
-    # price, so posting a max-97c limit means "fill anywhere up to 97c."
-    limit_cents = MAX_FILL_LIMIT
-    # Size contracts based on the observed ask (what we'll likely actually pay).
+    # TIGHT limit: ask + small buffer. If market has moved >LIMIT_BUFFER cents
+    # between our scan and Kalshi processing our order, we DON'T fill (miss trade,
+    # no harm). This prevents catastrophic fills at way-below-ask prices during
+    # end-of-window volatility.
+    limit_cents = min(MAX_ASK_CENTS + LIMIT_BUFFER, ask_cents + LIMIT_BUFFER)
     contracts   = max(1, int(BET_DOLLARS * 100 / ask_cents) + 1)
-    # Cost estimates use the observed ask (most realistic).
-    # Store BOTH estimated and worst-case in state so we can reconcile later.
-    est_cost         = contracts * ask_cents / 100        # expected fill cost
-    worst_case_cost  = contracts * limit_cents / 100      # if fill happens at limit
-    est_profit       = contracts * (100 - ask_cents) / 100 * (1 - 0.07)
+    est_cost    = contracts * ask_cents / 100
+    est_profit  = contracts * (100 - ask_cents) / 100 * (1 - 0.07)
 
     log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} ask={ask_cents}c "
-        f"limit={limit_cents}c  {contracts} contracts  est.cost=${est_cost:.2f} "
-        f"(worst ${worst_case_cost:.2f})  est.win=+${est_profit:.2f}")
+        f"limit={limit_cents}c  {contracts} contracts  est.cost=${est_cost:.2f}  "
+        f"est.win=+${est_profit:.2f}")
 
     if dry_run:
         log(f"    [dry-run] skipped")
