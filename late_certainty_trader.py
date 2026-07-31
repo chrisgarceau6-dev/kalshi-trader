@@ -45,7 +45,7 @@ LIMIT_BUFFER    = 1      # bid limit at ask + this many cents (slippage safety)
 MIN_SECS_LEFT   = 60     # skip final <60s (per-data, NO side has 84% WR there)
 MAX_SECS_LEFT   = 900    # skip if too early (unlikely to see 88c ask yet)
 
-BET_DOLLARS     = 5      # conservative start
+BET_DOLLARS     = 2      # ultra-conservative validation start
 
 # Kill switches
 STOP_BALANCE       = 300      # halt if balance drops below this
