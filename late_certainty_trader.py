@@ -38,9 +38,12 @@ LOG_FILE   = BASE / "certainty.log"
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
 
-MIN_ASK_CENTS   = 88     # min price we'll buy at (fatter margin below → riskier WR)
-MAX_ASK_CENTS   = 93     # max price (>93 profit too thin vs fees)
-LIMIT_BUFFER    = 1      # bid limit at ask + this many cents (slippage safety)
+MIN_ASK_CENTS   = 88     # min price we'll consider entering at
+MAX_ASK_CENTS   = 93     # max price we'll consider entering at
+# Once we decide to enter, be aggressive with the limit so we actually fill.
+# The MAX_FILL_LIMIT is our absolute worst acceptable price. Actual fill will
+# be determined by the market's current best resting order (usually near ask).
+MAX_FILL_LIMIT  = 97     # willing to pay up to 97c to guarantee fill
 
 MIN_SECS_LEFT   = 60     # skip final <60s (per-data, NO side has 84% WR there)
 MAX_SECS_LEFT   = 900    # skip if too early (unlikely to see 88c ask yet)
@@ -186,8 +189,12 @@ def try_trade(market, state, dry_run):
     if side is None:
         return
 
-    limit_cents = min(97, ask_cents + LIMIT_BUFFER)
-    contracts   = max(1, int(BET_DOLLARS * 100 / limit_cents) + 1)  # ceil to spend ~$5
+    # Use aggressive limit to guarantee fill. Kalshi matches at best available
+    # price, so posting a max-97c limit means "fill anywhere up to 97c."
+    limit_cents = MAX_FILL_LIMIT
+    # Size contracts based on the observed ask (what we'll likely actually pay),
+    # not the aggressive limit — otherwise a rare 97c fill would spend way more.
+    contracts   = max(1, int(BET_DOLLARS * 100 / ask_cents) + 1)
     est_cost    = contracts * limit_cents / 100
     est_profit  = contracts * (100 - limit_cents) / 100 * (1 - 0.07)  # after 7% fee on profit
 
