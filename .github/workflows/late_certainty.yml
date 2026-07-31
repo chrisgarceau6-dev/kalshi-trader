@@ -2,7 +2,10 @@ name: Late-Certainty Trader
 
 on:
   schedule:
-    - cron: '*/2 * * * *'    # every 2 min to catch the brief 88-93c price windows
+    # Fire every minute during the "hot" window (min 10-14, 25-29, 40-44, 55-59
+    # of each hour = final 5 min of each 15-min market). Skip the dead first
+    # 10 min of each market where no trading happens anyway.
+    - cron: '10-14,25-29,40-44,55-59 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
