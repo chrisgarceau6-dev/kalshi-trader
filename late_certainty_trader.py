@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
-"""Late-certainty trader — collect edge on high-confidence 15-min markets.
+"""Late-certainty trader v3 — YES-side only, 95c+, sustained-certainty gate.
 
-STRATEGY (revised 2026-08-01 after 60-day backtest of 23,546 trades):
-  When any open 15-min market has YES or NO ask in [93, 95] cents AND
-  the window has 150-900 seconds remaining AND the immediately prior
-  1-min candle's ask (same side) was >= 88 cents, buy that side.
-  Hold to settlement.
+STRATEGY (revised 2026-08-01 after finding key asymmetry in backtest):
+  Buy YES only, when yes_ask is in [95, 99] cents AND the window has
+  150-900 seconds remaining AND the immediately-prior 2 minutes of
+  candles both had yes_ask >= 88 cents. Hold to settlement.
 
-  The prior-candle gate rejects "spike" entries where the ask just crossed
-  into the safe zone from way below — those are lower quality signals.
+WHY YES-ONLY:
+  Backtest showed BUY YES is +EV at every ask level 83-99c, while
+  BUY NO is -EV at nearly every level. The base strategy that mixed
+  both sides lost money because NO-side losses outweighed YES-side gains.
+  60-day data on NO-only entries [88,95]: -$6,810 @ $50 bets.
 
-BACKTEST (60 days ending 2026-08-01, 6 crypto series, 9,791 trades):
-  20-day: 3,004 trades  WR=95.71%  EV=+1.23c/contract
-  40-day: 6,286 trades  WR=94.93%  EV=+0.46c/contract
-  60-day: 9,791 trades  WR=94.91%  EV=+0.46c/contract
-  Volume: ~163 trades/day across the 6 crypto series
+WHY 95+ AND PRIOR_2 GATE:
+  Backtest of full grid (60 days, 6 crypto series):
+    Naive [88,95] both-side:   90.9% WR  (BELOW break-even, EV-NEG)
+    YES only [93,95] prior_1:  95.7% WR  (+$2,583 @$50)
+    YES only [95,99] prior_2:  98.0% WR  (+$2,619 @$50)   ← this file
+    YES only [88,99] prior_1:  95.2% WR  (+$4,043 @$50 — higher $ but lower WR)
 
-  Prior naive strategy (ask in [88,95], no prior gate) was 90.9% WR —
-  BELOW break-even after 7% fee. Kalshi's ask is roughly calibrated to
-  the actual settlement probability, so buying the ask outright is EV-
-  negative. The prior-candle gate isolates a subset where the market has
-  been sustainably confident, which does produce positive edge.
+  The 98% variant was chosen for lowest loss frequency (fewer painful hits).
 
-ECONOMICS (per $2 bet at 93c ask, 3 contracts, 94.9% WR):
-  Win  (~95%):  +$0.20  (after 7% fee on 7c profit x 3 = $0.21 gross)
-  Loss (~5%):   -$2.79  (3 x 93c)
-  EV per trade: +$0.05
-
-  At $50 bets (~57 contracts) the 60-day backtest net was +$2,583.
+ECONOMICS (per $2 bet at ~96c ask, 2 contracts):
+  Win  (~98%):  +$0.07  (after 7% fee on 4c profit x 2 = $0.075 gross)
+  Loss (~2%):   -$1.92  (2 x 96c)
+  EV per trade: +$0.03  ($1-2/day at $2 bets, tiny but proven)
+  At $50 bets: expected +$40/day, ~$1200/month, high variance.
 
 usage: --once | --dry-run | --status
 """
@@ -54,10 +52,12 @@ SERIES_LIST     = [
     # later, re-run backtest_late_certainty.py and confirm WR holds.
 ]
 
-MIN_ASK_CENTS   = 93     # raised from 88 after backtest — [88,93) is EV-negative
-MAX_ASK_CENTS   = 95     # max price we'll consider entering at
-PRIOR_MIN_CENTS = 88     # gate: prior 1-min candle's ask (same side) must be >= this
-                          # (blocks "spike into zone" entries which lose more)
+MIN_ASK_CENTS   = 95     # data shows asymmetric edge: yes_ask 95+ has WR > 97%
+MAX_ASK_CENTS   = 99     # up to 99c still +EV (WR 99.3% at ask=99)
+PRIOR_MIN_CENTS = 88     # gate: prior K candles' ask (same side) must be >= this
+PRIOR_LOOKBACK  = 2      # require this many consecutive prior candles above gate
+YES_ONLY        = True   # NO-side buying is systematically -EV across all ask levels
+                          # (60-day data on 12,182 NO-side entries: -$6,810 @ $50 bets)
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
@@ -256,36 +256,42 @@ def _fresh_ask_cents(ticker, side):
         return None
 
 
-def _prior_candle_ask_cents(ticker, series, side):
-    """Fetch the ask price from the 1-min candle immediately preceding now.
-    Returns cents (int) for the given side, or None on error.
+def _prior_k_candle_asks(ticker, series, side, k):
+    """Fetch the ask price from the K 1-min candles immediately preceding now.
+    Returns list of cents (int) for the given side (length k), or None on error.
 
-    Backtest gate: prior candle's ask (same side) must be >= PRIOR_MIN_CENTS.
+    Gate: all K prior candles' asks (same side) must be >= PRIOR_MIN_CENTS.
     This rejects 'spike into zone' entries — where the market just jumped
-    into [93, 95] from a much lower price — which have systematically lower WR.
+    into [MIN, MAX] from a much lower price — which have systematically
+    lower WR. K=2 gives 98% WR vs K=1 at 96.7% (backtest).
     """
     import time
     now_ts = int(time.time())
-    # Fetch a 3-minute window; the immediately-preceding minute is what we want,
-    # but Kalshi's period boundaries may not perfectly line up with wall-clock.
+    # Fetch enough window to cover K prior 1-min candles plus buffer.
+    window = max(300, 60 * (k + 3))
     code, r = kalshi_get(
         f"/series/{series}/markets/{ticker}/candlesticks",
-        {"start_ts": now_ts - 180, "end_ts": now_ts - 20, "period_interval": 1},
+        {"start_ts": now_ts - window, "end_ts": now_ts - 20, "period_interval": 1},
     )
     if code != 200:
         return None
     candles = r.get("candlesticks", [])
-    if not candles:
+    if len(candles) < k:
         return None
-    latest = max(candles, key=lambda c: c.get("end_period_ts", 0))
-    try:
-        if side == "yes":
-            return int(round(float(latest["yes_ask"]["close_dollars"]) * 100))
-        else:
-            yes_bid = int(round(float(latest["yes_bid"]["close_dollars"]) * 100))
-            return 100 - yes_bid if yes_bid > 0 else 100
-    except (KeyError, ValueError, TypeError):
-        return None
+    # Take the K most-recent candles
+    candles.sort(key=lambda c: c.get("end_period_ts", 0), reverse=True)
+    latest_k = candles[:k]
+    out = []
+    for c in latest_k:
+        try:
+            if side == "yes":
+                out.append(int(round(float(c["yes_ask"]["close_dollars"]) * 100)))
+            else:
+                yes_bid = int(round(float(c["yes_bid"]["close_dollars"]) * 100))
+                out.append(100 - yes_bid if yes_bid > 0 else 100)
+        except (KeyError, ValueError, TypeError):
+            return None
+    return out
 
 
 def try_trade(market, state, dry_run):
@@ -297,11 +303,11 @@ def try_trade(market, state, dry_run):
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
     no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
 
-    # Pick cheapest side within target band
+    # Pick side within target band. YES-only per backtest — NO side is -EV.
     side, ask_cents = None, None
     if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
         side, ask_cents = "yes", yes_ask
-    elif MIN_ASK_CENTS <= no_ask <= MAX_ASK_CENTS:
+    elif not YES_ONLY and MIN_ASK_CENTS <= no_ask <= MAX_ASK_CENTS:
         side, ask_cents = "no",  no_ask
     if side is None:
         return
@@ -327,17 +333,16 @@ def try_trade(market, state, dry_run):
         return
 
     # PRIOR-CANDLE GATE — reject 'spike into zone' entries. Backtest shows the
-    # base [88, 95] strategy is EV-negative (~91% WR, below break-even) because
-    # Kalshi's ask is calibrated to actual probability. The subset where the
-    # market was already at 88c+ for the prior minute has WR ~95% with genuine
-    # positive EV. Skip trades that fail this gate.
-    prior_ask = _prior_candle_ask_cents(ticker, series, side)
-    if prior_ask is None:
-        log(f"  SKIP {ticker} — could not fetch prior candle ask; gate fails closed")
+    # naive strategy is EV-negative because Kalshi's ask is calibrated to true
+    # probability. The subset where the market was sustainably confident (prior
+    # K candles all above threshold) has WR ~98% with real edge.
+    prior_asks = _prior_k_candle_asks(ticker, series, side, PRIOR_LOOKBACK)
+    if prior_asks is None:
+        log(f"  SKIP {ticker} — could not fetch prior candles; gate fails closed")
         return
-    if prior_ask < PRIOR_MIN_CENTS:
-        log(f"  SKIP {ticker} — prior 1-min {side} ask was {prior_ask}c "
-            f"(< {PRIOR_MIN_CENTS}c); spike-into-zone entry, lower WR")
+    if any(pa < PRIOR_MIN_CENTS for pa in prior_asks):
+        log(f"  SKIP {ticker} — prior {PRIOR_LOOKBACK}-min {side} asks were "
+            f"{prior_asks} (need all >= {PRIOR_MIN_CENTS}c); spike-into-zone entry")
         return
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
