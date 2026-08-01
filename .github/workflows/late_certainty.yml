@@ -1,11 +1,28 @@
 name: Late-Certainty Trader
 
+# ┌────────────────────────────────────────────────────────────────────┐
+# │  HALTED 2026-08-01 — backtest proved the strategy is EV-negative.  │
+# │                                                                     │
+# │  60-day backtest on 23,546 crypto trades: WR = 90.90%.              │
+# │  Break-even WR needed (with 7% fee) at 90c ask = 90.63%.            │
+# │  Actual WR at each ask bucket ~= market's implied probability,      │
+# │  meaning Kalshi's prices are efficient at 88-95c. Buying at the     │
+# │  ask means we PAY the "insurance premium," not collect it.          │
+# │                                                                     │
+# │  Net P&L over 60 days at $2 bets: -$17.93                           │
+# │  At $50 bets it would have been -$6,547.                            │
+# │                                                                     │
+# │  The docstring's "100% WR on 7,662 markets" claim was fabricated    │
+# │  or cherry-picked; no source data exists on disk.                   │
+# │                                                                     │
+# │  Cron disabled. Manual runs still possible via workflow_dispatch    │
+# │  if you want to re-verify. Do NOT re-enable cron without a          │
+# │  new edge (e.g., different filter, market-making instead of taking).│
+# └────────────────────────────────────────────────────────────────────┘
+
 on:
-  schedule:
-    # Fire every minute during the "hot" window (min 10-14, 25-29, 40-44, 55-59
-    # of each hour = final 5 min of each 15-min market). Skip the dead first
-    # 10 min of each market where no trading happens anyway.
-    - cron: '10-14,25-29,40-44,55-59 * * * *'
+  # schedule:  # DISABLED — see header above
+  #   - cron: '10-14,25-29,40-44,55-59 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
