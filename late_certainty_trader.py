@@ -66,7 +66,9 @@ BET_DOLLARS     = 2      # ultra-conservative validation start
 STOP_BALANCE       = 300      # halt if balance drops below this
 DAILY_LOSS_LIMIT   = 25       # halt for the day if -$25+ today
 CONSEC_LOSS_LIMIT  = 3        # halt for 60 min after 3 consecutive losses
-MAX_TRADES_PER_DAY = 200      # safety cap on total trades per UTC day
+# No trades-per-day cap — if WR holds, more volume = more +EV.
+# The three brakes above (balance, daily P&L, consec losses) still
+# protect against runaway losses.
 MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
 
 
@@ -174,10 +176,6 @@ def check_halts(state, balance):
     daily = state.get("daily", {})
     if daily.get("date") == today and daily.get("pnl", 0) <= -DAILY_LOSS_LIMIT:
         return True, f"today's P&L ${daily['pnl']:+.2f} <= -${DAILY_LOSS_LIMIT}"
-    # Trades-per-day cap
-    daily_trades = daily.get("trades_today", 0) if daily.get("date") == today else 0
-    if daily_trades >= MAX_TRADES_PER_DAY:
-        return True, f"{daily_trades} trades today >= cap {MAX_TRADES_PER_DAY}"
     # 60-min cooldown after N consecutive losses
     cl  = state.get("consec_losses", 0)
     ts  = state.get("last_loss_ts", 0)
