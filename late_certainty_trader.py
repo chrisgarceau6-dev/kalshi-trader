@@ -223,6 +223,23 @@ def query_actual_fill(ticker, side):
     return total_ct, total_cost
 
 
+def _fresh_ask_cents(ticker, side):
+    """Refetch best ask right before order placement — narrows the race window
+    from scan-to-order (5-30s) down to ~200ms. Returns None on error."""
+    code, r = kalshi_get(f"/markets/{ticker}")
+    if code != 200:
+        return None
+    m = r.get("market", r)
+    field = "yes_ask_dollars" if side == "yes" else "no_ask_dollars"
+    raw = m.get(field)
+    if raw is None:
+        return None
+    try:
+        return int(round(float(raw) * 100))
+    except Exception:
+        return None
+
+
 def try_trade(market, state, dry_run):
     ticker = market.get("ticker", "")
     if ticker in state.get("positions", {}):
@@ -240,18 +257,37 @@ def try_trade(market, state, dry_run):
     if side is None:
         return
 
-    # TIGHT limit: ask + small buffer. If market has moved >LIMIT_BUFFER cents
-    # between our scan and Kalshi processing our order, we DON'T fill (miss trade,
-    # no harm). This prevents catastrophic fills at way-below-ask prices during
-    # end-of-window volatility.
-    limit_cents = min(MAX_ASK_CENTS + LIMIT_BUFFER, ask_cents + LIMIT_BUFFER)
-    contracts   = max(1, int(BET_DOLLARS * 100 / ask_cents) + 1)
-    est_cost    = contracts * ask_cents / 100
-    est_profit  = contracts * (100 - ask_cents) / 100 * (1 - 0.07)
+    # PREFLIGHT RECHECK — the scan happened seconds ago. Refetch the ask right
+    # before placing to catch DOWNWARD crashes (the actual loss mechanism from
+    # DOGE@82c, XRP@86c, ETH@50c live losses). A limit at ask+2 still fills
+    # against ANY resting ask below it, so if the market crashed between scan
+    # and order landing, we'd fill outside the WR-validated safe zone.
+    fresh_ask = _fresh_ask_cents(ticker, side)
+    if fresh_ask is None:
+        log(f"  SKIP {ticker} — could not refetch {side} ask")
+        return
+    if fresh_ask < MIN_ASK_CENTS:
+        log(f"  SKIP {ticker} — {side} ask crashed to {fresh_ask}c "
+            f"(< {MIN_ASK_CENTS}c) between scan ({ask_cents}c) and order — "
+            f"unsafe entry, underlying moved against thesis")
+        return
+    if fresh_ask > MAX_ASK_CENTS:
+        log(f"  SKIP {ticker} — {side} ask jumped to {fresh_ask}c "
+            f"(> {MAX_ASK_CENTS}c) between scan ({ask_cents}c) and order — "
+            f"no longer good EV")
+        return
 
-    log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} ask={ask_cents}c "
-        f"limit={limit_cents}c  {contracts} contracts  est.cost=${est_cost:.2f}  "
-        f"est.win=+${est_profit:.2f}")
+    # TIGHT limit based on FRESH ask (not stale scan value). If market moves
+    # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
+    # the trade (no harm). If it moves down, the preflight above caught it.
+    limit_cents = min(MAX_ASK_CENTS + LIMIT_BUFFER, fresh_ask + LIMIT_BUFFER)
+    contracts   = max(1, int(BET_DOLLARS * 100 / fresh_ask) + 1)
+    est_cost    = contracts * fresh_ask / 100
+    est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
+
+    log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} "
+        f"scan={ask_cents}c fresh={fresh_ask}c  limit={limit_cents}c  "
+        f"{contracts} contracts  est.cost=${est_cost:.2f}  est.win=+${est_profit:.2f}")
 
     if dry_run:
         log(f"    [dry-run] skipped")
@@ -271,10 +307,29 @@ def try_trade(market, state, dry_run):
         # After order, immediately query fills to get REAL cost + contract count.
         # This corrects for partial fills, better-than-limit prices, etc.
         actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        outside_safe_zone = False
         if actual_contracts > 0:
-            log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}")
+            avg_price_cents = int(round(100 * actual_cost / actual_contracts))
+            log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, "
+                f"avg={avg_price_cents}c")
             final_contracts = actual_contracts
             final_cost      = actual_cost
+            # POST-FILL SAFETY — even with preflight, ~200ms race can slip a
+            # bad fill through (e.g., stale resting ask well below our limit
+            # gets consumed). Alert loudly so user can manually exit if needed.
+            if avg_price_cents < MIN_ASK_CENTS:
+                outside_safe_zone = True
+                log(f"    ⚠ DANGER — filled at {avg_price_cents}c, BELOW "
+                    f"safe zone [{MIN_ASK_CENTS},{MAX_ASK_CENTS}]. Preflight "
+                    f"race slipped — trade has elevated loss risk.")
+                send_email(
+                    f"[Kalshi-C] DANGER FILL {avg_price_cents}c — {ticker}",
+                    f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents}c\n"
+                    f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n"
+                    f"Scan saw: {ask_cents}c, refetch saw: {fresh_ask}c\n"
+                    f"Fill was BELOW safe zone — market crashed in the ~200ms\n"
+                    f"between refetch and order landing. Consider manual exit.\n",
+                )
         else:
             log(f"    no fill data available yet — using estimates")
             final_contracts = contracts
@@ -282,7 +337,9 @@ def try_trade(market, state, dry_run):
         state["positions"][ticker] = {
             "side":        side,
             "limit_cents": limit_cents,
-            "ask_at_entry": ask_cents,
+            "ask_at_entry": fresh_ask,
+            "ask_at_scan":  ask_cents,
+            "outside_safe_zone": outside_safe_zone,
             "contracts":   final_contracts,
             "cost":        final_cost,
             "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
