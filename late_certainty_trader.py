@@ -36,7 +36,7 @@ STATE_FILE = BASE / "certainty_state.json"
 LOG_FILE   = BASE / "certainty.log"
 
 # ── strategy constants ─────────────────────────────────────────────────────────
-SERIES_LIST     = ["KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
+SERIES_LIST     = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
 
 MIN_ASK_CENTS   = 88     # min price we'll consider entering at
 MAX_ASK_CENTS   = 95     # max price we'll consider entering at
