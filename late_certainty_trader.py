@@ -99,24 +99,30 @@ MAX_SECS_LEFT   = 900
 # every scan cycle so scaling happens automatically as PnL accumulates.
 def compute_bet_dollars(balance):
     """Return bet size in dollars for the given balance.
-       $500 balance -> $5 bets (1% of bankroll)
-       $700         -> $15
-       $900         -> $25
-       $1100        -> $35
-       $1400+       -> $50 (cap)"""
-    if balance is None or balance < 500:
-        return 5
+       <$400 balance -> $2 bets  (~$1.86/loss — protect small bankrolls)
+       $400-500      -> $3 bets
+       $500          -> $5 bets  (1% of bankroll)
+       $700          -> $15
+       $900          -> $25
+       $1100         -> $35
+       $1400+        -> $50 (cap)"""
+    if balance is None or balance < 400:
+        return 2
+    if balance < 500:
+        return 3
     # Linear: (balance - 400) / 20 gives 5 at $500, 50 at $1400
     return max(5, min(50, (int(balance) - 400) // 20))
 
 
 def compute_daily_loss_limit(bet_dollars):
     """Daily loss floor scales with bet size — otherwise a single loss auto-halts
-       when scaled up. Allows ~6-8 losing bets/day of net loss before halt."""
-    return max(60, bet_dollars * 6)
+       when scaled up. Allows ~10-15 losing bets/day of net loss before halt."""
+    return max(30, bet_dollars * 8)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE       = 350      # halt if balance drops below this ($150 max loss on $500 stake)
+STOP_BALANCE       = 250      # halt if balance drops below this
+                                # ($120 max loss on current ~$370 balance)
+                                # Adjust manually when balance grows past $700+
 CONSEC_LOSS_LIMIT  = 5        # halt for 60 min after 5 consecutive losses
                                 # (v5 has ~4% loss rate; 5-in-a-row prob = 0.04^5 = 1e-7)
 MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
