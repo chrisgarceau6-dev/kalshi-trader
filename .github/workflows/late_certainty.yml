@@ -19,10 +19,11 @@ name: Late-Certainty Trader
 # └────────────────────────────────────────────────────────────────────┘
 
 on:
-  schedule:
-    # Fire every minute during the "hot" window (min 10-14, 25-29, 40-44, 55-59
-    # of each hour = final 5 min of each 15-min market).
-    - cron: '10-14,25-29,40-44,55-59 * * * *'
+  # HALTED AGAIN 2026-08-01 — user reports live is losing money.
+  # Investigating whether backtest edge is real, whether live diverges
+  # from backtest, or whether bet sizing + fees eat the edge.
+  # schedule:
+  #   - cron: '10-14,25-29,40-44,55-59 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
