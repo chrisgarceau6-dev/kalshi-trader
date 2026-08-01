@@ -45,13 +45,13 @@ LOG_FILE   = BASE / "certainty.log"
 
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = [
-    # Crypto 15m — 24/7, original backtest set (100% WR on 7,662 markets)
+    # Crypto 15m — 24/7. These 6 are the EXACT set backtested at 94.91% WR
+    # over 60 days (9,791 trades). Live must match backtest.
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
-    # Commodity 15m — same mechanic (continuously-priced underlying, 15-min
-    # window, near-close certainty), trade during futures hours only
-    # (Sun 6pm ET → Fri 5pm ET, 1-hour daily break at 5-6pm ET).
-    # WR unproven for these series — post-fill safety alert catches surprises.
-    "KXWTI15M", "KXGOLD15M", "KXSILVER15M",
+    # NOTE: WTI/Gold/Silver 15m markets exist but only had ~40 settled markets
+    # each at backtest time (too few to validate WR). Excluded until they
+    # accumulate 500+ markets and can be independently backtested. To add
+    # later, re-run backtest_late_certainty.py and confirm WR holds.
 ]
 
 MIN_ASK_CENTS   = 93     # raised from 88 after backtest — [88,93) is EV-negative
