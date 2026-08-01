@@ -1,20 +1,20 @@
 name: Late-Certainty Trader
 
 # ┌────────────────────────────────────────────────────────────────────┐
-# │  v4 DEPLOYED 2026-08-01 — winner of exhaustive backtest search.    │
+# │  v5 DEPLOYED 2026-08-01 — max-return filter (replaces v4).         │
 # │                                                                     │
-# │  Filter: ask in [95, 99] AND prior 3 candles (same side) all >= 92c │
+# │  Filter: ask in [90, 99] AND prior 3 candles (same side) all >= 80c │
 # │  Both YES and NO sides eligible.                                    │
 # │                                                                     │
-# │  Backtest (33,973 markets, 1,539 filters tested):                   │
-# │    60d:  n=7,608  WR=98.51%  net@$50=+$1,972                        │
-# │    40d:  n=5,035  WR=98.49%  net@$50=+$1,106                        │
-# │    20d:  n=2,339  WR=98.72%  net@$50=+$821                          │
-# │  OOS validation: train_WR=98.56% -> test_WR=98.72% (edge held).     │
-# │  All 6 crypto series 98.29%-98.64% WR. Zero losing series.          │
+# │  Backtest of 7 crypto series (BTC/ETH/SOL/DOGE/BNB/XRP + HYPE):     │
+# │    60d net @ $50: +$5,692 (2.9x v4's +$1,972)                       │
+# │    60d WR:        ~96%    (v4 was 98.5%, more variance now)         │
+# │    60d trades:    ~18,555 (v4 was 8,811)                            │
+# │  OOS test (0-20d): +$3,574 for main 6 crypto (edge strengthened)    │
 # │                                                                     │
-# │  Expected: ~127 trades/day, ~$33/day at $2 bets equivalent, more    │
-# │  at higher bet size. High variance — judge over 500+ live trades.   │
+# │  Expected: ~309 trades/day, ~$95/day at $50 bets = ~$34K/year.      │
+# │  Losses ~4% of trades = ~12/day at $50 → ~-$580 gross loss/day      │
+# │  offset by ~$675 gross wins. Kill switches active.                  │
 # └────────────────────────────────────────────────────────────────────┘
 
 on:

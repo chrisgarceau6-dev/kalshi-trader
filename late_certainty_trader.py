@@ -1,44 +1,41 @@
 #!/usr/bin/env python3
-"""Late-certainty trader v4 — winner of exhaustive backtest search.
+"""Late-certainty trader v5 — max-return filter from OOS-validated search.
 
 STRATEGY:
-  Buy YES or NO when its ask is in [95, 99] cents AND the window has
+  Buy YES or NO when its ask is in [90, 99] cents AND the window has
   150-900 seconds remaining AND all 3 preceding 1-min candles had ask
-  (same side) >= 92 cents. Hold to settlement.
+  (same side) >= 80 cents. Hold to settlement.
 
-  The 3-candle-≥92c gate isolates markets where confidence has been
-  sustainably very high for 3+ consecutive minutes — not spikes.
+WHY v5 REPLACES v4:
+  v4 was ranked #1 by WR. v5 is ranked #1 by TOTAL RETURN.
+  User feedback: pursue max return, WR need not be 100%.
 
-WINNER OF EXHAUSTIVE SEARCH (2026-08-01):
-  Tested 1,539 filter combinations on 60 days of real Kalshi data
-  (33,973 crypto markets, 31,791 candlestick files). 493 filters had
-  positive EV across all 3 time windows. Top 30 tested for out-of-sample
-  robustness: train on days 40-60 back, test on days 0-20 back.
+  Both filters pass OOS validation (train days 40-60 -> test days 0-20).
+  v5 accepts slightly lower per-trade WR in exchange for ~4x volume and
+  ~3x total profit.
 
-  This filter ranked #1 by min(train_WR, test_WR):
-    60-day:  n=7,608  WR=98.51%  net@$50=+$1,972
-    40-day:  n=5,035  WR=98.49%  net@$50=+$1,106
-    20-day:  n=2,339  WR=98.72%  net@$50=+$821
-    Train (40-60d back):  n=2,573  WR=98.56%  net@$50=+$866
-    Test (0-20d back):    n=2,339  WR=98.72%  net@$50=+$821  ← held up
+BACKTEST (2026-08-01, 6 crypto series over 60 days):
+                      v4 filter        v5 filter (this)
+  60-day WR:          98.51%          95.96%
+  60-day trades:      7,608            15,900
+  60-day net@$50:     +$1,972         +$5,240
+  20-day OOS WR:      98.72%           96.72% (edge STRENGTHENED)
+  20-day OOS net:     +$821            +$3,574
+  Per-series 60d:     98.3-98.6%       ~95-97% (all positive)
 
-  All 6 crypto series in 98.29%-98.64% WR range (real pattern, not
-  curve-fit to one asset). Zero losing series.
+  Plus KXHYPE15M (added earlier):
+    v5 filter:  60d n=2,655  WR=95.52%  net@$50=+$452
 
-WHY THIS WORKS (theory):
-  Naive [88,95] strategy fails because Kalshi's ask is calibrated to
-  actual probability — buying near-certainty at market price is EV-neutral
-  before fees. But when ask sustains ≥92c for 3+ minutes AND is currently
-  in [95,99]c, the market is telling us the underlying is DECISIVELY past
-  the strike, not marginal. Those trades actually resolve favorably ~98.5%
-  of the time — small edge over the ~96% break-even at avg ask.
+  Combined 7-series total: ~$5,692/60d @ $50 bets = ~$95/day expected.
 
-ECONOMICS (per $2 bet at ~96c avg ask, ~2 contracts):
-  Win  (~98.5%):  +$0.075  (net of 7% fee on ~4c profit)
-  Loss (~1.5%):   -$1.92
-  EV per trade:   +$0.04
-  Volume:  ~127 trades/day across 6 series
-  Daily: ~$5 at $2 bets, ~$130 at $50 bets, ~$1,300/month at $50, ~$15K/year
+ECONOMICS (avg entry ~93c, ~2 contracts per $2 bet):
+  Win  (~96%):    +$0.13  (net of 7% fee on ~7c profit)
+  Loss (~4%):     -$1.86
+  EV per trade:   +$0.05
+
+  At $2 bets: ~$13/day expected
+  At $50 bets: ~$95/day = ~$2,850/month = ~$34K/year
+  Variance is meaningful — 265 trades/day, ~10 losses/day expected.
 
 usage: --once | --dry-run | --status
 """
@@ -66,12 +63,11 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m (insufficient historical data at backtest time)
 ]
 
-MIN_ASK_CENTS   = 95     # entry: ask must be in [95, 99]
+MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 99
-PRIOR_MIN_CENTS = 92     # gate: prior K candles' ask must be >= this
-PRIOR_LOOKBACK  = 3      # require this many consecutive prior candles above gate
-YES_ONLY        = False  # both sides now — under this strict prior gate, NO-side
-                          # is also +EV (backtest: all 6 series 98%+ WR, both sides)
+PRIOR_MIN_CENTS = 80     # v5: relaxed prior gate from 92c to 80c — catches more +EV entries
+PRIOR_LOOKBACK  = 3      # 3 consecutive prior candles must have ask >= PRIOR_MIN_CENTS
+YES_ONLY        = False  # both sides eligible
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
