@@ -1,25 +1,33 @@
 #!/usr/bin/env python3
-"""Late-certainty trader — collect the premium on near-decided 15-min crypto markets.
+"""Late-certainty trader — collect edge on high-confidence 15-min markets.
 
-STRATEGY:
-  When any open 15-min crypto market has YES or NO ask in [88, 93] cents AND
-  the window has 60-900 seconds remaining, buy that side.  Hold to settlement.
+STRATEGY (revised 2026-08-01 after 60-day backtest of 23,546 trades):
+  When any open 15-min market has YES or NO ask in [93, 95] cents AND
+  the window has 150-900 seconds remaining AND the immediately prior
+  1-min candle's ask (same side) was >= 88 cents, buy that side.
+  Hold to settlement.
 
-WHY IT WORKS (from empirical data over 500 markets, 40,000+ trades):
-  * YES @ 85-89c in final 5 min: 100% resolved YES  (n=969)
-  * YES @ 90-94c in final 5 min: 100% resolved YES  (n=3,085)
-  * NO  @ 85-89c in final 5 min: 100% resolved NO   (n=703)  *not final 60s
-  * NO  @ 90-94c in final 5 min: 100% resolved NO   (n=2,905)
-  Wilson 95% CI on true win rate: >=99.6%
+  The prior-candle gate rejects "spike" entries where the ask just crossed
+  into the safe zone from way below — those are lower quality signals.
 
-  By the time price reaches 88c+ with 1+ min left, the underlying is already
-  well past the strike (or moving strongly toward it).  The remaining 5-15c
-  is insurance premium retail buyers pay for near-certainty.  We collect it.
+BACKTEST (60 days ending 2026-08-01, 6 crypto series, 9,791 trades):
+  20-day: 3,004 trades  WR=95.71%  EV=+1.23c/contract
+  40-day: 6,286 trades  WR=94.93%  EV=+0.46c/contract
+  60-day: 9,791 trades  WR=94.91%  EV=+0.46c/contract
+  Volume: ~163 trades/day across the 6 crypto series
 
-ECONOMICS (per $5 bet at 89c limit, 5 contracts):
-  Win  (~99%+):  +$0.51  (10% return)
-  Loss (~1%):    -$4.45
-  EV per trade: +$0.46
+  Prior naive strategy (ask in [88,95], no prior gate) was 90.9% WR —
+  BELOW break-even after 7% fee. Kalshi's ask is roughly calibrated to
+  the actual settlement probability, so buying the ask outright is EV-
+  negative. The prior-candle gate isolates a subset where the market has
+  been sustainably confident, which does produce positive edge.
+
+ECONOMICS (per $2 bet at 93c ask, 3 contracts, 94.9% WR):
+  Win  (~95%):  +$0.20  (after 7% fee on 7c profit x 3 = $0.21 gross)
+  Loss (~5%):   -$2.79  (3 x 93c)
+  EV per trade: +$0.05
+
+  At $50 bets (~57 contracts) the 60-day backtest net was +$2,583.
 
 usage: --once | --dry-run | --status
 """
@@ -46,8 +54,10 @@ SERIES_LIST     = [
     "KXWTI15M", "KXGOLD15M", "KXSILVER15M",
 ]
 
-MIN_ASK_CENTS   = 88     # min price we'll consider entering at
+MIN_ASK_CENTS   = 93     # raised from 88 after backtest — [88,93) is EV-negative
 MAX_ASK_CENTS   = 95     # max price we'll consider entering at
+PRIOR_MIN_CENTS = 88     # gate: prior 1-min candle's ask (same side) must be >= this
+                          # (blocks "spike into zone" entries which lose more)
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
@@ -246,8 +256,41 @@ def _fresh_ask_cents(ticker, side):
         return None
 
 
+def _prior_candle_ask_cents(ticker, series, side):
+    """Fetch the ask price from the 1-min candle immediately preceding now.
+    Returns cents (int) for the given side, or None on error.
+
+    Backtest gate: prior candle's ask (same side) must be >= PRIOR_MIN_CENTS.
+    This rejects 'spike into zone' entries — where the market just jumped
+    into [93, 95] from a much lower price — which have systematically lower WR.
+    """
+    import time
+    now_ts = int(time.time())
+    # Fetch a 3-minute window; the immediately-preceding minute is what we want,
+    # but Kalshi's period boundaries may not perfectly line up with wall-clock.
+    code, r = kalshi_get(
+        f"/series/{series}/markets/{ticker}/candlesticks",
+        {"start_ts": now_ts - 180, "end_ts": now_ts - 20, "period_interval": 1},
+    )
+    if code != 200:
+        return None
+    candles = r.get("candlesticks", [])
+    if not candles:
+        return None
+    latest = max(candles, key=lambda c: c.get("end_period_ts", 0))
+    try:
+        if side == "yes":
+            return int(round(float(latest["yes_ask"]["close_dollars"]) * 100))
+        else:
+            yes_bid = int(round(float(latest["yes_bid"]["close_dollars"]) * 100))
+            return 100 - yes_bid if yes_bid > 0 else 100
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
 def try_trade(market, state, dry_run):
     ticker = market.get("ticker", "")
+    series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
     if ticker in state.get("positions", {}):
         return  # already entered this market
     secs_left = market.get("_secs_left", 0)
@@ -281,6 +324,20 @@ def try_trade(market, state, dry_run):
         log(f"  SKIP {ticker} — {side} ask jumped to {fresh_ask}c "
             f"(> {MAX_ASK_CENTS}c) between scan ({ask_cents}c) and order — "
             f"no longer good EV")
+        return
+
+    # PRIOR-CANDLE GATE — reject 'spike into zone' entries. Backtest shows the
+    # base [88, 95] strategy is EV-negative (~91% WR, below break-even) because
+    # Kalshi's ask is calibrated to actual probability. The subset where the
+    # market was already at 88c+ for the prior minute has WR ~95% with genuine
+    # positive EV. Skip trades that fail this gate.
+    prior_ask = _prior_candle_ask_cents(ticker, series, side)
+    if prior_ask is None:
+        log(f"  SKIP {ticker} — could not fetch prior candle ask; gate fails closed")
+        return
+    if prior_ask < PRIOR_MIN_CENTS:
+        log(f"  SKIP {ticker} — prior 1-min {side} ask was {prior_ask}c "
+            f"(< {PRIOR_MIN_CENTS}c); spike-into-zone entry, lower WR")
         return
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
