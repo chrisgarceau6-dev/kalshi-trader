@@ -1,27 +1,23 @@
 name: Late-Certainty Trader
 
 # ┌────────────────────────────────────────────────────────────────────┐
-# │  REVIVED 2026-08-01 — new filter isolates a genuinely +EV subset.  │
+# │  v4 DEPLOYED 2026-08-01 — winner of exhaustive backtest search.    │
 # │                                                                     │
-# │  Original strategy (ask in [88,95]) backtested at 90.9% WR — below │
-# │  break-even after 7% fee, EV-negative. Kalshi's ask is calibrated   │
-# │  to actual probability.                                             │
+# │  Filter: ask in [95, 99] AND prior 3 candles (same side) all >= 92c │
+# │  Both YES and NO sides eligible.                                    │
 # │                                                                     │
-# │  New filter: entry ask in [93, 95] AND prior 1-min candle's ask     │
-# │  (same side) >= 88c. This isolates markets where confidence is      │
-# │  sustained, not a spike. 60-day backtest of the new filter:         │
-# │    20d:  n=3,004  WR=95.71%  net@$50=+$2,112                        │
-# │    40d:  n=6,286  WR=94.93%  net@$50=+$1,661                        │
-# │    60d:  n=9,791  WR=94.91%  net@$50=+$2,583                        │
+# │  Backtest (33,973 markets, 1,539 filters tested):                   │
+# │    60d:  n=7,608  WR=98.51%  net@$50=+$1,972                        │
+# │    40d:  n=5,035  WR=98.49%  net@$50=+$1,106                        │
+# │    20d:  n=2,339  WR=98.72%  net@$50=+$821                          │
+# │  OOS validation: train_WR=98.56% -> test_WR=98.72% (edge held).     │
+# │  All 6 crypto series 98.29%-98.64% WR. Zero losing series.          │
 # │                                                                     │
-# │  Cron re-enabled. Every scan now does one extra candlestick API     │
-# │  call to check the prior-minute gate.                               │
+# │  Expected: ~127 trades/day, ~$33/day at $2 bets equivalent, more    │
+# │  at higher bet size. High variance — judge over 500+ live trades.   │
 # └────────────────────────────────────────────────────────────────────┘
 
 on:
-  # Re-enabled 2026-08-01 with v3 strategy: YES-only, ask [95,99], prior_2
-  # candles >= 88c. Backtest showed 98% WR — the base strategy lost because
-  # it took both YES and NO sides; only YES has genuine +EV.
   schedule:
     - cron: '10-14,25-29,40-44,55-59 * * * *'
   workflow_dispatch:

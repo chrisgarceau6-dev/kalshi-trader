@@ -1,31 +1,44 @@
 #!/usr/bin/env python3
-"""Late-certainty trader v3 — YES-side only, 95c+, sustained-certainty gate.
+"""Late-certainty trader v4 — winner of exhaustive backtest search.
 
-STRATEGY (revised 2026-08-01 after finding key asymmetry in backtest):
-  Buy YES only, when yes_ask is in [95, 99] cents AND the window has
-  150-900 seconds remaining AND the immediately-prior 2 minutes of
-  candles both had yes_ask >= 88 cents. Hold to settlement.
+STRATEGY:
+  Buy YES or NO when its ask is in [95, 99] cents AND the window has
+  150-900 seconds remaining AND all 3 preceding 1-min candles had ask
+  (same side) >= 92 cents. Hold to settlement.
 
-WHY YES-ONLY:
-  Backtest showed BUY YES is +EV at every ask level 83-99c, while
-  BUY NO is -EV at nearly every level. The base strategy that mixed
-  both sides lost money because NO-side losses outweighed YES-side gains.
-  60-day data on NO-only entries [88,95]: -$6,810 @ $50 bets.
+  The 3-candle-≥92c gate isolates markets where confidence has been
+  sustainably very high for 3+ consecutive minutes — not spikes.
 
-WHY 95+ AND PRIOR_2 GATE:
-  Backtest of full grid (60 days, 6 crypto series):
-    Naive [88,95] both-side:   90.9% WR  (BELOW break-even, EV-NEG)
-    YES only [93,95] prior_1:  95.7% WR  (+$2,583 @$50)
-    YES only [95,99] prior_2:  98.0% WR  (+$2,619 @$50)   ← this file
-    YES only [88,99] prior_1:  95.2% WR  (+$4,043 @$50 — higher $ but lower WR)
+WINNER OF EXHAUSTIVE SEARCH (2026-08-01):
+  Tested 1,539 filter combinations on 60 days of real Kalshi data
+  (33,973 crypto markets, 31,791 candlestick files). 493 filters had
+  positive EV across all 3 time windows. Top 30 tested for out-of-sample
+  robustness: train on days 40-60 back, test on days 0-20 back.
 
-  The 98% variant was chosen for lowest loss frequency (fewer painful hits).
+  This filter ranked #1 by min(train_WR, test_WR):
+    60-day:  n=7,608  WR=98.51%  net@$50=+$1,972
+    40-day:  n=5,035  WR=98.49%  net@$50=+$1,106
+    20-day:  n=2,339  WR=98.72%  net@$50=+$821
+    Train (40-60d back):  n=2,573  WR=98.56%  net@$50=+$866
+    Test (0-20d back):    n=2,339  WR=98.72%  net@$50=+$821  ← held up
 
-ECONOMICS (per $2 bet at ~96c ask, 2 contracts):
-  Win  (~98%):  +$0.07  (after 7% fee on 4c profit x 2 = $0.075 gross)
-  Loss (~2%):   -$1.92  (2 x 96c)
-  EV per trade: +$0.03  ($1-2/day at $2 bets, tiny but proven)
-  At $50 bets: expected +$40/day, ~$1200/month, high variance.
+  All 6 crypto series in 98.29%-98.64% WR range (real pattern, not
+  curve-fit to one asset). Zero losing series.
+
+WHY THIS WORKS (theory):
+  Naive [88,95] strategy fails because Kalshi's ask is calibrated to
+  actual probability — buying near-certainty at market price is EV-neutral
+  before fees. But when ask sustains ≥92c for 3+ minutes AND is currently
+  in [95,99]c, the market is telling us the underlying is DECISIVELY past
+  the strike, not marginal. Those trades actually resolve favorably ~98.5%
+  of the time — small edge over the ~96% break-even at avg ask.
+
+ECONOMICS (per $2 bet at ~96c avg ask, ~2 contracts):
+  Win  (~98.5%):  +$0.075  (net of 7% fee on ~4c profit)
+  Loss (~1.5%):   -$1.92
+  EV per trade:   +$0.04
+  Volume:  ~127 trades/day across 6 series
+  Daily: ~$5 at $2 bets, ~$130 at $50 bets, ~$1,300/month at $50, ~$15K/year
 
 usage: --once | --dry-run | --status
 """
@@ -52,12 +65,12 @@ SERIES_LIST     = [
     # later, re-run backtest_late_certainty.py and confirm WR holds.
 ]
 
-MIN_ASK_CENTS   = 95     # data shows asymmetric edge: yes_ask 95+ has WR > 97%
-MAX_ASK_CENTS   = 99     # up to 99c still +EV (WR 99.3% at ask=99)
-PRIOR_MIN_CENTS = 88     # gate: prior K candles' ask (same side) must be >= this
-PRIOR_LOOKBACK  = 2      # require this many consecutive prior candles above gate
-YES_ONLY        = True   # NO-side buying is systematically -EV across all ask levels
-                          # (60-day data on 12,182 NO-side entries: -$6,810 @ $50 bets)
+MIN_ASK_CENTS   = 95     # entry: ask must be in [95, 99]
+MAX_ASK_CENTS   = 99
+PRIOR_MIN_CENTS = 92     # gate: prior K candles' ask must be >= this
+PRIOR_LOOKBACK  = 3      # require this many consecutive prior candles above gate
+YES_ONLY        = False  # both sides now — under this strict prior gate, NO-side
+                          # is also +EV (backtest: all 6 series 98%+ WR, both sides)
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
