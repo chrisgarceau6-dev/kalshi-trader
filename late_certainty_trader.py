@@ -56,13 +56,14 @@ LOG_FILE   = BASE / "certainty.log"
 
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = [
-    # Crypto 15m — 24/7. These 6 are the EXACT set backtested at 94.91% WR
-    # over 60 days (9,791 trades). Live must match backtest.
+    # 15m crypto series where v4 filter (ask[95,99] prior_k=3 pmin=92 both)
+    # showed +EV in 60-day backtest:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
-    # NOTE: WTI/Gold/Silver 15m markets exist but only had ~40 settled markets
-    # each at backtest time (too few to validate WR). Excluded until they
-    # accumulate 500+ markets and can be independently backtested. To add
-    # later, re-run backtest_late_certainty.py and confirm WR holds.
+    "KXHYPE15M",  # added — 98.75% WR, +$442/60d @ $50 in v4 backtest
+    # Explicitly EXCLUDED (v4 filter tested but was net-negative):
+    # - KXNEAR15M (96.10% WR but small-cap tail risk lost money)
+    # - KXZEC15M (95.03% WR, same issue)
+    # - WTI/Gold/Silver 15m (insufficient historical data at backtest time)
 ]
 
 MIN_ASK_CENTS   = 95     # entry: ask must be in [95, 99]
