@@ -28,14 +28,27 @@ BACKTEST (2026-08-01, 6 crypto series over 60 days):
 
   Combined 7-series total: ~$5,692/60d @ $50 bets = ~$95/day expected.
 
-ECONOMICS (avg entry ~93c, ~2 contracts per $2 bet):
-  Win  (~96%):    +$0.13  (net of 7% fee on ~7c profit)
-  Loss (~4%):     -$1.86
-  EV per trade:   +$0.05
+ECONOMICS (avg entry ~93c):
+  Win  (~96%):    +$0.13 per $2 bet, scales linearly to bet size
+  Loss (~4%):     -$1.86 per $2 bet, scales linearly to bet size
+  EV per trade:   +$0.05 per $2 bet
 
-  At $2 bets: ~$13/day expected
-  At $50 bets: ~$95/day = ~$2,850/month = ~$34K/year
-  Variance is meaningful — 265 trades/day, ~10 losses/day expected.
+  Volume: ~265 trades/day across 7 crypto series (BTC/ETH/SOL/DOGE/BNB/XRP/HYPE).
+  Expected losses: ~10-12/day (4% loss rate).
+
+BET SIZING (auto-scales with balance):
+  $500 balance -> $5 bets  (~$10/day expected)
+  $700         -> $15
+  $900         -> $25
+  $1100        -> $35
+  $1400+       -> $50 cap (~$95/day expected)
+
+KILL SWITCHES:
+  STOP_BALANCE=$350 (halt if balance drops here)
+  DAILY_LOSS_LIMIT = 6x bet_size (dynamic — auto-scales)
+  5 consecutive losses -> 60-min cooldown
+
+usage: --once | --dry-run | --status
 
 usage: --once | --dry-run | --status
 """
@@ -80,15 +93,32 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
 MAX_SECS_LEFT   = 900
 
-BET_DOLLARS     = 2      # ultra-conservative validation start
+# ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
+# Bet size auto-scales with account balance. Linear ramp from $5 (safe start)
+# up to $50 (Kelly-informed cap for 96% WR strategy). Reads fresh balance
+# every scan cycle so scaling happens automatically as PnL accumulates.
+def compute_bet_dollars(balance):
+    """Return bet size in dollars for the given balance.
+       $500 balance -> $5 bets (1% of bankroll)
+       $700         -> $15
+       $900         -> $25
+       $1100        -> $35
+       $1400+       -> $50 (cap)"""
+    if balance is None or balance < 500:
+        return 5
+    # Linear: (balance - 400) / 20 gives 5 at $500, 50 at $1400
+    return max(5, min(50, (int(balance) - 400) // 20))
 
-# Kill switches
-STOP_BALANCE       = 300      # halt if balance drops below this
-DAILY_LOSS_LIMIT   = 25       # halt for the day if -$25+ today
-CONSEC_LOSS_LIMIT  = 3        # halt for 60 min after 3 consecutive losses
-# No trades-per-day cap — if WR holds, more volume = more +EV.
-# The three brakes above (balance, daily P&L, consec losses) still
-# protect against runaway losses.
+
+def compute_daily_loss_limit(bet_dollars):
+    """Daily loss floor scales with bet size — otherwise a single loss auto-halts
+       when scaled up. Allows ~6-8 losing bets/day of net loss before halt."""
+    return max(60, bet_dollars * 6)
+
+# Kill switches (some now dynamic)
+STOP_BALANCE       = 350      # halt if balance drops below this ($150 max loss on $500 stake)
+CONSEC_LOSS_LIMIT  = 5        # halt for 60 min after 5 consecutive losses
+                                # (v5 has ~4% loss rate; 5-in-a-row prob = 0.04^5 = 1e-7)
 MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
 
 
@@ -189,13 +219,15 @@ def open_markets_near_close(series):
 # ── kill switches ──────────────────────────────────────────────────────────────
 
 def check_halts(state, balance):
-    """Returns (halt: bool, reason: str)."""
+    """Returns (halt: bool, reason: str). Daily loss limit is dynamic based on bet size."""
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
     today = datetime.now(timezone.utc).date().isoformat()
     daily = state.get("daily", {})
-    if daily.get("date") == today and daily.get("pnl", 0) <= -DAILY_LOSS_LIMIT:
-        return True, f"today's P&L ${daily['pnl']:+.2f} <= -${DAILY_LOSS_LIMIT}"
+    bet_dollars = compute_bet_dollars(balance)
+    daily_loss_limit = compute_daily_loss_limit(bet_dollars)
+    if daily.get("date") == today and daily.get("pnl", 0) <= -daily_loss_limit:
+        return True, f"today's P&L ${daily['pnl']:+.2f} <= -${daily_loss_limit} (bet=${bet_dollars})"
     # 60-min cooldown after N consecutive losses
     cl  = state.get("consec_losses", 0)
     ts  = state.get("last_loss_ts", 0)
@@ -304,11 +336,12 @@ def _prior_k_candle_asks(ticker, series, side, k):
     return out
 
 
-def try_trade(market, state, dry_run):
+def try_trade(market, state, dry_run, balance=None):
     ticker = market.get("ticker", "")
     series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
     if ticker in state.get("positions", {}):
         return  # already entered this market
+    bet_dollars = compute_bet_dollars(balance)
     secs_left = market.get("_secs_left", 0)
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
     no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
@@ -359,13 +392,13 @@ def try_trade(market, state, dry_run):
     # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
     # the trade (no harm). If it moves down, the preflight above caught it.
     limit_cents = min(MAX_ASK_CENTS + LIMIT_BUFFER, fresh_ask + LIMIT_BUFFER)
-    contracts   = max(1, int(BET_DOLLARS * 100 / fresh_ask) + 1)
+    contracts   = max(1, int(bet_dollars * 100 / fresh_ask) + 1)
     est_cost    = contracts * fresh_ask / 100
     est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
 
     log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} "
         f"scan={ask_cents}c fresh={fresh_ask}c  limit={limit_cents}c  "
-        f"{contracts} contracts  est.cost=${est_cost:.2f}  est.win=+${est_profit:.2f}")
+        f"{contracts} contracts  bet=${bet_dollars}  est.cost=${est_cost:.2f}  est.win=+${est_profit:.2f}")
 
     if dry_run:
         log(f"    [dry-run] skipped")
@@ -528,13 +561,16 @@ def run_once(dry_run=False):
         log(f"  HALTED — {reason}")
         return
 
+    bet = compute_bet_dollars(balance)
+    dll = compute_daily_loss_limit(bet)
+    log(f"  bet_size=${bet} (balance=${balance:.2f})  daily_loss_limit=${dll}")
     n_scanned, n_tradeable = 0, 0
     for series in SERIES_LIST:
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
             before = len(state.get("positions", {}))
-            try_trade(m, state, dry_run)
+            try_trade(m, state, dry_run, balance=balance)
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
 
