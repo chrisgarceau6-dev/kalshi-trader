@@ -69,6 +69,7 @@ from kalshi_auth import get as _get, place_order
 COINBASE_PAIR = {
     "KXBTC15M": "BTC-USD", "KXETH15M": "ETH-USD", "KXSOL15M": "SOL-USD",
     "KXDOGE15M": "DOGE-USD", "KXBNB15M": "BNB-USD", "KXXRP15M": "XRP-USD",
+    "KXNEAR15M": "NEAR-USD",
     # KXHYPE15M has no Coinbase feed — filters skipped for HYPE
 }
 H4_ADVERSE_BPS = 5      # skip if 60s spot moved > 5bps against side
@@ -109,10 +110,14 @@ SERIES_LIST     = [
     # showed +EV in 60-day backtest:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
     "KXHYPE15M",  # added — 98.75% WR, +$442/60d @ $50 in v4 backtest
-    # Explicitly EXCLUDED (v4 filter tested but was net-negative):
-    # - KXNEAR15M (96.10% WR but small-cap tail risk lost money)
-    # - KXZEC15M (95.03% WR, same issue)
-    # - WTI/Gold/Silver 15m (insufficient historical data at backtest time)
+    # Added 2026-08-02: OOS-validated with H4+near-strike filters. Raw v5 loses
+    # money on NEAR (WR 92% but tail risk); filters flip it to +EV.
+    # Walk-forward (14d, train Jul 19-25 / test Jul 25-Aug 1):
+    #   Train filtered: WR 96.0%, +$0.87.  Test filtered: WR 97.8%, +$7.79.
+    "KXNEAR15M",
+    # Explicitly EXCLUDED:
+    # - KXZEC15M — filters mitigate but OOS test half still -$3.88 (WR 93.9%)
+    # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
