@@ -53,12 +53,52 @@ usage: --once | --dry-run | --status
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, os, smtplib
+import argparse, base64, json, os, smtplib, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
 from kalshi_auth import get as _get, place_order
+
+# ── OOS-validated pre-trade filters (added 2026-08-02) ─────────────────────────
+# Walk-forward on 60d v5 backtest (train Jun 2-Jul 1 → test Jul 2-Aug 1):
+#   H4 5bps + Near-strike 10bps combo: +2.43c/trade OOS, CI [+1.85, +2.92]
+#   Test-set total +$61.71 vs base +$39.69 (+155%)
+# Filters fail OPEN (proceed with trade) on Coinbase API errors so v5's
+# base positive-EV isn't sacrificed to a transient feed outage.
+COINBASE_PAIR = {
+    "KXBTC15M": "BTC-USD", "KXETH15M": "ETH-USD", "KXSOL15M": "SOL-USD",
+    "KXDOGE15M": "DOGE-USD", "KXBNB15M": "BNB-USD", "KXXRP15M": "XRP-USD",
+    "KXNEAR15M": "NEAR-USD",
+    # KXHYPE15M has no Coinbase feed — filters skipped for HYPE
+}
+H4_ADVERSE_BPS = 5      # skip if 60s spot moved > 5bps against side
+NEAR_STRIKE_BPS = 10    # skip if |spot - strike| / spot < 10bps
+
+
+def coinbase_1min_close(series, minute_end_ts=None):
+    """Fetch the 1-minute close price from Coinbase for the minute ending at
+    minute_end_ts (or now if None). Returns None on any error or missing bar."""
+    pair = COINBASE_PAIR.get(series)
+    if not pair:
+        return None
+    if minute_end_ts is None:
+        minute_end_ts = int(time.time())
+    end = minute_end_ts
+    start = end - 120  # request a small window to guarantee a bar
+    url = (f"https://api.exchange.coinbase.com/products/{pair}/candles"
+           f"?granularity=60&start={start}&end={end}")
+    req = urllib.request.Request(url, headers={"User-Agent": "kalshi-v5-filter/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return None
+    if not data:
+        return None
+    # Coinbase returns [time, low, high, open, close, volume]; newest first
+    data.sort(key=lambda row: -row[0])
+    return float(data[0][4])
 
 BASE       = Path(__file__).parent
 STATE_FILE = BASE / "certainty_state.json"
@@ -70,10 +110,14 @@ SERIES_LIST     = [
     # showed +EV in 60-day backtest:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
     "KXHYPE15M",  # added — 98.75% WR, +$442/60d @ $50 in v4 backtest
-    # Explicitly EXCLUDED (v4 filter tested but was net-negative):
-    # - KXNEAR15M (96.10% WR but small-cap tail risk lost money)
-    # - KXZEC15M (95.03% WR, same issue)
-    # - WTI/Gold/Silver 15m (insufficient historical data at backtest time)
+    # Added 2026-08-02: OOS-validated with H4+near-strike filters. Raw v5 loses
+    # money on NEAR (WR 92% but tail risk); filters flip it to +EV.
+    # Walk-forward (14d, train Jul 19-25 / test Jul 25-Aug 1):
+    #   Train filtered: WR 96.0%, +$0.87.  Test filtered: WR 97.8%, +$7.79.
+    "KXNEAR15M",
+    # Explicitly EXCLUDED:
+    # - KXZEC15M — filters mitigate but OOS test half still -$3.88 (WR 93.9%)
+    # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
@@ -393,6 +437,33 @@ def try_trade(market, state, dry_run, balance=None):
         log(f"  SKIP {ticker} — prior {PRIOR_LOOKBACK}-min {side} asks were "
             f"{prior_asks} (need all >= {PRIOR_MIN_CENTS}c); spike-into-zone entry")
         return
+
+    # SPOT-BASED FILTERS (fail open on feed error) ─────────────────────────────
+    #   H4:           skip if last-60s spot moved > 5bps against our side
+    #   Near-strike:  skip if spot is within 10bps of the market's strike
+    # Both walk-forward validated OOS on the v5 backtest (Jul-Aug halves).
+    if series in COINBASE_PAIR:
+        now_ts = int(time.time())
+        spot_now = coinbase_1min_close(series, now_ts)
+        spot_60s = coinbase_1min_close(series, now_ts - 60)
+        if spot_now is None or spot_60s is None:
+            log(f"  {ticker} — Coinbase feed unavailable; filters SKIPPED (fail open)")
+        else:
+            ret_60 = (spot_now - spot_60s) / spot_60s
+            adverse = -ret_60 if side == "yes" else ret_60
+            if adverse > H4_ADVERSE_BPS / 10000:
+                log(f"  SKIP {ticker} — H4 filter: 60s spot moved "
+                    f"{ret_60*100:+.3f}% (adverse for {side.upper()}, "
+                    f"threshold {H4_ADVERSE_BPS}bps)")
+                return
+            strike = float(market.get("floor_strike") or 0)
+            if strike:
+                dist_pct = abs(spot_now - strike) / spot_now
+                if dist_pct < NEAR_STRIKE_BPS / 10000:
+                    log(f"  SKIP {ticker} — near-strike filter: spot {spot_now:.4f} "
+                        f"within {dist_pct*10000:.1f}bps of strike {strike:.4f} "
+                        f"(threshold {NEAR_STRIKE_BPS}bps)")
+                    return
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
     # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
