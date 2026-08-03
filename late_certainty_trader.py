@@ -44,8 +44,8 @@ BET SIZING (auto-scales with balance):
   $1400+       -> $50 cap (~$95/day expected)
 
 KILL SWITCHES:
-  STOP_BALANCE=$350 (halt if balance drops here)
-  DAILY_LOSS_LIMIT = 6x bet_size (dynamic — auto-scales)
+  STOP_BALANCE=$300 (halt if balance drops here)
+  DAILY_LOSS_LIMIT = 8x bet_size = $160/day at $20 bets
   5 consecutive losses -> 60-min cooldown
 
 usage: --once | --dry-run | --status
@@ -142,8 +142,8 @@ MAX_SECS_LEFT   = 900
 # up to $50 (Kelly-informed cap for 96% WR strategy). Reads fresh balance
 # every scan cycle so scaling happens automatically as PnL accumulates.
 def compute_bet_dollars(balance):
-    """Flat $5 per bet. Stop-loss handled separately via STOP_BALANCE=$350."""
-    return 5
+    """Flat $20 per bet. Stop-loss handled separately via STOP_BALANCE=$300."""
+    return 20
 
 
 def compute_daily_loss_limit(bet_dollars):
@@ -152,8 +152,8 @@ def compute_daily_loss_limit(bet_dollars):
     return max(30, bet_dollars * 8)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE       = 350      # halt if balance drops below this
-                                # user-set stop-loss @ $5 bets
+STOP_BALANCE       = 300      # halt if balance drops below this
+                                # user-set stop-loss @ $20 bets
 CONSEC_LOSS_LIMIT  = 5        # halt for 60 min after 5 consecutive losses
                                 # (v5 has ~4% loss rate; 5-in-a-row prob = 0.04^5 = 1e-7)
 MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
