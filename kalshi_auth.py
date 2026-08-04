@@ -84,6 +84,11 @@ def delete(path):
     return r.status_code, _parse(r)
 
 
+def cancel_order(order_id):
+    """Cancel an open GTC order by order_id. Returns (status_code, response)."""
+    return delete(f"/portfolio/orders/{order_id}")
+
+
 # ---------------------------------------------------------------- orders
 
 def get_balance():
