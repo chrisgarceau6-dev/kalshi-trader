@@ -37,11 +37,11 @@ ECONOMICS (avg entry ~93c):
   Expected losses: ~10-12/day (4% loss rate).
 
 BET SIZING (auto-scales with balance):
-  $500 balance -> $5 bets  (~$10/day expected)
-  $700         -> $15
-  $900         -> $25
-  $1100        -> $35
-  $1400+       -> $50 cap (~$95/day expected)
+  5% of balance, rounded to nearest $5, min $20, max $50
+  $380 balance -> $20 bets
+  $500         -> $25
+  $700         -> $35
+  $1000+       -> $50 cap (~$95/day expected)
 
 KILL SWITCHES:
   STOP_BALANCE=$300 (halt if balance drops here)
@@ -53,12 +53,12 @@ usage: --once | --dry-run | --status
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, os, smtplib, time, urllib.request, urllib.error
+import argparse, base64, json, os, random, smtplib, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
-from kalshi_auth import get as _get, place_order
+from kalshi_auth import get as _get, place_order, cancel_order
 
 # ── OOS-validated pre-trade filters (added 2026-08-02) ─────────────────────────
 # Walk-forward on 60d v5 backtest (train Jun 2-Jul 1 → test Jul 2-Aug 1):
@@ -120,6 +120,8 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
+STRATEGY_VERSION = "v5.2"  # bump when strategy logic changes; resets WR/pnl counter
+
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 99
 PRIOR_MIN_CENTS = 80     # v5: relaxed prior gate from 92c to 80c — catches more +EV entries
@@ -135,15 +137,16 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
-MAX_SECS_LEFT   = 900
+MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # Bet size auto-scales with account balance. Linear ramp from $5 (safe start)
 # up to $50 (Kelly-informed cap for 96% WR strategy). Reads fresh balance
 # every scan cycle so scaling happens automatically as PnL accumulates.
 def compute_bet_dollars(balance):
-    """Flat $20 per bet. Stop-loss handled separately via STOP_BALANCE=$300."""
-    return 20
+    """5% of balance, rounded to nearest $5. Min $20, max $50."""
+    scaled = round(balance * 0.05 / 5) * 5
+    return int(min(50, max(20, scaled)))
 
 
 def compute_daily_loss_limit(bet_dollars):
@@ -152,11 +155,12 @@ def compute_daily_loss_limit(bet_dollars):
     return max(30, bet_dollars * 8)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE       = 300      # halt if balance drops below this
-                                # user-set stop-loss @ $20 bets
-CONSEC_LOSS_LIMIT  = 5        # halt for 60 min after 5 consecutive losses
-                                # (v5 has ~4% loss rate; 5-in-a-row prob = 0.04^5 = 1e-7)
-MAX_POSITIONS_STATE = 500     # keep only most recent settled positions in state
+STOP_BALANCE            = 300  # halt if balance drops below this
+CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
+MAX_CONCURRENT_POSITIONS = 4  # cap open positions to limit correlated-loss exposure
+EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
+EDGE_DEGRADE_THRESHOLD  = 0.90  # halt if rolling WR drops below this (3σ below 96% baseline)
+MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 
 
 # ── infrastructure (reused from crypto15m_trader pattern) ─────────────────────
@@ -183,10 +187,19 @@ def kalshi_get(path, params=None):
 def load_state():
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            s = json.loads(STATE_FILE.read_text())
+            if s.get("strategy_version") != STRATEGY_VERSION:
+                log(f"Strategy version changed ({s.get('strategy_version')} → {STRATEGY_VERSION}); resetting stats")
+                s["stats"] = {"trades": 0, "wins": 0, "pnl": 0.0}
+                s["recent_results"] = []
+                s["strategy_version"] = STRATEGY_VERSION
+            return s
         except Exception:
             pass
-    return {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+    return {
+        "positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        "recent_results": [], "strategy_version": STRATEGY_VERSION,
+    }
 
 
 def save_state(s):
@@ -272,6 +285,13 @@ def check_halts(state, balance):
         age = datetime.now(timezone.utc).timestamp() - ts
         if age < 3600:
             return True, f"{cl} consec losses, cooldown {60 - int(age/60)}min"
+    # Edge degradation — rolling WR well below backtest baseline
+    recent = state.get("recent_results", [])
+    if len(recent) >= EDGE_DEGRADE_WINDOW:
+        rolling_wr = sum(recent[-EDGE_DEGRADE_WINDOW:]) / EDGE_DEGRADE_WINDOW
+        if rolling_wr < EDGE_DEGRADE_THRESHOLD:
+            return True, (f"edge degradation: last {EDGE_DEGRADE_WINDOW} trades "
+                          f"WR={rolling_wr*100:.1f}% < {EDGE_DEGRADE_THRESHOLD*100:.0f}%")
     return False, ""
 
 
@@ -378,6 +398,10 @@ def try_trade(market, state, dry_run, balance=None):
     series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
     if ticker in state.get("positions", {}):
         return  # already entered this market
+    open_cnt = sum(1 for p in state.get("positions", {}).values() if not p.get("settled"))
+    if open_cnt >= MAX_CONCURRENT_POSITIONS:
+        log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
+        return
     bet_dollars = compute_bet_dollars(balance)
     secs_left = market.get("_secs_left", 0)
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
@@ -451,6 +475,8 @@ def try_trade(market, state, dry_run, balance=None):
                         f"within {dist_pct*10000:.1f}bps of strike {strike:.4f} "
                         f"(threshold {NEAR_STRIKE_BPS}bps)")
                     return
+    else:
+        log(f"  {ticker} — {series} has no Coinbase feed; H4+near-strike filters skipped")
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
     # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
@@ -477,11 +503,14 @@ def try_trade(market, state, dry_run, balance=None):
         yes_price_cents=limit_cents if side == "yes" else None,
         no_price_cents=limit_cents  if side == "no"  else None,
     )
+    order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
     if code in (200, 201):
-        log(f"    order accepted")
-        # After order, immediately query fills to get REAL cost + contract count.
-        # This corrects for partial fills, better-than-limit prices, etc.
+        log(f"    order accepted (id={order_id})")
+        # After order, query fills to get REAL cost + contract count.
         actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        if actual_contracts == 0:
+            # Retry once more — fills can be delayed up to ~3s
+            actual_contracts, actual_cost = query_actual_fill(ticker, side)
         outside_safe_zone = False
         if actual_contracts > 0:
             avg_price_cents = int(round(100 * actual_cost / actual_contracts))
@@ -494,7 +523,7 @@ def try_trade(market, state, dry_run, balance=None):
             # gets consumed). Alert loudly so user can manually exit if needed.
             if avg_price_cents < MIN_ASK_CENTS:
                 outside_safe_zone = True
-                log(f"    ⚠ DANGER — filled at {avg_price_cents}c, BELOW "
+                log(f"    DANGER — filled at {avg_price_cents}c, BELOW "
                     f"safe zone [{MIN_ASK_CENTS},{MAX_ASK_CENTS}]. Preflight "
                     f"race slipped — trade has elevated loss risk.")
                 send_email(
@@ -506,9 +535,13 @@ def try_trade(market, state, dry_run, balance=None):
                     f"between refetch and order landing. Consider manual exit.\n",
                 )
         else:
-            log(f"    no fill data available yet — using estimates")
-            final_contracts = contracts
-            final_cost      = est_cost
+            # No fill after 3s — cancel the GTC order to prevent a stale resting bid
+            if order_id:
+                c_code, _ = cancel_order(order_id)
+                log(f"    no fill after 3s — cancelled order {order_id} (HTTP {c_code})")
+            else:
+                log(f"    no fill after 3s — no order_id available to cancel")
+            return  # don't record a phantom position
         state["positions"][ticker] = {
             "side":        side,
             "limit_cents": limit_cents,
@@ -580,6 +613,10 @@ def check_outcomes(state, balance):
             state["consec_losses"] = state.get("consec_losses", 0) + 1
             state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
 
+        recent = state.setdefault("recent_results", [])
+        recent.append(won)
+        state["recent_results"] = recent[-100:]  # keep last 100
+
         save_state(state)
         wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
         log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
@@ -629,7 +666,7 @@ def run_once(dry_run=False):
     dll = compute_daily_loss_limit(bet)
     log(f"  bet_size=${bet} (balance=${balance:.2f})  daily_loss_limit=${dll}")
     n_scanned, n_tradeable = 0, 0
-    for series in SERIES_LIST:
+    for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
