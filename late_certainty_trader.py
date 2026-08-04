@@ -120,6 +120,8 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
+STRATEGY_VERSION = "v5.2"  # bump when strategy logic changes; resets WR/pnl counter
+
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 99
 PRIOR_MIN_CENTS = 80     # v5: relaxed prior gate from 92c to 80c — catches more +EV entries
@@ -135,7 +137,7 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
-MAX_SECS_LEFT   = 900
+MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # Bet size auto-scales with account balance. Linear ramp from $5 (safe start)
@@ -183,10 +185,15 @@ def kalshi_get(path, params=None):
 def load_state():
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            s = json.loads(STATE_FILE.read_text())
+            if s.get("strategy_version") != STRATEGY_VERSION:
+                log(f"Strategy version changed ({s.get('strategy_version')} → {STRATEGY_VERSION}); resetting stats")
+                s["stats"] = {"trades": 0, "wins": 0, "pnl": 0.0}
+                s["strategy_version"] = STRATEGY_VERSION
+            return s
         except Exception:
             pass
-    return {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+    return {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}, "strategy_version": STRATEGY_VERSION}
 
 
 def save_state(s):
@@ -451,6 +458,8 @@ def try_trade(market, state, dry_run, balance=None):
                         f"within {dist_pct*10000:.1f}bps of strike {strike:.4f} "
                         f"(threshold {NEAR_STRIKE_BPS}bps)")
                     return
+    else:
+        log(f"  {ticker} — {series} has no Coinbase feed; H4+near-strike filters skipped")
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
     # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
