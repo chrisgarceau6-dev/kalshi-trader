@@ -70,22 +70,23 @@ COINBASE_PAIR = {
     "KXBTC15M": "BTC-USD", "KXETH15M": "ETH-USD", "KXSOL15M": "SOL-USD",
     "KXDOGE15M": "DOGE-USD", "KXBNB15M": "BNB-USD", "KXXRP15M": "XRP-USD",
     "KXNEAR15M": "NEAR-USD",
-    # KXHYPE15M has no Coinbase feed — filters skipped for HYPE
+}
+HYPERLIQUID_PAIR = {
+    "KXHYPE15M": "HYPE",  # HYPE trades on Hyperliquid DEX — use their native API
 }
 H4_ADVERSE_BPS = 5      # skip if 60s spot moved > 5bps against side
 NEAR_STRIKE_BPS = 10    # skip if |spot - strike| / spot < 10bps
 
 
 def coinbase_1min_close(series, minute_end_ts=None):
-    """Fetch the 1-minute close price from Coinbase for the minute ending at
-    minute_end_ts (or now if None). Returns None on any error or missing bar."""
+    """Fetch the 1-minute close price from Coinbase. Returns None on any error."""
     pair = COINBASE_PAIR.get(series)
     if not pair:
         return None
     if minute_end_ts is None:
         minute_end_ts = int(time.time())
-    end = minute_end_ts
-    start = end - 120  # request a small window to guarantee a bar
+    end   = minute_end_ts
+    start = end - 120
     url = (f"https://api.exchange.coinbase.com/products/{pair}/candles"
            f"?granularity=60&start={start}&end={end}")
     req = urllib.request.Request(url, headers={"User-Agent": "kalshi-v5-filter/1.0"})
@@ -96,9 +97,47 @@ def coinbase_1min_close(series, minute_end_ts=None):
         return None
     if not data:
         return None
-    # Coinbase returns [time, low, high, open, close, volume]; newest first
-    data.sort(key=lambda row: -row[0])
+    data.sort(key=lambda row: -row[0])  # [time, low, high, open, close, volume]; newest first
     return float(data[0][4])
+
+
+def hyperliquid_1min_close(coin, minute_end_ts=None):
+    """Fetch 1-min close from Hyperliquid for HYPE. Returns None on any error."""
+    if minute_end_ts is None:
+        minute_end_ts = int(time.time())
+    end_ms   = minute_end_ts * 1000
+    start_ms = (minute_end_ts - 120) * 1000
+    body = json.dumps({
+        "type": "candleSnapshot",
+        "req": {"coin": coin, "interval": "1m", "startTime": start_ms, "endTime": end_ms},
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.hyperliquid.xyz/info",
+        data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "kalshi-v5-filter/1.0"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return None
+    if not data:
+        return None
+    data.sort(key=lambda c: -c.get("t", 0))  # {t, o, h, l, c, v}; newest first
+    try:
+        return float(data[0]["c"])
+    except (KeyError, IndexError, ValueError, TypeError):
+        return None
+
+
+def spot_1min_close(series, minute_end_ts=None):
+    """Route spot price lookup to the right exchange for each series."""
+    if series in COINBASE_PAIR:
+        return coinbase_1min_close(series, minute_end_ts)
+    if series in HYPERLIQUID_PAIR:
+        return hyperliquid_1min_close(HYPERLIQUID_PAIR[series], minute_end_ts)
+    return None
 
 BASE       = Path(__file__).parent
 STATE_FILE = BASE / "certainty_state.json"
@@ -120,7 +159,7 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.2"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.3"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 99
@@ -453,12 +492,14 @@ def try_trade(market, state, dry_run, balance=None):
     #   H4:           skip if last-60s spot moved > 5bps against our side
     #   Near-strike:  skip if spot is within 10bps of the market's strike
     # Both walk-forward validated OOS on the v5 backtest (Jul-Aug halves).
-    if series in COINBASE_PAIR:
+    has_spot = series in COINBASE_PAIR or series in HYPERLIQUID_PAIR
+    if has_spot:
+        feed = "Hyperliquid" if series in HYPERLIQUID_PAIR else "Coinbase"
         now_ts = int(time.time())
-        spot_now = coinbase_1min_close(series, now_ts)
-        spot_60s = coinbase_1min_close(series, now_ts - 60)
+        spot_now = spot_1min_close(series, now_ts)
+        spot_60s = spot_1min_close(series, now_ts - 60)
         if spot_now is None or spot_60s is None:
-            log(f"  {ticker} — Coinbase feed unavailable; filters SKIPPED (fail open)")
+            log(f"  {ticker} — {feed} feed unavailable; filters SKIPPED (fail open)")
         else:
             ret_60 = (spot_now - spot_60s) / spot_60s
             adverse = -ret_60 if side == "yes" else ret_60
@@ -476,7 +517,7 @@ def try_trade(market, state, dry_run, balance=None):
                         f"(threshold {NEAR_STRIKE_BPS}bps)")
                     return
     else:
-        log(f"  {ticker} — {series} has no Coinbase feed; H4+near-strike filters skipped")
+        log(f"  {ticker} — {series} has no spot feed; H4+near-strike filters skipped")
 
     # TIGHT limit based on FRESH ask (not stale scan value). If market moves
     # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
@@ -691,9 +732,23 @@ def main():
     ap.add_argument("--once",    action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--status",  action="store_true")
+    ap.add_argument("--daemon",  action="store_true",
+                    help="run continuously, polling every 20s (for VPS deployment)")
     a = ap.parse_args()
     if a.status:
         print(json.dumps(load_state(), indent=2))
+        return
+    if a.daemon:
+        log("=== DAEMON MODE — polling every 20s ===")
+        while True:
+            try:
+                run_once(dry_run=a.dry_run)
+            except KeyboardInterrupt:
+                log("Daemon stopped")
+                break
+            except Exception as e:
+                log(f"cycle error: {e}")
+            time.sleep(20)
         return
     try:
         run_once(dry_run=a.dry_run)
