@@ -37,11 +37,13 @@ ECONOMICS (avg entry ~93c):
   Expected losses: ~10-12/day (4% loss rate).
 
 BET SIZING (auto-scales with balance):
-  5% of balance, rounded to nearest $5, min $20, max $50
+  5% of balance, rounded to nearest $5, min $20, no cap
   $380 balance -> $20 bets
   $500         -> $25
   $700         -> $35
-  $1000+       -> $50 cap (~$95/day expected)
+  $1000        -> $50
+  $2000        -> $100
+  $4000        -> $200
 
 KILL SWITCHES:
   STOP_BALANCE=$300 (halt if balance drops here)
@@ -179,13 +181,13 @@ MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
 MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
-# Bet size auto-scales with account balance. Linear ramp from $5 (safe start)
-# up to $50 (Kelly-informed cap for 96% WR strategy). Reads fresh balance
-# every scan cycle so scaling happens automatically as PnL accumulates.
+# 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
+# every scan cycle so scaling is fully automatic. Natural limit is Kalshi
+# order-book depth (~200-300 contracts); no-fill cancellation handles it.
 def compute_bet_dollars(balance):
-    """5% of balance, rounded to nearest $5. Min $20, max $50."""
+    """5% of balance, rounded to nearest $5. Min $20, no cap."""
     scaled = round(balance * 0.05 / 5) * 5
-    return int(min(50, max(20, scaled)))
+    return int(max(20, scaled))
 
 
 def compute_daily_loss_limit(bet_dollars):
