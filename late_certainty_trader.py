@@ -536,10 +536,9 @@ def try_trade(market, state, dry_run, balance=None):
     else:
         log(f"  {ticker} — {series} has no spot feed; H4+near-strike filters skipped")
 
-    # TIGHT limit based on FRESH ask (not stale scan value). If market moves
-    # >LIMIT_BUFFER cents up between refetch and Kalshi processing, we miss
-    # the trade (no harm). If it moves down, the preflight above caught it.
-    limit_cents = min(MAX_ASK_CENTS + LIMIT_BUFFER, fresh_ask + LIMIT_BUFFER)
+    # TIGHT limit based on FRESH ask. Cap at MAX_ASK_CENTS so slippage can't
+    # push us above the OOS-validated range (96c+ is EV-negative after fee).
+    limit_cents = min(MAX_ASK_CENTS, fresh_ask + LIMIT_BUFFER)
     contracts   = max(1, int(bet_dollars * 100 / fresh_ask) + 1)
     est_cost    = contracts * fresh_ask / 100
     est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
