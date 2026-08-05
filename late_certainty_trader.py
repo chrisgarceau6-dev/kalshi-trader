@@ -676,24 +676,28 @@ def check_outcomes(state, balance):
         log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
             f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
 
+        d_pnl  = daily['pnl']
+        c_pnl  = state['stats']['pnl']
+        d_sign = '+' if d_pnl >= 0 else '-'
+        c_sign = '+' if c_pnl >= 0 else '-'
         if won:
             send_email(
                 f"[Kalshi-C] WIN +${pnl:.2f} — {ticker}",
                 f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
                 f"Result: {result.upper()} → WIN\n"
                 f"Profit: +${pnl:.2f} (after 7% fee)\n"
-                f"Today: ${daily['pnl']:+.2f}\n"
-                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L=${state['stats']['pnl']:+.2f}\n",
+                f"Today: {d_sign}${abs(d_pnl):.2f}\n"
+                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
             )
         else:
             send_email(
                 f"[Kalshi-C] LOSS -${abs(pnl):.2f} — {ticker}",
                 f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
                 f"Result: {result.upper()} → LOSS\n"
-                f"Loss: ${pnl:+.2f}\n"
+                f"Loss: -${abs(pnl):.2f}\n"
                 f"Consec losses: {state['consec_losses']}\n"
-                f"Today: ${daily['pnl']:+.2f}\n"
-                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L=${state['stats']['pnl']:+.2f}\n",
+                f"Today: {d_sign}${abs(d_pnl):.2f}\n"
+                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
             )
 
 
