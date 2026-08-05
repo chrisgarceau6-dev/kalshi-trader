@@ -269,6 +269,7 @@ def log(msg):
 def fetch_balance():
     code, resp = kalshi_get("/portfolio/balance")
     if code != 200:
+        log(f"  fetch_balance: HTTP {code} resp={str(resp)[:120]}")
         return None
     try:
         return float(resp.get("balance_dollars", 0))
