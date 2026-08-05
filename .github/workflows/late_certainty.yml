@@ -19,7 +19,7 @@ name: Late-Certainty Trader
 
 on:
   schedule:
-    - cron: '10-14,25-29,40-44,55-59 * * * *'
+    - cron: '05-14,20-29,35-44,50-59 * * * *'
   workflow_dispatch:
 
 concurrency:
