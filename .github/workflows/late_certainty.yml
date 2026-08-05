@@ -19,7 +19,7 @@ name: Late-Certainty Trader
 
 on:
   schedule:
-    - cron: '05-14,20-29,35-44,50-59 * * * *'
+    - cron: '*/5 * * * *'  # backup; primary trigger is self-dispatch at end of each run
   workflow_dispatch:
 
 concurrency:
@@ -60,3 +60,11 @@ jobs:
         with:
           path: certainty_state.json
           key: certainty-state-${{ github.run_id }}
+
+      - name: Schedule next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
+        run: |
+          sleep 60
+          gh workflow run late_certainty.yml --repo chrisgarceau6-dev/polymarket-monitor2 2>/dev/null || true
