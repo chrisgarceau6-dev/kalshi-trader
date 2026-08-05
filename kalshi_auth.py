@@ -47,7 +47,11 @@ def sign_request(private_key, method, path, timestamp_ms=None):
 def signed_headers(method, path, api_key_id=None, private_key=None):
     api_key_id = api_key_id or os.environ.get("KALSHI_API_KEY_ID", "")
     if not api_key_id:
-        raise ValueError("KALSHI_API_KEY_ID not set")
+        cfg = Path("~/.kalshi/key_id").expanduser()
+        if cfg.exists():
+            api_key_id = cfg.read_text().strip().strip("<>")
+    if not api_key_id:
+        raise ValueError("KALSHI_API_KEY_ID not set — run: echo <uuid> > ~/.kalshi/key_id")
     private_key = private_key or load_private_key()
     ts, sig = sign_request(private_key, method, path)
     return {
