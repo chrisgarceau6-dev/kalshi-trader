@@ -10,9 +10,17 @@ You have full context. Just do what's asked. No need for the user to explain the
 - Live entrypoint: `late_certainty_trader.py` on `origin/main`, GitHub Actions cron `.github/workflows/late_certainty.yml`
 - Cron: `10-14,25-29,40-44,55-59 * * * *` (fires 5 min before/after each 15-min boundary)
 
-## Active Strategy — v5.3 late-certainty (deployed 2026-08-01, updated 2026-08-04)
+## Active Strategy — v5.4 late-certainty (deployed 2026-08-04, updated 2026-08-05)
 
-**Trigger:** buy YES or NO at ask 90-99¢ with 150-600s remaining, provided prior 3 same-side 1-min candles all ≥ 80¢.
+**Trigger:** buy YES or NO at ask [90, 95]¢ with 150-600s remaining, provided prior 3 same-side 1-min candles all ≥ 80¢.
+
+**v5.4 changes (Aug 4–5):**
+- MAX_ASK_CENTS=95 (96-99c is EV-negative after 7% fee)
+- BLACKOUT_HOURS={15,16,17} UTC (11am-1pm ET — equity open volatility)
+- Per-asset 1.5x bet: BNB, SOL, HYPE (best WR series)
+- Limit order capped hard at MAX_ASK_CENTS — no 96c+ slippage fills
+- Preflight refetch (fresh ask check before every order placement)
+- workflow_dispatch removed — external cron-job.org trigger stopped
 
 **Filters** (OOS-validated 2026-08-02):
 - H4: skip if underlying spot moved > 5 bps adverse in last 60s
@@ -24,18 +32,19 @@ You have full context. Just do what's asked. No need for the user to explain the
 `KXBTC15M`, `KXETH15M`, `KXSOL15M`, `KXDOGE15M`, `KXBNB15M`, `KXXRP15M`, `KXHYPE15M`, `KXNEAR15M`
 
 **Sizing and kill switches** (in `late_certainty_trader.py`):
-- `compute_bet_dollars()` → 5% of balance, rounded to nearest $5, min $20, **no cap** (auto-scales forever)
+- `compute_bet_dollars()` → 5% of balance, rounded to nearest $5, min $20, cap $200
+- `SERIES_BET_MULTIPLIER` → BNB/SOL/HYPE get 1.5x (e.g. $35 base → $50 top-tier)
 - `STOP_BALANCE = 300` (halt if balance drops here)
 - `CONSEC_LOSS_LIMIT = 5` → 60-min cooldown
-- `compute_daily_loss_limit()` → `max(30, bet * 8)` = $160 at $20 bets
+- `compute_daily_loss_limit()` → `max(30, bet * 8)` = $280 at $35 bets
 - `MAX_CONCURRENT_POSITIONS = 4` (heat cap — skip if 4 unsettled positions open)
 - `EDGE_DEGRADE_WINDOW = 50`, `EDGE_DEGRADE_THRESHOLD = 0.90` → halt if rolling 50-trade WR < 90%
-- `STRATEGY_VERSION = "v5.3"` — resets stats/recent_results on strategy logic changes
+- `STRATEGY_VERSION = "v5.4"` — resets stats/recent_results on strategy logic changes
 - Order cancellation: GTC orders cancelled after 3s if no fill (via `cancel_order()` in `kalshi_auth.py`)
 
 **Backtest:** 96% WR, ~$95/day @ $50 bets, ~265 trades/day across 7+ series.
 
-**Live performance (Aug 1-4):** Balance $368 → $409, ~$20 bets. Strategy confirmed working.
+**Live performance (Aug 1–5):** Balance $744 → $706 (1 HYPE loss at 1.5x, 23/24 = 95.8% WR, P&L +$0.85 since v5.4 reset).
 
 ## Key files
 
