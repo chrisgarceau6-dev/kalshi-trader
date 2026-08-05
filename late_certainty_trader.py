@@ -574,9 +574,18 @@ def try_trade(market, state, dry_run, balance=None):
         if actual_contracts == 0:
             # Retry once more — fills can be delayed up to ~3s
             actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        # Always cancel GTC order after fill window — prevents partial fills from
+        # leaving a resting bid that gets filled later at unexpected prices.
+        if order_id:
+            c_code, _ = cancel_order(order_id)
+            log(f"    cancelled GTC order {order_id} after fill window (HTTP {c_code})")
         outside_safe_zone = False
         if actual_contracts > 0:
             avg_price_cents = int(round(100 * actual_cost / actual_contracts))
+            contracts_intended = max(1, int(bet_dollars * 100 / fresh_ask) + 1)
+            if actual_contracts < contracts_intended * 0.9:
+                log(f"    PARTIAL FILL: {actual_contracts}/{contracts_intended} contracts "
+                    f"(${actual_cost:.2f} vs ${est_cost:.2f} expected)")
             log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, "
                 f"avg={avg_price_cents}c")
             final_contracts = actual_contracts
@@ -598,12 +607,7 @@ def try_trade(market, state, dry_run, balance=None):
                     f"between refetch and order landing. Consider manual exit.\n",
                 )
         else:
-            # No fill after 3s — cancel the GTC order to prevent a stale resting bid
-            if order_id:
-                c_code, _ = cancel_order(order_id)
-                log(f"    no fill after 3s — cancelled order {order_id} (HTTP {c_code})")
-            else:
-                log(f"    no fill after 3s — no order_id available to cancel")
+            log(f"    no fill after 3s — order already cancelled above")
             return  # don't record a phantom position
         state["positions"][ticker] = {
             "side":        side,
@@ -628,9 +632,9 @@ def try_trade(market, state, dry_run, balance=None):
         save_state(state)
         send_email(
             f"[Kalshi-C] Trade {ticker} {side.upper()} @ {limit_cents}c",
-            f"Bought {contracts} {side.upper()} contracts @ {limit_cents}c on {ticker}\n"
-            f"Cost: ${est_cost:.2f}\n"
-            f"Expected win: +${est_profit:.2f}\n"
+            f"Bought {final_contracts} {side.upper()} contracts @ {limit_cents}c on {ticker}\n"
+            f"Cost: ${final_cost:.2f}\n"
+            f"Expected win: +${final_contracts * (100 - limit_cents) / 100 * 0.93:.2f}\n"
             f"Seconds left: {secs_left:.0f}\n",
         )
     else:
