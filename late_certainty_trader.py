@@ -371,11 +371,8 @@ def cleanup_state(state):
 # ── order placement ───────────────────────────────────────────────────────────
 
 def query_actual_fill(ticker, side):
-    """After placing an order, query fills to get real filled count + cost.
-    Returns (total_contracts, total_cost) — both 0 if no fills yet."""
-    import time
-    time.sleep(1.5)   # give Kalshi a moment to process
-    code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 20})
+    """Query fills for ticker/side. Caller controls timing — no sleep here."""
+    code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 50})
     if code != 200:
         return 0, 0
     total_ct   = 0.0
@@ -569,16 +566,17 @@ def try_trade(market, state, dry_run, balance=None):
     order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
     if code in (200, 201):
         log(f"    order accepted (id={order_id})")
-        # After order, query fills to get REAL cost + contract count.
-        actual_contracts, actual_cost = query_actual_fill(ticker, side)
-        if actual_contracts == 0:
-            # Retry once more — fills can be delayed up to ~3s
-            actual_contracts, actual_cost = query_actual_fill(ticker, side)
-        # Always cancel GTC order after fill window — prevents partial fills from
-        # leaving a resting bid that gets filled later at unexpected prices.
+        import time
+        time.sleep(3)  # wait for fills to propagate before cancelling
+        # Cancel GTC FIRST so the fill picture is final when we query.
         if order_id:
             c_code, _ = cancel_order(order_id)
-            log(f"    cancelled GTC order {order_id} after fill window (HTTP {c_code})")
+            log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
+        time.sleep(0.5)  # brief settle after cancel
+        actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        if actual_contracts == 0:
+            time.sleep(1.5)
+            actual_contracts, actual_cost = query_actual_fill(ticker, side)
         outside_safe_zone = False
         if actual_contracts > 0:
             avg_price_cents = int(round(100 * actual_cost / actual_contracts))
