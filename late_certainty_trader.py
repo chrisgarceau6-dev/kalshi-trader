@@ -161,7 +161,7 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.4"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.5"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 95     # v5.4: capped at 95c; 96-99c is EV-negative after 7% fee
@@ -182,12 +182,8 @@ MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; tr
 # v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
 BLACKOUT_HOURS  = {15, 16, 17}
 
-# v5.4: top-tier series get 1.5x the base bet (BNB 96.28%, SOL 95.11%, HYPE 94.69%)
-SERIES_BET_MULTIPLIER = {
-    "KXBNB15M":  1.5,
-    "KXSOL15M":  1.5,
-    "KXHYPE15M": 1.5,
-}
+# v5.5: flat bet for all series — 1.5x multiplier removed (losses on 1.5x series disproportionate)
+SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
@@ -686,8 +682,8 @@ def check_outcomes(state, balance):
                 f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
                 f"Result: {result.upper()} → WIN\n"
                 f"Profit: +${pnl:.2f} (after 7% fee)\n"
-                f"Balance: ${balance:.2f}\n"
-                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR\n",
+                f"Today: ${daily['pnl']:+.2f}\n"
+                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L=${state['stats']['pnl']:+.2f}\n",
             )
         else:
             send_email(
@@ -696,7 +692,8 @@ def check_outcomes(state, balance):
                 f"Result: {result.upper()} → LOSS\n"
                 f"Loss: ${pnl:+.2f}\n"
                 f"Consec losses: {state['consec_losses']}\n"
-                f"Balance: ${balance:.2f}\n",
+                f"Today: ${daily['pnl']:+.2f}\n"
+                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L=${state['stats']['pnl']:+.2f}\n",
             )
 
 
