@@ -202,6 +202,16 @@ def compute_daily_loss_limit(bet_dollars):
        when scaled up. Allows ~10-15 losing bets/day of net loss before halt."""
     return max(30, bet_dollars * 8)
 
+def daily_pnl(state):
+    """Compute today's P&L from settled positions (UTC date).
+    Position-based so it survives cache loss — not a running counter."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    return round(sum(
+        p.get("pnl", 0)
+        for p in state.get("positions", {}).values()
+        if p.get("settled") and p.get("settled_date") == today
+    ), 2)
+
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 300  # halt if balance drops below this
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
@@ -323,12 +333,11 @@ def check_halts(state, balance):
     """Returns (halt: bool, reason: str). Daily loss limit is dynamic based on bet size."""
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
-    today = datetime.now(timezone.utc).date().isoformat()
-    daily = state.get("daily", {})
     bet_dollars = compute_bet_dollars(balance)
     daily_loss_limit = compute_daily_loss_limit(bet_dollars)
-    if daily.get("date") == today and daily.get("pnl", 0) <= -daily_loss_limit:
-        return True, f"today's P&L ${daily['pnl']:+.2f} <= -${daily_loss_limit} (bet=${bet_dollars})"
+    d_pnl = daily_pnl(state)
+    if d_pnl <= -daily_loss_limit:
+        return True, f"today's P&L -{abs(d_pnl):.2f} <= -${daily_loss_limit} (bet=${bet_dollars})"
     # 60-min cooldown after N consecutive losses
     cl  = state.get("consec_losses", 0)
     ts  = state.get("last_loss_ts", 0)
@@ -654,9 +663,10 @@ def check_outcomes(state, balance):
         fee_on_profit = 0.07 * max(0, payout - pos["cost"])
         pnl = round(payout - pos["cost"] - fee_on_profit, 2)
 
-        pos["settled"] = True
-        pos["result"]  = result
-        pos["pnl"]     = pnl
+        pos["settled"]      = True
+        pos["result"]       = result
+        pos["pnl"]          = pnl
+        pos["settled_date"] = today
 
         daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
         state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
@@ -676,7 +686,7 @@ def check_outcomes(state, balance):
         log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
             f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
 
-        d_pnl  = daily['pnl']
+        d_pnl  = daily_pnl(state)
         c_pnl  = state['stats']['pnl']
         d_sign = '+' if d_pnl >= 0 else '-'
         c_sign = '+' if c_pnl >= 0 else '-'
