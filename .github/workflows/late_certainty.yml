@@ -20,12 +20,6 @@ name: Late-Certainty Trader
 on:
   schedule:
     - cron: '10-14,25-29,40-44,55-59 * * * *'
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run — detect opportunities but place no orders'
-        required: false
-        default: 'false'
 
 concurrency:
   group: certainty-trader
@@ -57,12 +51,7 @@ jobs:
           COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_TO: ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            python late_certainty_trader.py --dry-run --once
-          else
-            python late_certainty_trader.py --once
-          fi
+        run: python late_certainty_trader.py --once
 
       - name: Save state
         if: always()
