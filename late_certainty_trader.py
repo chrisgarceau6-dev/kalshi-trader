@@ -161,10 +161,10 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.3"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.4"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
-MAX_ASK_CENTS   = 99
+MAX_ASK_CENTS   = 95     # v5.4: capped at 95c; 96-99c is EV-negative after 7% fee
 PRIOR_MIN_CENTS = 80     # v5: relaxed prior gate from 92c to 80c — catches more +EV entries
 PRIOR_LOOKBACK  = 3      # 3 consecutive prior candles must have ask >= PRIOR_MIN_CENTS
 YES_ONLY        = False  # both sides eligible
@@ -179,15 +179,26 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
 MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
+# v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
+BLACKOUT_HOURS  = {15, 16, 17}
+
+# v5.4: top-tier series get 1.5x the base bet (BNB 96.28%, SOL 95.11%, HYPE 94.69%)
+SERIES_BET_MULTIPLIER = {
+    "KXBNB15M":  1.5,
+    "KXSOL15M":  1.5,
+    "KXHYPE15M": 1.5,
+}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
 # every scan cycle so scaling is fully automatic. Natural limit is Kalshi
 # order-book depth (~200-300 contracts); no-fill cancellation handles it.
 def compute_bet_dollars(balance):
-    """5% of balance, rounded to nearest $5. Min $20, no cap."""
-    scaled = round(balance * 0.05 / 5) * 5
-    return int(max(20, scaled))
+    """5% of balance, rounded to nearest $5. Floor $20, cap $200."""
+    if balance is None:
+        return 20
+    rounded = max(1, round(balance * 0.05 / 5)) * 5
+    return max(20, min(200, rounded))
 
 
 def compute_daily_loss_limit(bet_dollars):
@@ -300,6 +311,8 @@ def open_markets_near_close(series):
             close_dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
             secs = (close_dt - now).total_seconds()
         except Exception:
+            continue
+        if close_dt.hour in BLACKOUT_HOURS:
             continue
         if MIN_SECS_LEFT <= secs <= MAX_SECS_LEFT:
             m["_secs_left"] = secs
@@ -443,7 +456,9 @@ def try_trade(market, state, dry_run, balance=None):
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
         return
-    bet_dollars = compute_bet_dollars(balance)
+    base_bet    = compute_bet_dollars(balance)
+    multiplier  = SERIES_BET_MULTIPLIER.get(series, 1.0)
+    bet_dollars = max(20, round(base_bet * multiplier / 5) * 5)
     secs_left = market.get("_secs_left", 0)
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
     no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
