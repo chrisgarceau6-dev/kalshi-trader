@@ -8,7 +8,9 @@ You have full context. Just do what's asked. No need for the user to explain the
 - Chris Garceau — UMass freshman. Real money on Kalshi. Expects concise responses, no encouragement without evidence, no emojis.
 - Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/polymarket-monitor2`
 - Live entrypoint: `late_certainty_trader.py` on `origin/main`, GitHub Actions cron `.github/workflows/late_certainty.yml`
-- Cron: `10-14,25-29,40-44,55-59 * * * *` (fires 5 min before/after each 15-min boundary)
+- **Primary trigger:** self-dispatch — each run sleeps 60s then dispatches itself via `GH_DISPATCH_TOKEN` secret (~45 fires/hour)
+- **Backup cron:** `*/5 * * * *` (every 5 min) — fires if self-dispatch chain breaks
+- Repo is PUBLIC — unlimited GitHub Actions minutes
 
 ## Active Strategy — v5.4 late-certainty (deployed 2026-08-04, updated 2026-08-05)
 
@@ -20,7 +22,8 @@ You have full context. Just do what's asked. No need for the user to explain the
 - Per-asset 1.5x bet: BNB, SOL, HYPE (best WR series)
 - Limit order capped hard at MAX_ASK_CENTS — no 96c+ slippage fills
 - Preflight refetch (fresh ask check before every order placement)
-- workflow_dispatch removed — external cron-job.org trigger stopped
+- workflow_dispatch restored — needed for self-dispatch via GH_DISPATCH_TOKEN
+- Self-dispatch replaces cron-job.org (which paused after workflow_dispatch was temporarily removed)
 
 **Filters** (OOS-validated 2026-08-02):
 - H4: skip if underlying spot moved > 5 bps adverse in last 60s
@@ -44,7 +47,7 @@ You have full context. Just do what's asked. No need for the user to explain the
 
 **Backtest:** 96% WR, ~$95/day @ $50 bets, ~265 trades/day across 7+ series.
 
-**Live performance (Aug 1–5):** Balance $744 → $706 (1 HYPE loss at 1.5x, 23/24 = 95.8% WR, P&L +$0.85 since v5.4 reset).
+**Live performance (Aug 1–5):** Balance ~$708, 24/25 = 96.0% WR, P&L +$2.82 since v5.4 reset. Daily +$27 (Aug 5).
 
 ## Key files
 
