@@ -45,6 +45,9 @@ jobs:
           key: certainty-state-${{ github.run_id }}
           restore-keys: certainty-state-
 
+      - name: Syntax check
+        run: python -m py_compile late_certainty_trader.py
+
       - name: Run trader
         env:
           KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID }}
