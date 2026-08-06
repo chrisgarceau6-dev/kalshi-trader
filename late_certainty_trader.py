@@ -566,7 +566,6 @@ def try_trade(market, state, dry_run, balance=None):
     order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
     if code in (200, 201):
         log(f"    order accepted (id={order_id})")
-        import time
         time.sleep(3)  # wait for fills to propagate before cancelling
         # Cancel GTC FIRST so the fill picture is final when we query.
         if order_id:
