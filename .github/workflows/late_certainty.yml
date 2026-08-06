@@ -19,7 +19,8 @@ name: Late-Certainty Trader
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # backup; primary trigger is self-dispatch at end of each run
+    - cron: '*/5 * * * *'    # backup at 0, 5, 10, 15...
+    - cron: '2-59/5 * * * *' # backup at 2, 7, 12, 17... — staggered so gap is max ~2-3 min
   workflow_dispatch:
 
 concurrency:
