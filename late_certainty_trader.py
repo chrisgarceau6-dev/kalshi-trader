@@ -161,7 +161,7 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.5"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.5.1"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 95     # v5.4: capped at 95c; 96-99c is EV-negative after 7% fee
