@@ -345,26 +345,6 @@ def check_halts(state, balance):
         age = datetime.now(timezone.utc).timestamp() - ts
         if age < 3600:
             return True, f"{cl} consec losses, cooldown {60 - int(age/60)}min"
-    # Edge degradation — rolling WR below fee-adjusted break-even for actual avg entry price
-    recent = state.get("recent_results", [])
-    if len(recent) >= EDGE_DEGRADE_WINDOW:
-        window = recent[-EDGE_DEGRADE_WINDOW:]
-        # Support both old format (bool/int) and new format ([won, ask_cents])
-        wins, asks = [], []
-        for entry in window:
-            if isinstance(entry, (list, tuple)) and len(entry) == 2:
-                wins.append(entry[0])
-                asks.append(entry[1])
-            else:
-                wins.append(int(entry))
-                asks.append(92)  # fallback for pre-upgrade entries
-        rolling_wr = sum(wins) / len(wins)
-        avg_ask    = sum(asks) / len(asks)
-        dynamic_be = avg_ask / (avg_ask + (100 - avg_ask) * (1 - 0.07))
-        if rolling_wr < dynamic_be:
-            return True, (f"edge degradation: last {EDGE_DEGRADE_WINDOW} trades "
-                          f"WR={rolling_wr*100:.1f}% < BE={dynamic_be*100:.1f}% "
-                          f"(avg entry={avg_ask:.1f}c)")
     return False, ""
 
 
