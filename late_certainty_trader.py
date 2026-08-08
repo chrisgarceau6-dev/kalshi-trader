@@ -183,9 +183,10 @@ MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; tr
 BLACKOUT_HOURS  = {15, 16, 17}
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
-# IS backtest (60d, 8 series, $35 bets): 5-19c buckets +$4,512 (+3.4-4.0pp edge)
-# 20-25c was -EV; excluded. Fixed $20 bet until OOS data confirms edge.
-LONGSHOT_MIN_ASK   = 5
+# IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
+#   5-9c: -7.5pp, 10-14c: -7.9pp — both fail OOS. 15-19c: +0.8pp — marginal hold.
+#   Raised LONGSHOT_MIN_ASK 5→15 to cut the two failing buckets.
+LONGSHOT_MIN_ASK   = 15
 LONGSHOT_MAX_ASK   = 19
 LONGSHOT_PRIOR_K   = 3
 LONGSHOT_PRIOR_AVG = 60   # avg of prior K candles must be >= 60c (crash signal)
