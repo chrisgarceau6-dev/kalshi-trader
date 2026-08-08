@@ -65,6 +65,15 @@ jobs:
           path: certainty_state.json
           key: certainty-state-${{ github.run_id }}
 
+      - name: Upload live state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-state
+          path: certainty_state.json
+          retention-days: 1
+          overwrite: true
+
       - name: Schedule next run
         if: always()
         env:
