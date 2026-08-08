@@ -901,22 +901,10 @@ def run_once(dry_run=False):
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
 
-    for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
-        markets = open_markets_longshot(series)
-        for m in markets:
-            before = len(state.get("positions", {}))
-            try_longshot_trade(m, state, dry_run)
-            if len(state.get("positions", {})) > before:
-                n_tradeable += 1
-
     stats = state["stats"]
     wr = stats["wins"] / stats["trades"] if stats["trades"] else 0
     log(f"  scanned {n_scanned} near-close markets, new trades: {n_tradeable}")
     log(f"  cumulative: {stats['wins']}/{stats['trades']} = {wr*100:.1f}% WR  P&L=${stats['pnl']:+.2f}")
-    ls = state.get("longshot_stats", {})
-    if ls.get("trades", 0):
-        ls_wr = ls["wins"] / ls["trades"] * 100
-        log(f"  longshot: {ls['wins']}/{ls['trades']} = {ls_wr:.1f}% WR  P&L=${ls.get('pnl', 0):+.2f}")
 
     # Prune old settled positions to keep state file compact
     cleanup_state(state)
