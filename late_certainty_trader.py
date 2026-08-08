@@ -182,6 +182,17 @@ MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; tr
 # v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
 BLACKOUT_HOURS  = {15, 16, 17}
 
+# ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
+# IS backtest (60d, 8 series, $35 bets): 5-19c buckets +$4,512 (+3.4-4.0pp edge)
+# 20-25c was -EV; excluded. Fixed $20 bet until OOS data confirms edge.
+LONGSHOT_MIN_ASK   = 5
+LONGSHOT_MAX_ASK   = 19
+LONGSHOT_PRIOR_K   = 3
+LONGSHOT_PRIOR_AVG = 60   # avg of prior K candles must be >= 60c (crash signal)
+LONGSHOT_MIN_SECS  = 300
+LONGSHOT_MAX_SECS  = 900
+LONGSHOT_BET       = 20
+
 # v5.5: flat bet for all series — 1.5x multiplier removed (losses on 1.5x series disproportionate)
 SERIES_BET_MULTIPLIER = {}
 
@@ -322,6 +333,30 @@ def open_markets_near_close(series):
         if close_dt.hour in BLACKOUT_HOURS:
             continue
         if MIN_SECS_LEFT <= secs <= MAX_SECS_LEFT:
+            m["_secs_left"] = secs
+            out.append(m)
+    return out
+
+
+def open_markets_longshot(series):
+    """Return open markets for series with 300-900s remaining (longshot window)."""
+    code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": 10})
+    if code != 200:
+        return []
+    now = datetime.now(timezone.utc)
+    out = []
+    for m in r.get("markets", []):
+        ct = m.get("close_time", "")
+        if not ct:
+            continue
+        try:
+            close_dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+            secs = (close_dt - now).total_seconds()
+        except Exception:
+            continue
+        if close_dt.hour in BLACKOUT_HOURS:
+            continue
+        if LONGSHOT_MIN_SECS <= secs <= LONGSHOT_MAX_SECS:
             m["_secs_left"] = secs
             out.append(m)
     return out
@@ -631,6 +666,111 @@ def try_trade(market, state, dry_run, balance=None):
         log(f"    order FAILED — HTTP {code}: {str(resp)[:200]}")
 
 
+def try_longshot_trade(market, state, dry_run):
+    ticker = market.get("ticker", "")
+    series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
+    if ticker in state.get("positions", {}):
+        return
+    open_cnt = sum(1 for p in state.get("positions", {}).values() if not p.get("settled"))
+    if open_cnt >= MAX_CONCURRENT_POSITIONS:
+        return
+
+    secs_left = market.get("_secs_left", 0)
+    yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
+    no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
+
+    side, ask_cents = None, None
+    if LONGSHOT_MIN_ASK <= yes_ask <= LONGSHOT_MAX_ASK:
+        side, ask_cents = "yes", yes_ask
+    elif LONGSHOT_MIN_ASK <= no_ask <= LONGSHOT_MAX_ASK:
+        side, ask_cents = "no", no_ask
+    if side is None:
+        return
+
+    prior_asks = _prior_k_candle_asks(ticker, series, side, LONGSHOT_PRIOR_K)
+    if prior_asks is None or len(prior_asks) < LONGSHOT_PRIOR_K:
+        return
+    prior_avg = sum(prior_asks) / len(prior_asks)
+    if prior_avg < LONGSHOT_PRIOR_AVG:
+        return
+
+    fresh_ask = _fresh_ask_cents(ticker, side)
+    if fresh_ask is None or not (LONGSHOT_MIN_ASK <= fresh_ask <= LONGSHOT_MAX_ASK):
+        return
+
+    limit_cents = min(LONGSHOT_MAX_ASK, fresh_ask + LIMIT_BUFFER)
+    contracts   = max(1, int(LONGSHOT_BET * 100 / fresh_ask) + 1)
+    est_cost    = contracts * fresh_ask / 100
+    est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
+
+    log(f"  LONGSHOT: {ticker}  {secs_left:.0f}s left  {side.upper()} "
+        f"scan={ask_cents}c fresh={fresh_ask}c prior_avg={prior_avg:.0f}c  "
+        f"limit={limit_cents}c  {contracts} contracts  bet=${LONGSHOT_BET}  "
+        f"est.win=+${est_profit:.2f}")
+
+    if dry_run:
+        log(f"    [dry-run] skipped")
+        return
+
+    if not os.environ.get("KALSHI_API_KEY_ID"):
+        return
+
+    code, resp = place_order(
+        ticker, side, contracts,
+        yes_price_cents=limit_cents if side == "yes" else None,
+        no_price_cents=limit_cents  if side == "no"  else None,
+    )
+    order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
+    if code in (200, 201):
+        log(f"    order accepted (id={order_id})")
+        time.sleep(3)
+        if order_id:
+            c_code, _ = cancel_order(order_id)
+            log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
+        time.sleep(0.5)
+        actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        if actual_contracts == 0:
+            time.sleep(1.5)
+            actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        if actual_contracts == 0:
+            log(f"    no fill")
+            return
+        avg_price_cents = int(round(100 * actual_cost / actual_contracts))
+        log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, avg={avg_price_cents}c")
+        state["positions"][ticker] = {
+            "side":         side,
+            "limit_cents":  limit_cents,
+            "ask_at_entry": fresh_ask,
+            "ask_at_scan":  ask_cents,
+            "outside_safe_zone": False,
+            "contracts":    actual_contracts,
+            "cost":         actual_cost,
+            "opened_at":    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "settled":      False,
+            "strategy":     "longshot",
+        }
+        ls = state.setdefault("longshot_stats", {"trades": 0, "wins": 0, "pnl": 0.0})
+        ls["trades"] += 1
+        today = datetime.now(timezone.utc).date().isoformat()
+        daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
+        if daily.get("date") != today:
+            daily["date"] = today
+            daily["pnl"]  = 0.0
+            daily["trades_today"] = 0
+        daily["trades_today"] = daily.get("trades_today", 0) + 1
+        save_state(state)
+        send_email(
+            f"[Kalshi-C] LONGSHOT {ticker} {side.upper()} @ {limit_cents}c",
+            f"[Crash-reversal longshot — OOS trial, ${LONGSHOT_BET} fixed]\n"
+            f"Bought {actual_contracts} {side.upper()} @ {limit_cents}c on {ticker}\n"
+            f"Prior avg: {prior_avg:.0f}c → crashed to {fresh_ask}c\n"
+            f"Cost: ${actual_cost:.2f}  Est. win: +${est_profit:.2f}\n"
+            f"Seconds left: {secs_left:.0f}\n",
+        )
+    else:
+        log(f"    order FAILED — HTTP {code}: {str(resp)[:200]}")
+
+
 # ── outcome tracking ───────────────────────────────────────────────────────────
 
 def check_outcomes(state, balance):
@@ -663,46 +803,68 @@ def check_outcomes(state, balance):
         pos["settled_date"] = today
 
         daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
-        state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
-        if won:
-            state["stats"]["wins"] = state["stats"].get("wins", 0) + 1
-            state["consec_losses"] = 0
-        else:
-            state["consec_losses"] = state.get("consec_losses", 0) + 1
-            state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
-
-        recent = state.setdefault("recent_results", [])
-        recent.append([int(won), pos.get("limit_cents", 92)])
-        state["recent_results"] = recent[-100:]  # keep last 100
-
-        save_state(state)
-        wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
-        log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
-            f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
-
         d_pnl  = daily_pnl(state)
-        c_pnl  = state['stats']['pnl']
         d_sign = '+' if d_pnl >= 0 else '-'
-        c_sign = '+' if c_pnl >= 0 else '-'
-        if won:
-            send_email(
-                f"[Kalshi-C] WIN +${pnl:.2f} — {ticker}",
-                f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
-                f"Result: {result.upper()} → WIN\n"
-                f"Profit: +${pnl:.2f} (after 7% fee)\n"
-                f"Today: {d_sign}${abs(d_pnl):.2f}\n"
-                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
-            )
+
+        if pos.get("strategy") == "longshot":
+            ls = state.setdefault("longshot_stats", {"trades": 0, "wins": 0, "pnl": 0.0})
+            ls["pnl"] = round(ls.get("pnl", 0.0) + pnl, 2)
+            if won:
+                ls["wins"] = ls.get("wins", 0) + 1
+                state["consec_losses"] = 0
+            else:
+                state["consec_losses"] = state.get("consec_losses", 0) + 1
+                state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
+            ls_wr = ls["wins"] / ls["trades"] * 100 if ls["trades"] else 0
+            ls_sign = '+' if ls["pnl"] >= 0 else '-'
+            save_state(state)
+            log(f"  SETTLED(LS) {ticker} result={result.upper()}  side={pos['side'].upper()}  "
+                f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  LS WR={ls_wr:.1f}%")
+            subj = f"[Kalshi-C] LONGSHOT {'WIN' if won else 'LOSS'} {'+' if won else '-'}${abs(pnl):.2f} — {ticker}"
+            body = (f"[Crash-reversal OOS trial]\n"
+                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
+                    f"Result: {result.upper()} → {'WIN' if won else 'LOSS'}\n"
+                    f"P&L: {'+' if won else '-'}${abs(pnl):.2f}\n"
+                    f"Longshot: {ls['wins']}/{ls['trades']} = {ls_wr:.1f}% WR  "
+                    f"P&L={ls_sign}${abs(ls['pnl']):.2f}\n"
+                    f"Today: {d_sign}${abs(d_pnl):.2f}\n")
+            send_email(subj, body)
         else:
-            send_email(
-                f"[Kalshi-C] LOSS -${abs(pnl):.2f} — {ticker}",
-                f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
-                f"Result: {result.upper()} → LOSS\n"
-                f"Loss: -${abs(pnl):.2f}\n"
-                f"Consec losses: {state['consec_losses']}\n"
-                f"Today: {d_sign}${abs(d_pnl):.2f}\n"
-                f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
-            )
+            state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
+            if won:
+                state["stats"]["wins"] = state["stats"].get("wins", 0) + 1
+                state["consec_losses"] = 0
+            else:
+                state["consec_losses"] = state.get("consec_losses", 0) + 1
+                state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
+            recent = state.setdefault("recent_results", [])
+            recent.append([int(won), pos.get("limit_cents", 92)])
+            state["recent_results"] = recent[-100:]
+            save_state(state)
+            wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
+            c_pnl  = state['stats']['pnl']
+            c_sign = '+' if c_pnl >= 0 else '-'
+            log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
+                f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
+            if won:
+                send_email(
+                    f"[Kalshi-C] WIN +${pnl:.2f} — {ticker}",
+                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
+                    f"Result: {result.upper()} → WIN\n"
+                    f"Profit: +${pnl:.2f} (after 7% fee)\n"
+                    f"Today: {d_sign}${abs(d_pnl):.2f}\n"
+                    f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
+                )
+            else:
+                send_email(
+                    f"[Kalshi-C] LOSS -${abs(pnl):.2f} — {ticker}",
+                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
+                    f"Result: {result.upper()} → LOSS\n"
+                    f"Loss: -${abs(pnl):.2f}\n"
+                    f"Consec losses: {state['consec_losses']}\n"
+                    f"Today: {d_sign}${abs(d_pnl):.2f}\n"
+                    f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
+                )
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -738,10 +900,22 @@ def run_once(dry_run=False):
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
 
+    for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
+        markets = open_markets_longshot(series)
+        for m in markets:
+            before = len(state.get("positions", {}))
+            try_longshot_trade(m, state, dry_run)
+            if len(state.get("positions", {})) > before:
+                n_tradeable += 1
+
     stats = state["stats"]
     wr = stats["wins"] / stats["trades"] if stats["trades"] else 0
     log(f"  scanned {n_scanned} near-close markets, new trades: {n_tradeable}")
     log(f"  cumulative: {stats['wins']}/{stats['trades']} = {wr*100:.1f}% WR  P&L=${stats['pnl']:+.2f}")
+    ls = state.get("longshot_stats", {})
+    if ls.get("trades", 0):
+        ls_wr = ls["wins"] / ls["trades"] * 100
+        log(f"  longshot: {ls['wins']}/{ls['trades']} = {ls_wr:.1f}% WR  P&L=${ls.get('pnl', 0):+.2f}")
 
     # Prune old settled positions to keep state file compact
     cleanup_state(state)
