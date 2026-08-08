@@ -190,11 +190,11 @@ SERIES_BET_MULTIPLIER = {}
 # every scan cycle so scaling is fully automatic. Natural limit is Kalshi
 # order-book depth (~200-300 contracts); no-fill cancellation handles it.
 def compute_bet_dollars(balance):
-    """5% of balance, rounded to nearest $5. Floor $20, cap $200."""
+    """5% of balance, rounded to nearest $5. Floor $20, no cap."""
     if balance is None:
         return 20
     rounded = max(1, round(balance * 0.05 / 5)) * 5
-    return max(20, min(200, rounded))
+    return max(20, rounded)
 
 
 def compute_daily_loss_limit(bet_dollars):
