@@ -191,7 +191,7 @@ LONGSHOT_PRIOR_K   = 3
 LONGSHOT_PRIOR_AVG = 60   # avg of prior K candles must be >= 60c (crash signal)
 LONGSHOT_MIN_SECS  = 300
 LONGSHOT_MAX_SECS  = 900
-LONGSHOT_BET       = 20
+LONGSHOT_BET       = 5
 
 # v5.5: flat bet for all series — 1.5x multiplier removed (losses on 1.5x series disproportionate)
 SERIES_BET_MULTIPLIER = {}
