@@ -192,14 +192,14 @@ SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
-# every scan cycle so scaling is fully automatic. Natural limit is Kalshi
-# order-book depth (~200-300 contracts); no-fill cancellation handles it.
+# Flat bet: $55 targets ~$40/day at ~68 trades/day across 6 series.
+# Math: live EV/trade ≈ $0.354 at $35 bet → $0.354/$35 = 1.01¢/$ bet;
+# $40/day ÷ 68 trades/day ÷ 0.01011 $/$ ≈ $58 → rounded to $55.
+FLAT_BET_DOLLARS = 55
+
+
 def compute_bet_dollars(balance):
-    """5% of balance, rounded to nearest $5. Floor $20, no cap."""
-    if balance is None:
-        return 20
-    rounded = max(1, round(balance * 0.05 / 5)) * 5
-    return max(20, rounded)
+    return FLAT_BET_DOLLARS
 
 
 def compute_daily_loss_limit(bet_dollars):
@@ -489,9 +489,7 @@ def try_trade(market, state, dry_run, balance=None):
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
         return
-    base_bet    = compute_bet_dollars(balance)
-    multiplier  = SERIES_BET_MULTIPLIER.get(series, 1.0)
-    bet_dollars = max(20, round(base_bet * multiplier / 5) * 5)
+    bet_dollars = compute_bet_dollars(balance)
     secs_left = market.get("_secs_left", 0)
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
     no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
@@ -891,7 +889,7 @@ def run_once(dry_run=False):
 
     bet = compute_bet_dollars(balance)
     dll = compute_daily_loss_limit(bet)
-    log(f"  bet_size=${bet} (balance=${balance:.2f})  daily_loss_limit=${dll}")
+    log(f"  bet_size=${bet} (flat)  balance=${balance:.2f}  daily_loss_limit=${dll}")
     n_scanned, n_tradeable = 0, 0
     for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
