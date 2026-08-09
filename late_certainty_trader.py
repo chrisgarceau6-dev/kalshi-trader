@@ -150,18 +150,14 @@ SERIES_LIST     = [
     # 15m crypto series where v4 filter (ask[95,99] prior_k=3 pmin=92 both)
     # showed +EV in 60-day backtest:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
-    "KXHYPE15M",  # added — 98.75% WR, +$442/60d @ $50 in v4 backtest
-    # Added 2026-08-02: OOS-validated with H4+near-strike filters. Raw v5 loses
-    # money on NEAR (WR 92% but tail risk); filters flip it to +EV.
-    # Walk-forward (14d, train Jul 19-25 / test Jul 25-Aug 1):
-    #   Train filtered: WR 96.0%, +$0.87.  Test filtered: WR 97.8%, +$7.79.
-    "KXNEAR15M",
     # Explicitly EXCLUDED:
-    # - KXZEC15M — filters mitigate but OOS test half still -$3.88 (WR 93.9%)
+    # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → EV-negative (2026-08-09)
+    # - KXNEAR15M — live break-even WR 95.5% (avg loss $30), actual 92% → EV-negative (2026-08-09)
+    # - KXZEC15M  — OOS test still -$3.88 (WR 93.9%)
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.5.1"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.6"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 95     # v5.4: capped at 95c; 96-99c is EV-negative after 7% fee
@@ -227,9 +223,9 @@ def daily_pnl(state):
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 300  # halt if balance drops below this
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
-MAX_CONCURRENT_POSITIONS = 4  # cap open positions to limit correlated-loss exposure
+MAX_CONCURRENT_POSITIONS = 6  # cap open positions to limit correlated-loss exposure
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
-EDGE_DEGRADE_THRESHOLD  = 0.90  # halt if rolling WR drops below this (3σ below 96% baseline)
+EDGE_DEGRADE_THRESHOLD  = 0.88  # halt if rolling WR drops below this; lowered from 0.90 to reduce false halts
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 
 
