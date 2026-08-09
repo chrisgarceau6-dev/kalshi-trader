@@ -71,11 +71,8 @@ from kalshi_auth import get as _get, place_order, cancel_order
 COINBASE_PAIR = {
     "KXBTC15M": "BTC-USD", "KXETH15M": "ETH-USD", "KXSOL15M": "SOL-USD",
     "KXDOGE15M": "DOGE-USD", "KXBNB15M": "BNB-USD", "KXXRP15M": "XRP-USD",
-    "KXNEAR15M": "NEAR-USD",
 }
-HYPERLIQUID_PAIR = {
-    "KXHYPE15M": "HYPE",  # HYPE trades on Hyperliquid DEX — use their native API
-}
+HYPERLIQUID_PAIR = {}
 H4_ADVERSE_BPS = 5      # skip if 60s spot moved > 5bps against side
 NEAR_STRIKE_BPS = 10    # skip if |spot - strike| / spot < 10bps
 
@@ -377,6 +374,14 @@ def check_halts(state, balance):
         age = datetime.now(timezone.utc).timestamp() - ts
         if age < 3600:
             return True, f"{cl} consec losses, cooldown {60 - int(age/60)}min"
+    # Rolling WR degradation check
+    recent = state.get("recent_results", [])
+    if len(recent) >= EDGE_DEGRADE_WINDOW:
+        window = recent[-EDGE_DEGRADE_WINDOW:]
+        rolling_wr = sum(r[0] for r in window) / EDGE_DEGRADE_WINDOW
+        if rolling_wr < EDGE_DEGRADE_THRESHOLD:
+            return True, (f"edge degrade: rolling {EDGE_DEGRADE_WINDOW}-trade WR "
+                          f"{rolling_wr*100:.1f}% < {EDGE_DEGRADE_THRESHOLD*100:.0f}% threshold")
     return False, ""
 
 
@@ -836,7 +841,7 @@ def check_outcomes(state, balance):
                 state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
             recent = state.setdefault("recent_results", [])
             recent.append([int(won), pos.get("limit_cents", 92)])
-            state["recent_results"] = recent[-100:]
+            state["recent_results"] = recent[-EDGE_DEGRADE_WINDOW * 2:]
             save_state(state)
             wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
             c_pnl  = state['stats']['pnl']
