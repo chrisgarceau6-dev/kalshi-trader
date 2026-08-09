@@ -192,10 +192,10 @@ SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
-# Flat bet: $55 targets ~$40/day at ~68 trades/day across 6 series.
-# Math: live EV/trade ≈ $0.354 at $35 bet → $0.354/$35 = 1.01¢/$ bet;
-# $40/day ÷ 68 trades/day ÷ 0.01011 $/$ ≈ $58 → rounded to $55.
-FLAT_BET_DOLLARS = 55
+# Flat bet: $45 targets ~$31/day at ~68 trades/day across 6 series.
+# Math: live EV/trade ≈ $0.354 at $35 bet → 1.01¢/$ bet;
+# $45 × 68 × 0.01011 ≈ $31/day expected.
+FLAT_BET_DOLLARS = 45
 
 
 def compute_bet_dollars(balance):
