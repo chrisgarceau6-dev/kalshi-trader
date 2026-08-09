@@ -400,6 +400,14 @@ def cleanup_state(state):
 
 # ── order placement ───────────────────────────────────────────────────────────
 
+def fetch_live_position_tickers():
+    """Return set of tickers with unsettled Kalshi positions. One call per run."""
+    code, r = kalshi_get("/portfolio/positions", {"settlement_status": "unsettled", "limit": 200})
+    if code != 200:
+        return set()
+    return {p.get("ticker") for p in r.get("market_positions", []) if p.get("ticker")}
+
+
 def query_actual_fill(ticker, side, order_id=None):
     """Query fills for a specific order_id. Falls back to ticker+side if no order_id."""
     code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 50})
@@ -481,11 +489,14 @@ def _prior_k_candle_asks(ticker, series, side, k):
     return out
 
 
-def try_trade(market, state, dry_run, balance=None):
+def try_trade(market, state, dry_run, balance=None, live_tickers=None):
     ticker = market.get("ticker", "")
     series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
     if ticker in state.get("positions", {}):
         return  # already entered this market
+    if live_tickers and ticker in live_tickers:
+        log(f"  SKIP {ticker} — live Kalshi position exists (state was stale)")
+        return
     open_cnt = sum(1 for p in state.get("positions", {}).values() if not p.get("settled"))
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
@@ -891,13 +902,14 @@ def run_once(dry_run=False):
     bet = compute_bet_dollars(balance)
     dll = compute_daily_loss_limit(bet)
     log(f"  bet_size=${bet} (flat)  balance=${balance:.2f}  daily_loss_limit=${dll}")
+    live_tickers = fetch_live_position_tickers()
     n_scanned, n_tradeable = 0, 0
     for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
             before = len(state.get("positions", {}))
-            try_trade(m, state, dry_run, balance=balance)
+            try_trade(m, state, dry_run, balance=balance, live_tickers=live_tickers)
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
 
