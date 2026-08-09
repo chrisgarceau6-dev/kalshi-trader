@@ -400,8 +400,8 @@ def cleanup_state(state):
 
 # ── order placement ───────────────────────────────────────────────────────────
 
-def query_actual_fill(ticker, side):
-    """Query fills for ticker/side. Caller controls timing — no sleep here."""
+def query_actual_fill(ticker, side, order_id=None):
+    """Query fills for a specific order_id. Falls back to ticker+side if no order_id."""
     code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 50})
     if code != 200:
         return 0, 0
@@ -410,6 +410,7 @@ def query_actual_fill(ticker, side):
     for f in r.get("fills", []):
         if f.get("ticker") != ticker: continue
         if f.get("outcome_side") != side: continue
+        if order_id and f.get("order_id") != order_id: continue
         try:
             ct = float(f.get("count_fp", "0"))
         except Exception:
@@ -600,10 +601,10 @@ def try_trade(market, state, dry_run, balance=None):
             c_code, _ = cancel_order(order_id)
             log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
         time.sleep(0.5)  # brief settle after cancel
-        actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             time.sleep(1.5)
-            actual_contracts, actual_cost = query_actual_fill(ticker, side)
+            actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
         outside_safe_zone = False
         if actual_contracts > 0:
             avg_price_cents = int(round(100 * actual_cost / actual_contracts))
@@ -728,10 +729,10 @@ def try_longshot_trade(market, state, dry_run):
             c_code, _ = cancel_order(order_id)
             log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
         time.sleep(0.5)
-        actual_contracts, actual_cost = query_actual_fill(ticker, side)
+        actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             time.sleep(1.5)
-            actual_contracts, actual_cost = query_actual_fill(ticker, side)
+            actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             log(f"    no fill")
             return
