@@ -173,7 +173,7 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 MIN_SECS_LEFT   = 150    # ensure at least 2min left after order lands
 MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
 # v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
-BLACKOUT_HOURS  = {15, 16, 17}
+BLACKOUT_HOURS  = {15, 17}  # UTC 16 (12-1pm ET) is +EV in backtest; only 15 and 17 are -EV
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
 # IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
