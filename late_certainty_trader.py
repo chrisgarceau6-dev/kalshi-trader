@@ -154,7 +154,7 @@ SERIES_LIST     = [
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
 
-STRATEGY_VERSION = "v5.6"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.7"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -207,14 +207,22 @@ def compute_daily_loss_limit(bet_dollars):
        when scaled up. Allows ~10-15 losing bets/day of net loss before halt."""
     return max(30, bet_dollars * 8)
 
-def daily_pnl(state):
-    """Compute today's P&L from settled positions (UTC date).
-    Position-based so it survives cache loss — not a running counter."""
-    today = datetime.now(timezone.utc).date().isoformat()
+ROLLING_PNL_SECONDS = 86400  # trailing 24h window avoids double-limit at midnight UTC
+
+def daily_pnl(state, now_ts=None):
+    """Realized P&L over the trailing 24 hours.
+    Uses settled_ts when available; falls back to settled_date == today for
+    legacy positions recorded before this field existed."""
+    now_ts = now_ts or datetime.now(timezone.utc).timestamp()
+    cutoff = now_ts - ROLLING_PNL_SECONDS
+    today  = datetime.fromtimestamp(now_ts, tz=timezone.utc).date().isoformat()
     return round(sum(
         p.get("pnl", 0)
         for p in state.get("positions", {}).values()
-        if p.get("settled") and p.get("settled_date") == today
+        if p.get("settled") and (
+            float(p["settled_ts"]) >= cutoff
+            if p.get("settled_ts") else p.get("settled_date") == today
+        )
     ), 2)
 
 # Kill switches (some now dynamic)
@@ -425,29 +433,34 @@ def fetch_live_position_tickers():
 
 
 def query_actual_fill(ticker, side, order_id=None):
-    """Query fills for a specific order_id. Falls back to ticker+side if no order_id."""
-    code, r = kalshi_get("/portfolio/fills", {"ticker": ticker, "limit": 50})
+    """Return (contracts, cost, fees) for this order.
+    Passes order_id to the API when available; client-side filter as belt-and-suspenders."""
+    params = {"ticker": ticker, "limit": 1000}
+    if order_id:
+        params["order_id"] = order_id
+    code, r = kalshi_get("/portfolio/fills", params)
     if code != 200:
-        return 0, 0
-    total_ct   = 0.0
-    total_cost = 0.0
+        return 0.0, 0.0, 0.0
+    total_ct = total_cost = total_fee = 0.0
     for f in r.get("fills", []):
         if f.get("ticker") != ticker: continue
         if f.get("outcome_side") != side: continue
         if order_id and f.get("order_id") != order_id: continue
         try:
-            ct = float(f.get("count_fp", "0"))
+            ct = float(f.get("count_fp", "0") or 0)
         except Exception:
             continue
         if ct <= 0: continue
-        price_str = f.get("yes_price_dollars") if side == "yes" else f.get("no_price_dollars")
+        price_field = "yes_price_dollars" if side == "yes" else "no_price_dollars"
         try:
-            price = float(price_str or 0)
+            price = float(f.get(price_field, "0") or 0)
+            fee   = float(f.get("fee_cost", "0") or 0)
         except Exception:
             continue
         total_ct   += ct
         total_cost += ct * price
-    return total_ct, total_cost
+        total_fee  += fee
+    return total_ct, total_cost, total_fee
 
 
 def _fresh_ask_cents(ticker, side):
@@ -628,10 +641,10 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
             c_code, _ = cancel_order(order_id)
             log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
         time.sleep(0.5)  # brief settle after cancel
-        actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
+        actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             time.sleep(1.5)
-            actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
+            actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
         outside_safe_zone = False
         if actual_contracts > 0:
             avg_price_cents = int(round(100 * actual_cost / actual_contracts))
@@ -640,9 +653,10 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
                 log(f"    PARTIAL FILL: {actual_contracts}/{contracts_intended} contracts "
                     f"(${actual_cost:.2f} vs ${est_cost:.2f} expected)")
             log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, "
-                f"avg={avg_price_cents}c")
+                f"avg={avg_price_cents}c  fee=${actual_fee:.4f}")
             final_contracts = actual_contracts
             final_cost      = actual_cost
+            final_fee       = actual_fee
             # POST-FILL SAFETY — even with preflight, ~200ms race can slip a
             # bad fill through (e.g., stale resting ask well below our limit
             # gets consumed). Alert loudly so user can manually exit if needed.
@@ -670,6 +684,8 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
             "outside_safe_zone": outside_safe_zone,
             "contracts":   final_contracts,
             "cost":        final_cost,
+            "fee_cost":    final_fee,
+            "order_id":    order_id,
             "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":     False,
         }
@@ -749,15 +765,15 @@ def try_longshot_trade(market, state, dry_run):
             c_code, _ = cancel_order(order_id)
             log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
         time.sleep(0.5)
-        actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
+        actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             time.sleep(1.5)
-            actual_contracts, actual_cost = query_actual_fill(ticker, side, order_id)
+            actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
         if actual_contracts == 0:
             log(f"    no fill")
             return
         avg_price_cents = int(round(100 * actual_cost / actual_contracts))
-        log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, avg={avg_price_cents}c")
+        log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, avg={avg_price_cents}c  fee=${actual_fee:.4f}")
         state["positions"][ticker] = {
             "side":         side,
             "limit_cents":  limit_cents,
@@ -766,6 +782,8 @@ def try_longshot_trade(market, state, dry_run):
             "outside_safe_zone": False,
             "contracts":    actual_contracts,
             "cost":         actual_cost,
+            "fee_cost":     actual_fee,
+            "order_id":     order_id,
             "opened_at":    datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":      False,
             "strategy":     "longshot",
@@ -805,15 +823,22 @@ def check_outcomes(state, balance):
         if status not in ("settled", "finalized") or result not in ("yes", "no"):
             continue
 
-        won  = (result == pos["side"])
-        payout = pos["contracts"] if won else 0
-        fee_on_profit = 0.07 * max(0, payout - pos["cost"])
-        pnl = round(payout - pos["cost"] - fee_on_profit, 2)
+        won    = (result == pos["side"])
+        payout = float(pos["contracts"]) if won else 0.0
+        cost   = float(pos["cost"])
+        if "fee_cost" in pos:
+            fee = float(pos["fee_cost"])
+        else:
+            contracts  = float(pos["contracts"])
+            avg_price  = cost / contracts if contracts else 0
+            fee = round(0.07 * contracts * avg_price * (1 - avg_price), 4)
+        pnl = round(payout - cost - fee, 2)
 
         pos["settled"]      = True
+        pos["settled_ts"]   = datetime.now(timezone.utc).timestamp()
         pos["result"]       = result
         pos["pnl"]          = pnl
-        pos["settled_date"] = today
+        pos["settled_date"] = today  # retained for backward compat
 
         daily["pnl"] = round(daily.get("pnl", 0.0) + pnl, 2)
         d_pnl  = daily_pnl(state)
