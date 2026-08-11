@@ -667,13 +667,6 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
             daily["trades_today"] = 0
         daily["trades_today"] = daily.get("trades_today", 0) + 1
         save_state(state)
-        send_email(
-            f"[Kalshi-C] Trade {ticker} {side.upper()} @ {limit_cents}c",
-            f"Bought {final_contracts} {side.upper()} contracts @ {limit_cents}c on {ticker}\n"
-            f"Cost: ${final_cost:.2f}\n"
-            f"Expected win: +${final_contracts * (100 - limit_cents) / 100 * 0.93:.2f}\n"
-            f"Seconds left: {secs_left:.0f}\n",
-        )
     else:
         log(f"    order FAILED — HTTP {code}: {str(resp)[:200]}")
 
@@ -771,14 +764,6 @@ def try_longshot_trade(market, state, dry_run):
             daily["trades_today"] = 0
         daily["trades_today"] = daily.get("trades_today", 0) + 1
         save_state(state)
-        send_email(
-            f"[Kalshi-C] LONGSHOT {ticker} {side.upper()} @ {limit_cents}c",
-            f"[Crash-reversal longshot — OOS trial, ${LONGSHOT_BET} fixed]\n"
-            f"Bought {actual_contracts} {side.upper()} @ {limit_cents}c on {ticker}\n"
-            f"Prior avg: {prior_avg:.0f}c → crashed to {fresh_ask}c\n"
-            f"Cost: ${actual_cost:.2f}  Est. win: +${est_profit:.2f}\n"
-            f"Seconds left: {secs_left:.0f}\n",
-        )
     else:
         log(f"    order FAILED — HTTP {code}: {str(resp)[:200]}")
 
@@ -828,19 +813,9 @@ def check_outcomes(state, balance):
                 state["consec_losses"] = state.get("consec_losses", 0) + 1
                 state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
             ls_wr = ls["wins"] / ls["trades"] * 100 if ls["trades"] else 0
-            ls_sign = '+' if ls["pnl"] >= 0 else '-'
             save_state(state)
             log(f"  SETTLED(LS) {ticker} result={result.upper()}  side={pos['side'].upper()}  "
                 f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  LS WR={ls_wr:.1f}%")
-            subj = f"[Kalshi-C] LONGSHOT {'WIN' if won else 'LOSS'} {'+' if won else '-'}${abs(pnl):.2f} — {ticker}"
-            body = (f"[Crash-reversal OOS trial]\n"
-                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
-                    f"Result: {result.upper()} → {'WIN' if won else 'LOSS'}\n"
-                    f"P&L: {'+' if won else '-'}${abs(pnl):.2f}\n"
-                    f"Longshot: {ls['wins']}/{ls['trades']} = {ls_wr:.1f}% WR  "
-                    f"P&L={ls_sign}${abs(ls['pnl']):.2f}\n"
-                    f"Today: {d_sign}${abs(d_pnl):.2f}\n")
-            send_email(subj, body)
         else:
             state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
             if won:
@@ -854,29 +829,8 @@ def check_outcomes(state, balance):
             state["recent_results"] = recent[-EDGE_DEGRADE_WINDOW * 2:]
             save_state(state)
             wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
-            c_pnl  = state['stats']['pnl']
-            c_sign = '+' if c_pnl >= 0 else '-'
             log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
                 f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
-            if won:
-                send_email(
-                    f"[Kalshi-C] WIN +${pnl:.2f} — {ticker}",
-                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
-                    f"Result: {result.upper()} → WIN\n"
-                    f"Profit: +${pnl:.2f} (after 7% fee)\n"
-                    f"Today: {d_sign}${abs(d_pnl):.2f}\n"
-                    f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
-                )
-            else:
-                send_email(
-                    f"[Kalshi-C] LOSS -${abs(pnl):.2f} — {ticker}",
-                    f"Bought {pos['contracts']} {pos['side'].upper()} @ {pos['limit_cents']}c\n"
-                    f"Result: {result.upper()} → LOSS\n"
-                    f"Loss: -${abs(pnl):.2f}\n"
-                    f"Consec losses: {state['consec_losses']}\n"
-                    f"Today: {d_sign}${abs(d_pnl):.2f}\n"
-                    f"Cumulative: {state['stats']['wins']}/{state['stats']['trades']} = {wr*100:.1f}% WR  P&L={c_sign}${abs(c_pnl):.2f}\n",
-                )
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
