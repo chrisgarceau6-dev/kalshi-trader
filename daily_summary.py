@@ -110,11 +110,11 @@ def series_from_ticker(ticker):
     return ticker.split("-")[0]
 
 
-def main():
+def main(hours=24):
     _ensure_key()
     now    = datetime.now(timezone.utc)
     max_ts = int(now.timestamp())
-    min_ts = max_ts - 86400
+    min_ts = max_ts - hours * 3600
 
     window_start = datetime.fromtimestamp(min_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     window_end   = now.strftime("%Y-%m-%d %H:%M UTC")
@@ -222,4 +222,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--hours", type=int, default=24)
+    a = p.parse_args()
+    main(a.hours)

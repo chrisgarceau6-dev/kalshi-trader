@@ -3,7 +3,12 @@ name: Daily P&L Summary
 on:
   schedule:
     - cron: "0 2 * * *"   # 10pm ET (EDT, UTC-4) — adjust to "0 3 * * *" in winter
-  workflow_dispatch:       # allow manual trigger
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "Hours to look back (default 24)"
+        required: false
+        default: "24"
 
 jobs:
   summarize:
@@ -25,4 +30,4 @@ jobs:
           COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
-        run: python3 daily_summary.py
+        run: python3 daily_summary.py --hours ${{ inputs.hours || '24' }}
