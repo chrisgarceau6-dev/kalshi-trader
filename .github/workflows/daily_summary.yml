@@ -1,0 +1,34 @@
+name: Daily P&L Summary
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 10pm ET (EDT, UTC-4) — adjust to "0 3 * * *" in winter
+  workflow_dispatch:       # allow manual trigger
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests cryptography
+
+      - name: Write private key
+        env:
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.kalshi
+          echo "$KALSHI_PRIVATE_KEY" > ~/.kalshi/private_key.pem
+
+      - name: Run daily summary
+        env:
+          KALSHI_API_KEY_ID:    ${{ secrets.KALSHI_API_KEY_ID }}
+          COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL }}
+          COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL }}
+          COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
+        run: python3 daily_summary.py
