@@ -170,10 +170,10 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
-MIN_SECS_LEFT   = 240    # 150-239s bucket is -EV (-$0.14/trade); 240s+ is consistently +EV
+MIN_SECS_LEFT   = 150    # 150-239s bucket CI is -$1.86 to +$1.57 — not confirmed negative
 MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
 # v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
-BLACKOUT_HOURS  = {8, 15, 17, 22}  # UTC 08 (4am ET): -$1.23/trade; UTC 22 (6pm ET): -$1.76/trade
+BLACKOUT_HOURS  = {15, 17}  # UTC 08/22 reverted — 125/124 trades each, wide CI, multiple-comparison risk
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
 # IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
