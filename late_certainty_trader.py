@@ -222,7 +222,8 @@ STOP_BALANCE            = 300  # halt if balance drops below this
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
 MAX_CONCURRENT_POSITIONS = 6  # cap open positions to limit correlated-loss exposure
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
-EDGE_DEGRADE_THRESHOLD  = 0.88  # halt if rolling WR drops below this; lowered from 0.90 to reduce false halts
+EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
+EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 
 
@@ -374,14 +375,29 @@ def check_halts(state, balance):
         age = datetime.now(timezone.utc).timestamp() - ts
         if age < 3600:
             return True, f"{cl} consec losses, cooldown {60 - int(age/60)}min"
-    # Rolling WR degradation check
+    # Rolling WR degradation check — with 2h auto-recovery to prevent permanent deadlock
     recent = state.get("recent_results", [])
     if len(recent) >= EDGE_DEGRADE_WINDOW:
         window = recent[-EDGE_DEGRADE_WINDOW:]
         rolling_wr = sum(r[0] for r in window) / EDGE_DEGRADE_WINDOW
         if rolling_wr < EDGE_DEGRADE_THRESHOLD:
-            return True, (f"edge degrade: rolling {EDGE_DEGRADE_WINDOW}-trade WR "
-                          f"{rolling_wr*100:.1f}% < {EDGE_DEGRADE_THRESHOLD*100:.0f}% threshold")
+            halted_at = state.get("edge_degrade_halted_at", 0)
+            now_ts = datetime.now(timezone.utc).timestamp()
+            cl = state.get("consec_losses", 0)
+            if halted_at == 0:
+                state["edge_degrade_halted_at"] = now_ts
+                halted_at = now_ts
+            age = now_ts - halted_at
+            if age >= EDGE_DEGRADE_COOLDOWN and cl < 3:
+                state["edge_degrade_halted_at"] = 0
+                state["recent_results"] = []
+                log("  edge degrade cooldown expired — clearing window and resuming")
+            else:
+                return True, (f"edge degrade: rolling {EDGE_DEGRADE_WINDOW}-trade WR "
+                              f"{rolling_wr*100:.1f}% < {EDGE_DEGRADE_THRESHOLD*100:.0f}% "
+                              f"(auto-recover in {max(0, int((EDGE_DEGRADE_COOLDOWN - age)/60))}min)")
+        else:
+            state["edge_degrade_halted_at"] = 0
     return False, ""
 
 
