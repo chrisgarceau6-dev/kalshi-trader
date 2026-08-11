@@ -160,7 +160,7 @@ MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more vo
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
 PRIOR_MIN_CENTS = 75     # v5.6.5: relaxed 80→75c — same WR, +38% volume (filter audit Aug 10)
 PRIOR_LOOKBACK  = 2      # v5.6.5: relaxed 3→2 candles — -0.1pp WR, +53% volume (filter audit Aug 10)
-YES_ONLY        = False  # both sides eligible
+YES_ONLY        = True   # NO side is -EV: live 74W/8L vs YES 46W/1L (Aug 11 audit)
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
@@ -867,6 +867,7 @@ def run_once(dry_run=False):
     halted, reason = check_halts(state, balance)
     if halted:
         log(f"  HALTED — {reason}")
+        save_state(state)  # persist edge_degrade_halted_at so 2h cooldown actually counts down
         return
 
     bet = compute_bet_dollars(balance)
