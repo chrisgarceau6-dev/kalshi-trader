@@ -8,10 +8,25 @@ Run manually: python3 daily_summary.py
 GitHub Actions: triggered by daily_summary.yml at 02:00 UTC (10pm ET)
 """
 
-import os, smtplib, time
+import base64, os, smtplib, time
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
+from pathlib import Path
 from kalshi_auth import get as kalshi_get
+
+
+def _ensure_key():
+    if os.environ.get("KALSHI_PRIVATE_KEY_PATH"):
+        return
+    raw = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
+    if not raw:
+        return
+    p   = Path("/tmp/kalshi_summary_key.pem")
+    b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
+    b64 += "=" * (-len(b64) % 4)
+    p.write_bytes(base64.b64decode(b64))
+    p.chmod(0o600)
+    os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
 
 SERIES_LIST = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"]
 MAX_PAGES   = 20   # safety cap — 20 pages × 200 = 4,000 settlements max
@@ -96,6 +111,7 @@ def series_from_ticker(ticker):
 
 
 def main():
+    _ensure_key()
     now    = datetime.now(timezone.utc)
     max_ts = int(now.timestamp())
     min_ts = max_ts - 86400
@@ -112,8 +128,9 @@ def main():
     print(f"Found {len(settlements)} settlements")
 
     if not settlements:
+        bal_line = f"${balance:.2f}" if balance else "unavailable"
         body = (f"Period:  {window_start}  →  {window_end}\n"
-                f"Balance: ${balance:.2f}\n\n"
+                f"Balance: {bal_line}\n\n"
                 f"No trades settled in this period.")
         send_email("[Kalshi] Daily Summary — no trades", body)
         return

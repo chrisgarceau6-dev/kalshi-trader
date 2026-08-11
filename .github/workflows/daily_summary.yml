@@ -18,17 +18,11 @@ jobs:
       - name: Install deps
         run: pip install requests cryptography
 
-      - name: Write private key
-        env:
-          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.kalshi
-          echo "$KALSHI_PRIVATE_KEY" > ~/.kalshi/private_key.pem
-
       - name: Run daily summary
         env:
           KALSHI_API_KEY_ID:    ${{ secrets.KALSHI_API_KEY_ID }}
-          COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL }}
-          COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL }}
+          KALSHI_PRIVATE_KEY:   ${{ secrets.KALSHI_PRIVATE_KEY }}
+          COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
         run: python3 daily_summary.py
