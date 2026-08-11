@@ -42,8 +42,9 @@ def fetch_balance():
     return None
 
 
-def fetch_settlements(min_ts, max_ts):
-    """Fetch settlements in [min_ts, max_ts]. API returns newest-first."""
+def fetch_settlements(min_ts, max_ts, max_count=None):
+    """Fetch settlements in [min_ts, max_ts]. API returns newest-first.
+    If max_count is set, stop after collecting that many regardless of time."""
     results, cursor, pages = [], None, 0
     while pages < MAX_PAGES:
         params = {"limit": 200}
@@ -73,11 +74,16 @@ def fetch_settlements(min_ts, max_ts):
                     t = int(datetime.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp())
                 except Exception:
                     t = 0
-                if t < min_ts:
+                if max_count is None and t < min_ts:
                     stopped = True
                     break
-                if t <= max_ts:
+                if max_count is None and t <= max_ts:
                     results.append(s)
+                elif max_count is not None:
+                    results.append(s)
+            if max_count and len(results) >= max_count:
+                stopped = True
+                break
         cursor = r.get("cursor")
         if stopped or not cursor:
             break
@@ -110,21 +116,29 @@ def series_from_ticker(ticker):
     return ticker.split("-")[0]
 
 
-def main(hours=24):
+def main(hours=24, trades=None):
     _ensure_key()
     now    = datetime.now(timezone.utc)
     max_ts = int(now.timestamp())
     min_ts = max_ts - hours * 3600
 
-    window_start = datetime.fromtimestamp(min_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    window_end   = now.strftime("%Y-%m-%d %H:%M UTC")
-    print(f"Daily summary: {window_start} → {window_end}")
-
     balance = fetch_balance()
     print(f"Balance: ${balance:.2f}" if balance else "Balance: unavailable")
 
     print("Fetching settlements...")
-    settlements = fetch_settlements(min_ts, max_ts)
+    if trades:
+        settlements = fetch_settlements(0, max_ts, max_count=trades)
+        if settlements:
+            oldest = datetime.fromisoformat(settlements[-1].get("settled_time","").replace("Z","+00:00"))
+            newest = datetime.fromisoformat(settlements[0].get("settled_time","").replace("Z","+00:00"))
+            window_start = oldest.strftime("%Y-%m-%d %H:%M UTC")
+            window_end   = newest.strftime("%Y-%m-%d %H:%M UTC")
+        else:
+            window_start = window_end = now.strftime("%Y-%m-%d %H:%M UTC")
+    else:
+        settlements = fetch_settlements(min_ts, max_ts)
+        window_start = datetime.fromtimestamp(min_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        window_end   = now.strftime("%Y-%m-%d %H:%M UTC")
     print(f"Found {len(settlements)} settlements")
 
     if not settlements:
@@ -225,5 +239,6 @@ if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--hours", type=int, default=24)
+    p.add_argument("--trades", type=int, default=None)
     a = p.parse_args()
-    main(a.hours)
+    main(a.hours, a.trades)
