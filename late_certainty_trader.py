@@ -148,11 +148,15 @@ SERIES_LIST     = [
     # showed +EV in 60-day backtest:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
     # Explicitly EXCLUDED:
-    # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → EV-negative (2026-08-09)
+    # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → shadow-testing
     # - KXNEAR15M — live break-even WR 95.5% (avg loss $30), actual 92% → EV-negative (2026-08-09)
     # - KXZEC15M  — OOS test still -$3.88 (WR 93.9%)
     # - WTI/Gold/Silver 15m — TBD, backtest pending
 ]
+
+# Series excluded from live trading but scanned each run for shadow-test data collection.
+# Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
+SHADOW_SERIES   = ["KXHYPE15M"]
 
 STRATEGY_VERSION = "v5.7"  # bump when strategy logic changes; resets WR/pnl counter
 
@@ -228,7 +232,7 @@ def daily_pnl(state, now_ts=None):
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 300  # halt if balance drops below this
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
-MAX_CONCURRENT_POSITIONS = 6  # cap open positions to limit correlated-loss exposure
+MAX_CONCURRENT_POSITIONS = 2  # correlated crypto basket: effective independent bets ~1.3 at 0.7ρ; 6×$45=$270=33% account
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
 EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
@@ -313,6 +317,15 @@ def send_email(subject, body):
         log(f"  email sent: {subject}")
     except Exception as e:
         log(f"  email failed: {e}")
+
+
+# ── shadow test logging ────────────────────────────────────────────────────────
+
+def shadow_log(reason, ticker, side, ask, secs_left):
+    """Log a hypothetical trade that was excluded. Builds shadow-test dataset passively.
+    Parse these lines later with grep '[SHADOW:' on workflow logs."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    log(f"  [SHADOW:{reason}] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  ts={now}")
 
 
 # ── market scanning ────────────────────────────────────────────────────────────
@@ -541,6 +554,10 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
         side, ask_cents = "yes", yes_ask
     elif not YES_ONLY and MIN_ASK_CENTS <= no_ask <= MAX_ASK_CENTS:
         side, ask_cents = "no",  no_ask
+    # Shadow-log NO 90-91c when YES_ONLY blocks it — these are the strongest NO
+    # candidates in backtest (+$0.73/trade); tracking for future re-entry decision.
+    if YES_ONLY and side is None and 90 <= no_ask <= 91:
+        shadow_log("NO-90-91", ticker, "no", no_ask, secs_left)
     if side is None:
         return
 
@@ -908,6 +925,13 @@ def run_once(dry_run=False):
             try_trade(m, state, dry_run, balance=balance, live_tickers=live_tickers)
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
+
+    # Shadow scan — no orders placed, just logging for future re-entry analysis
+    for series in SHADOW_SERIES:
+        for m in open_markets_near_close(series):
+            yes_ask = int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
+            if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+                shadow_log(f"EXCL-{series}", m.get("ticker",""), "yes", yes_ask, m.get("_secs_left", 0))
 
     stats = state["stats"]
     wr = stats["wins"] / stats["trades"] if stats["trades"] else 0
