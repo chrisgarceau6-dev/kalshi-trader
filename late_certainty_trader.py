@@ -62,19 +62,11 @@ from pathlib import Path
 
 from kalshi_auth import get as _get, place_order, cancel_order
 
-# ── OOS-validated pre-trade filters (added 2026-08-02) ─────────────────────────
-# Walk-forward on 60d v5 backtest (train Jun 2-Jul 1 → test Jul 2-Aug 1):
-#   H4 5bps + Near-strike 10bps combo: +2.43c/trade OOS, CI [+1.85, +2.92]
-#   Test-set total +$61.71 vs base +$39.69 (+155%)
-# Filters fail OPEN (proceed with trade) on Coinbase API errors so v5's
-# base positive-EV isn't sacrificed to a transient feed outage.
 COINBASE_PAIR = {
     "KXBTC15M": "BTC-USD", "KXETH15M": "ETH-USD", "KXSOL15M": "SOL-USD",
     "KXDOGE15M": "DOGE-USD", "KXBNB15M": "BNB-USD", "KXXRP15M": "XRP-USD",
 }
 HYPERLIQUID_PAIR = {}
-H4_ADVERSE_BPS = 5      # skip if 60s spot moved > 5bps against side
-NEAR_STRIKE_BPS = 10    # skip if |spot - strike| / spot < 10bps
 
 
 def coinbase_1min_close(series, minute_end_ts=None):
@@ -175,9 +167,8 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # 150-239s bucket CI is -$1.86 to +$1.57 — not confirmed negative
-MAX_SECS_LEFT   = 600    # backtest shows 600-900s bucket is net-negative EV; trimmed
-# v5.4: UTC 15-17 = 11am-1pm ET; US equity open creates volatility that kills WR
-BLACKOUT_HOURS  = {15, 17}  # UTC 08/22 reverted — 125/124 trades each, wide CI, multiple-comparison risk
+MAX_SECS_LEFT   = 600
+BLACKOUT_HOURS  = {17}    # UTC 15 removed — ablation shows +$0.54/removed trade, no valid mechanism
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
 # IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
@@ -594,36 +585,9 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
             f"{prior_asks} (need all >= {PRIOR_MIN_CENTS}c); spike-into-zone entry")
         return
 
-    # SPOT-BASED FILTERS (fail open on feed error) ─────────────────────────────
-    #   H4:           skip if last-60s spot moved > 5bps against our side
-    #   Near-strike:  skip if spot is within 10bps of the market's strike
-    # Both walk-forward validated OOS on the v5 backtest (Jul-Aug halves).
-    has_spot = series in COINBASE_PAIR or series in HYPERLIQUID_PAIR
-    if has_spot:
-        feed = "Hyperliquid" if series in HYPERLIQUID_PAIR else "Coinbase"
-        now_ts = int(time.time())
-        spot_now = spot_1min_close(series, now_ts)
-        spot_60s = spot_1min_close(series, now_ts - 60)
-        if spot_now is None or spot_60s is None:
-            log(f"  {ticker} — {feed} feed unavailable; filters SKIPPED (fail open)")
-        else:
-            ret_60 = (spot_now - spot_60s) / spot_60s
-            adverse = -ret_60 if side == "yes" else ret_60
-            if adverse > H4_ADVERSE_BPS / 10000:
-                log(f"  SKIP {ticker} — H4 filter: 60s spot moved "
-                    f"{ret_60*100:+.3f}% (adverse for {side.upper()}, "
-                    f"threshold {H4_ADVERSE_BPS}bps)")
-                return
-            strike = float(market.get("floor_strike") or 0)
-            if strike:
-                dist_pct = abs(spot_now - strike) / spot_now
-                if dist_pct < NEAR_STRIKE_BPS / 10000:
-                    log(f"  SKIP {ticker} — near-strike filter: spot {spot_now:.4f} "
-                        f"within {dist_pct*10000:.1f}bps of strike {strike:.4f} "
-                        f"(threshold {NEAR_STRIKE_BPS}bps)")
-                    return
-    else:
-        log(f"  {ticker} — {series} has no spot feed; H4+near-strike filters skipped")
+    # H4 and near-strike filters removed 2026-08-12:
+    # 60-day ablation showed both are net-negative P&L (remove +$431 and +$28
+    # respectively) with no statistical case for tail-risk benefit at this bet size.
 
     # TIGHT limit based on FRESH ask. Cap at MAX_ASK_CENTS so slippage can't
     # push us above the OOS-validated range (96c+ is EV-negative after fee).
@@ -932,6 +896,29 @@ def run_once(dry_run=False):
             yes_ask = int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
             if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
                 shadow_log(f"EXCL-{series}", m.get("ticker",""), "yes", yes_ask, m.get("_secs_left", 0))
+
+    # Shadow log 600-700s window for OOS validation of MAX_SECS_LEFT=700 candidate
+    for series in SERIES_LIST:
+        code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": 10})
+        if code != 200:
+            continue
+        now = datetime.now(timezone.utc)
+        for m in r.get("markets", []):
+            ct = m.get("close_time", "")
+            if not ct:
+                continue
+            try:
+                close_dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                secs = (close_dt - now).total_seconds()
+            except Exception:
+                continue
+            if close_dt.hour in BLACKOUT_HOURS:
+                continue
+            if not (600 < secs <= 700):
+                continue
+            yes_ask = int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
+            if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+                shadow_log("600-700s", m.get("ticker", ""), "yes", yes_ask, secs)
 
     stats = state["stats"]
     wr = stats["wins"] / stats["trades"] if stats["trades"] else 0
