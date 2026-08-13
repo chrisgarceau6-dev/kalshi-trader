@@ -25,9 +25,14 @@ def _ensure_key():
     raw = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
     if not raw: return
     p = Path("/tmp/kd_key.pem")
-    b64 = raw.replace("\n","").replace("\r","").replace(" ","")
-    b64 += "=" * (-len(b64) % 4)
-    p.write_bytes(base64.b64decode(b64)); p.chmod(0o600)
+    if raw.startswith("-----"):
+        # Raw PEM pasted directly — write as-is, restore newlines if stripped
+        pem = raw.replace("\\n", "\n")
+        p.write_text(pem + "\n"); p.chmod(0o600)
+    else:
+        b64 = raw.replace("\n","").replace("\r","").replace(" ","")
+        b64 += "=" * (-len(b64) % 4)
+        p.write_bytes(base64.b64decode(b64)); p.chmod(0o600)
     os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
 
 try:
