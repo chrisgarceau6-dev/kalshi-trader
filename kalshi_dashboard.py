@@ -35,13 +35,20 @@ try:
 except ImportError:
     HAS_AUTH = False; _raw = None
 
+_last_err = {}
 def kalshi(path, params=None):
     _ensure_key()
-    if not HAS_AUTH: return None
+    if not HAS_AUTH:
+        _last_err[path] = "kalshi_auth not importable"
+        return None
     try:
         code, r = _raw(path, params)
-        return r if code == 200 else None
-    except Exception: return None
+        if code == 200: return r
+        _last_err[path] = f"HTTP {code}: {str(r)[:120]}"
+        return None
+    except Exception as e:
+        _last_err[path] = str(e)[:120]
+        return None
 
 _cache = {}
 def cached(key, ttl, fn):
@@ -105,6 +112,9 @@ def api_data():
         "positions":   get_positions(),
         "blackout":    [15, 17],
         "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "errors":      dict(_last_err),
+        "key_set":     bool(os.environ.get("KALSHI_PRIVATE_KEY_PATH") or os.environ.get("KALSHI_PRIVATE_KEY")),
+        "key_id_set":  bool(os.environ.get("KALSHI_API_KEY_ID")),
     })
 
 HTML = r"""<!DOCTYPE html>
