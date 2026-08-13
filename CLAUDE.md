@@ -7,108 +7,182 @@ You have full context. Just do what's asked. No need for the user to explain the
 
 - Chris Garceau — UMass freshman. Real money on Kalshi. Expects concise responses, no encouragement without evidence, no emojis.
 - Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/polymarket-monitor2`
-- Live entrypoint: `late_certainty_trader.py` on `origin/main`, GitHub Actions cron `.github/workflows/late_certainty.yml`
-- **Primary trigger:** self-dispatch — each run sleeps 60s then dispatches itself via `GH_DISPATCH_TOKEN` secret (~45 fires/hour)
-- **Backup cron:** `*/5 * * * *` (every 5 min) — fires if self-dispatch chain breaks
+- Live entrypoint: `late_certainty_trader.py` on `origin/main`, GitHub Actions workflow `.github/workflows/late_certainty.yml`
+- **Primary trigger:** self-dispatch — each run sleeps ~30s then dispatches itself via `GH_DISPATCH_TOKEN` secret
+- **Backup cron:** `*/5 * * * *` and `2-59/5 * * * *` (staggered) — fires if self-dispatch chain breaks
 - Repo is PUBLIC — unlimited GitHub Actions minutes
 
-## Active Strategy — v5.4 late-certainty (deployed 2026-08-04, updated 2026-08-05)
+## Active Strategy — v5.7 late-certainty (Aug 11, PRs #50–#59)
 
-**Trigger:** buy YES or NO at ask [90, 95]¢ with 150-600s remaining, provided prior 3 same-side 1-min candles all ≥ 80¢.
+**Trigger:** buy YES at ask [90, 93]¢ with 150-600s remaining, provided prior 2 same-side 1-min candles all ≥ 75¢. Hold to settlement.
 
-**v5.4 changes (Aug 4–5):**
-- MAX_ASK_CENTS=95 (96-99c is EV-negative after 7% fee)
-- BLACKOUT_HOURS={15,16,17} UTC (11am-1pm ET — equity open volatility)
-- Per-asset 1.5x bet: BNB, SOL, HYPE (best WR series)
-- Limit order capped hard at MAX_ASK_CENTS — no 96c+ slippage fills
-- Preflight refetch (fresh ask check before every order placement)
-- workflow_dispatch restored — needed for self-dispatch via GH_DISPATCH_TOKEN
-- Self-dispatch replaces cron-job.org (which paused after workflow_dispatch was temporarily removed)
-
-**Filters** (OOS-validated 2026-08-02):
-- H4: skip if underlying spot moved > 5 bps adverse in last 60s
-- Near-strike: skip if `|spot - strike| / spot < 10 bps`
-- Both filters fail OPEN on feed error
-- Spot source: Coinbase for 7 series, Hyperliquid DEX for KXHYPE15M
-
-**Series** (in `SERIES_LIST`):
-`KXBTC15M`, `KXETH15M`, `KXSOL15M`, `KXDOGE15M`, `KXBNB15M`, `KXXRP15M`, `KXHYPE15M`, `KXNEAR15M`
-
-**Sizing and kill switches** (in `late_certainty_trader.py`):
-- `compute_bet_dollars()` → 5% of balance, rounded to nearest $5, min $20, cap $200
-- `SERIES_BET_MULTIPLIER` → BNB/SOL/HYPE get 1.5x (e.g. $35 base → $50 top-tier)
-- `STOP_BALANCE = 300` (halt if balance drops here)
+**Current parameters:**
+- `FLAT_BET_DOLLARS = 45` — flat per trade, no balance dependency
+- `MIN_ASK_CENTS = 90`, `MAX_ASK_CENTS = 93`
+- `MIN_SECS_LEFT = 150`, `MAX_SECS_LEFT = 600`
+- `PRIOR_MIN_CENTS = 75`, `PRIOR_LOOKBACK = 2`
+- `YES_ONLY = True` — NO side suspended (see below)
+- `BLACKOUT_HOURS = {15, 17}` — UTC 15 (11am ET) and UTC 17 (1pm ET)
+- `MAX_CONCURRENT_POSITIONS = 2` — correlated basket cap (see below)
+- `STOP_BALANCE = 300`
 - `CONSEC_LOSS_LIMIT = 5` → 60-min cooldown
-- `compute_daily_loss_limit()` → `max(30, bet * 8)` = $280 at $35 bets
-- `MAX_CONCURRENT_POSITIONS = 4` (heat cap — skip if 4 unsettled positions open)
-- `EDGE_DEGRADE_WINDOW = 50`, `EDGE_DEGRADE_THRESHOLD = 0.90` → halt if rolling 50-trade WR < 90%
-- `STRATEGY_VERSION = "v5.4"` — resets stats/recent_results on strategy logic changes
-- Order cancellation: GTC orders cancelled after 3s if no fill (via `cancel_order()` in `kalshi_auth.py`)
+- `EDGE_DEGRADE_THRESHOLD = 0.84`, `EDGE_DEGRADE_WINDOW = 50`, `EDGE_DEGRADE_COOLDOWN = 7200`
+- `SHADOW_SERIES = ["KXHYPE15M"]` — scanned but not traded; logs `[SHADOW:]` lines
 
-**Backtest:** 96% WR, ~$95/day @ $50 bets, ~265 trades/day across 7+ series.
+**Series (`SERIES_LIST`):** `KXBTC15M`, `KXETH15M`, `KXSOL15M`, `KXDOGE15M`, `KXBNB15M`, `KXXRP15M`
 
-**Live performance (Aug 1–5):** Balance ~$708, 24/25 = 96.0% WR, P&L +$2.82 since v5.4 reset. Daily +$27 (Aug 5).
+**Order flow:**
+1. `fetch_live_position_tickers()` — prevents double-orders on cache miss
+2. Preflight refetch (`_fresh_ask_cents()`) — fresh ask ~200ms before order
+3. Place GTC limit at `min(93, fresh_ask + 2)`
+4. `sleep(3)` → cancel GTC → `sleep(0.5)` → query fills by `order_id`
+5. Store position with `fee_cost` and `order_id` from fill records
+
+**Filters (OOS-validated 2026-08-02):**
+- H4: skip if Coinbase spot moved > 5 bps adverse in last 60s (fails open)
+- Near-strike: skip if `|spot - strike| / spot < 10 bps` (fails open)
+- Spot source: Coinbase for all 6 series
+
+**Validated backtest performance (YES-only, current config, 60-day dataset):**
+- Period: 2026-06-10 → 2026-08-09
+- 2,062 trades, 94.4% WR, +$2,295 total, **+$38/day**, +$1.11/trade
+- Monthly WR: 93.9% / 94.6% / 94.8% — stable, not decaying
+- *Caveat: dataset was generated under old 3-candle/80c prior filter. Current 2-candle/75c adds ~50% more opportunities not yet in dataset.*
+
+## Key decisions made Aug 11 and why
+
+**YES_ONLY = True**
+- Backtest (5,683 trades): YES +$0.87/trade vs NO +$0.23/trade. NO at 92c is -$0.34/trade, NO at 93c is +$0.01/trade. 56% of NO trades hit at 92-93c → effective NO EV is -$0.16/trade.
+- Live (129 settlements): YES 46W/1L (+$116), NO 74W/8L (-$94).
+- NO's backtest +$0.23 overall had a 95% CI of -$0.23 to +$0.70 — never reliably positive even at 2,896 trades.
+- Keep suspended. Shadow-testing NO 90-91c (historically +$0.73/trade in old backtest, but post-hoc slice — needs 90-day clean validation).
+
+**MAX_CONCURRENT_POSITIONS = 2 (was 6)**
+- All 6 series are highly correlated crypto contracts closing simultaneously.
+- At 0.7 correlation, 6 positions = 1.33 effective independent bets.
+- 6 × $45 = $270 = 33% of account in one correlated crash event.
+- Capping at 2 limits basket exposure to $90 (11% of account).
+
+**EDGE_DEGRADE_THRESHOLD = 0.84 (catastrophic breaker, not regime detector)**
+- Break-even WR at current entry prices is ~92%. 84% threshold tolerates ~24% account drawdown before firing.
+- Only fires in ~13.9% of 50-trade windows at 88% WR — too loose to detect ordinary edge decay.
+- Treat as last-resort circuit breaker. Do NOT lower further; do NOT raise back to 88% (caused 9h false halt Aug 11).
+- Bug fixed Aug 11: `save_state()` now called before returning on halt, so `edge_degrade_halted_at` actually persists and the 2h cooldown counts down correctly.
+
+**Rolling 24h P&L (was midnight UTC reset)**
+- Daily loss limit ($360) now uses trailing 24h window via `settled_ts`. Legacy positions fall back to `settled_date == today`.
+- Prevents double-limit exposure around 00:00 UTC.
+
+**Exact fee capture**
+- `query_actual_fill()` now returns (contracts, cost, fees). `fee_cost` stored with each position.
+- `check_outcomes()` uses stored fee for exact P&L; falls back to per-contract approximation for legacy positions.
+
+**Filters reverted after audit (Aug 11)**
+- UTC 08 and 22 were added to blackout, then reverted. 125/124 trades each with ~$11-12 outcome volatility — wide CI, classic multiple-comparison problem across 24 hourly buckets.
+- MIN_SECS_LEFT was raised to 240, then reverted. 95% CI on 150-239s bucket is -$1.86 to +$1.57/trade — not confirmed negative.
+- Rule: require 500+ trades per bucket OR pre-registered hypothesis before calling a filter "confirmed."
+
+## Shadow testing
+
+`[SHADOW:NO-90-91]` lines logged when YES_ONLY blocks a NO trade at 90-91c.
+`[SHADOW:EXCL-KXHYPE15M]` lines logged when HYPE has a qualifying YES market.
+
+Re-entry criteria (preregistered):
+- Minimum: 90 calendar days + 250 unique settlement clusters + 500 executable shadow trades
+- Metric: net P&L after one-tick adverse execution (not win rate)
+- Inference: cluster-bootstrap CI (settlements at same close-time are one risk event, not N independent trades)
+- Confidence: Holm-adjusted one-sided 98.75% lower bound > $0 per component
+
+## Dashboard
+
+Live at **https://polymarket-monitor2.onrender.com** (Render free tier, cold-start ~30s if idle).
+- Balance, cumulative P&L chart, time range (1H/Today/1W/1M/All), today/hour stats, open positions, recent trades, blackout banner
+- Auto-refresh every 30s. Data pulled live from Kalshi settlements + positions API.
+- Render env vars: `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY` (raw PEM content, not base64)
+- `kalshi_dashboard.py` is the entrypoint. `render.yaml` + `requirements.txt` control the deploy.
 
 ## Key files
 
 | File | Purpose |
 |------|---------|
 | `late_certainty_trader.py` | THE live trader — surgical edits only (real money) |
-| `.github/workflows/late_certainty.yml` | Cron workflow |
+| `.github/workflows/late_certainty.yml` | Workflow — cron backup + self-dispatch chain |
+| `.github/workflows/daily_summary.yml` | Nightly P&L email; `--hours N` and `--trades N` flags |
+| `daily_summary.py` | Ground-truth P&L from Kalshi settlements API (not state) |
 | `kalshi_auth.py` | RSA-PSS-SHA256 auth wrapper + `cancel_order()` |
+| `kalshi_dashboard.py` | Render-hosted Robinhood-style dashboard |
+| `render.yaml` | Render deploy config |
 | `certainty_state.json` | Local blank; live state is in GitHub Actions cache |
-| `certainty.log` | Local only, pre-deploy test runs |
-| `HANDOFF.md` | Extended decision log and rejected filter archive |
-
-**Halted (do not enable):** `crypto15m_trader.py` + `.github/workflows/crypto15m_trader.yml` — lost -$92, hard guard in code.
+| `backtest_filter_audit.py` / `.csv` | Primary backtest — 60-day, 6 series, both sides |
+| `backtest_ablation_raw.csv` | 3,961-trade ablation dataset for filter research |
+| `backtest_series_pause.py` | Per-series WR kill switch backtest — all 36 configs lose vs baseline. Dead. |
 
 ## Auth
 
 - Kalshi API key: `972daba8-94c6-410d-ae83-5ff9852dd31a` (in GitHub Secret `KALSHI_API_KEY_ID`)
-- Private key: `/Users/chrisgarceau/pm/kalshi_key.pem` (DO NOT OVERWRITE)
-- Auth signature: must include `/trade-api/v2` prefix — already fixed in `kalshi_auth.py` line 38
+- Correct private key: `/Users/chrisgarceau/.kalshi/private_key.pem` (NOT `pm/kalshi_key.pem`)
+- Auth signature: must include `/trade-api/v2` prefix — fixed in `kalshi_auth.py` line 38
 - GitHub remote URL contains PAT (see `git remote get-url origin`) — flagged for rotation
 
 ## Push flow
 
-**Never push directly to main.** The auto-classifier blocks it. Workflow:
-1. `git checkout -b <branch> origin/main`
-2. Make changes
-3. `git push origin <branch>`
-4. `gh pr create` then immediately `gh pr merge <n> --squash --delete-branch`
-5. Use `GH_TOKEN` extracted from remote URL: `TOKEN=$(git remote get-url origin | sed 's|https://\([^@]*\)@.*|\1|')`
+**Never push directly to main.** Workflow:
+1. `git fetch origin && git checkout -b <branch> origin/main`
+2. `git checkout --theirs .claude-flow/ && git add .claude-flow/`
+3. Make changes
+4. `python3 -m py_compile late_certainty_trader.py` — must pass
+5. `git push origin <branch>`
+6. `TOKEN=$(git remote get-url origin | sed 's|https://\([^@]*\)@.*|\1|')`
+7. `GH_TOKEN=$TOKEN gh pr create ...` then `GH_TOKEN=$TOKEN gh api repos/chrisgarceau6-dev/polymarket-monitor2/pulls/<n>/merge -X PUT -f merge_method=squash`
 
-**Local main ≠ live main.** Always base new branches on `origin/main`.
+**Local `.claude-flow/` files** conflict on every branch checkout — always resolve with `git checkout --theirs .claude-flow/` and `git add .claude-flow/`.
 
-**Local `.claude-flow/` files** conflict on every stash pop — resolve with `git checkout --theirs .claude-flow/` and `git add .claude-flow/`.
+## Kalshi API
 
-## Kalshi API gotchas
+- Candles: `/series/{series_ticker}/markets/{ticker}/candlesticks`
+- Fills: `/portfolio/fills?ticker=<t>&order_id=<id>&limit=1000` — filter by `order_id`; `fee_cost` field has exact fee
+- Positions: `/portfolio/positions?settlement_status=unsettled&limit=200`
+- Settlements: `/portfolio/settlements?limit=200` — used by `daily_summary.py` for ground-truth P&L
+- Orders: `/portfolio/orders?status=resting&limit=10`
+- Spot prices: Coinbase `https://api.exchange.coinbase.com/products/{pair}/candles?granularity=60` (Binance geo-blocked)
+- `gh` CLI requires `GH_TOKEN` env var (extract from remote URL)
+- `gh pr merge` sometimes fails — use `gh api .../pulls/N/merge -X PUT -f merge_method=squash`
 
-- Candles endpoint: `/series/{series_ticker}/markets/{ticker}/candlesticks` (NOT `/markets/{ticker}/candlesticks`)
-- Binance is geo-blocked (HTTP 451) — use Coinbase: `https://api.exchange.coinbase.com/products/{pair}/candles?granularity=60` with `User-Agent` header
-- Coinbase pair map is in `COINBASE_PAIR` dict in `late_certainty_trader.py`
-- KXHYPE15M uses Hyperliquid API (`HYPERLIQUID_PAIR` dict, `hyperliquid_1min_close()`); H4/near-strike filters active for HYPE via `POST https://api.hyperliquid.xyz/info`
-- `--daemon` flag runs continuous 20s polling loop (for VPS — not currently used, GitHub Actions is sufficient)
-- `gh` CLI requires `GH_TOKEN` env var (extract from remote URL, don't use `gh auth login`)
+## Strategy research — tested and rejected
 
-## What's parked / rejected
+| Strategy | Result |
+|----------|--------|
+| Longshot crash-reversal (buy 5-25c after prior 60c+ candles) | OOS -$1,411. Dead. |
+| Cross-asset lag (buy lagging asset when leader at 90c+) | 87.3% WR WITH companion vs 90.5% WITHOUT. Dead. |
+| Candle acceleration filter (require rising prior candles) | Flat/decel outperforms. Dead. |
+| Stuck-market breakout (buy 65-85c after 4+ candles at 50c) | Every bucket -EV, -$8,553. Dead. |
+| Per-series WR kill switch | All 36 param combos lose vs baseline. Dead. |
+| KXZEC15M, KXNEAR15M | Negative OOS / structural -EV. Dead. |
+| New series (KXADA15M, KXBCH15M, KXTON15M) | Insufficient data. Re-check 4+ weeks. |
 
-| Item | Status |
-|------|--------|
-| Entry-timing filter `secs_left ≤ 300` | Parked — test showed 99.2% WR but train didn't confirm. Re-run in 2-3 weeks. |
-| Bet scaling to 7.5-8% | Parked — revisit after 2-3 weeks live data confirms ≥95% WR at scale |
-| Confidence-scaled sizing | Rejected — marginal improvement, kills volume |
-| Kalshi partial hedge | Rejected — hedge cost > tail savings at 97%+ WR |
-| Commodities (KXWTI/KXGOLD/KXSILVER) | Parked — insufficient data, re-run in 2-4 weeks |
-| KXZEC15M | Rejected — negative OOS |
-| VPS / always-on daemon | Not worth it — GitHub Actions 5-fire cron provides sufficient redundancy at current scale |
+## What's parked (not rejected, revisit with data)
+
+| Item | When / Criteria |
+|------|----------------|
+| NO 90-91c re-entry | 90 days shadow data + cluster-bootstrap CI > $0 |
+| KXHYPE15M re-entry | Same shadow criteria as NO |
+| UTC 08, 22 blackout | 500+ trades each before re-testing |
+| $100/trade bump | 200 live settlements ≥93% WR + balance ≥$1,200 post-deposit |
+| Hourly Kalshi crypto markets | Potential parallel strategy to fill dead zones |
+| Commodities (KXWTI/KXGOLD/KXSILVER) | Insufficient data |
+| Thursday blackout | 349 trades at -$1.20/trade — suggestive but needs 500+ |
+| BNB exclusion | 92.2% WR, +$0.06/trade YES — borderline, watch another month |
+| z_cushion filter (Q1 <0.9) | 929 trades at -$0.12/trade — real signal but 95% CI not confirmed negative yet |
 
 ## Rules
 
 1. Read files before editing. Surgical edits only to live trader — real money.
-2. Do not add "while I'm here" cleanups, abstractions, or logging to live trader.
+2. Never add "while I'm here" cleanups or abstractions to live trader.
 3. Never paste secrets into chat. Never commit `.env` or key files.
-4. Walk-forward OOS validation required before deploying any new filter.
+4. **Evidence standard:** require 500+ trades per bucket OR pre-registered hypothesis before treating a backtest slice as "confirmed." Post-hoc slices across 24 hours, days of week, etc. are hypothesis generation only.
 5. Local main is NOT live main — always base branches on `origin/main`.
 6. Live state is in GitHub Actions cache, not local `certainty_state.json`.
-7. To check live performance: use Gmail MCP (`search_threads` for `[Kalshi-C]` subject).
+7. Ground-truth P&L: run `daily_summary.py` or check Gmail `[Kalshi]` emails. Never trust state-derived P&L.
+8. Run `python3 -m py_compile late_certainty_trader.py` before every push.
+9. Never bump STRATEGY_VERSION unless strategy LOGIC changes (resets cumulative stats).
+10. Six crypto series close simultaneously — they are correlated, not independent. Never treat same-expiry positions as independent risk events.
