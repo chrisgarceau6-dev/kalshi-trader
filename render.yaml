@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kalshi-dashboard
+    env: python
+    buildCommand: pip install flask requests cryptography
+    startCommand: python kalshi_dashboard.py
+    envVars:
+      - key: KALSHI_API_KEY_ID
+        sync: false
+      - key: KALSHI_PRIVATE_KEY
+        sync: false
