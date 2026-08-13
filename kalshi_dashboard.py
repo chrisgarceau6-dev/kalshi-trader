@@ -103,8 +103,8 @@ def get_positions():
     def _f():
         r = kalshi("/portfolio/positions", {"settlement_status": "unsettled", "limit": 200})
         if not r: return []
-        return [{"ticker": p.get("ticker", ""), "contracts": p.get("position", 0)}
-                for p in r.get("market_positions", []) if p.get("position", 0) > 0]
+        return [{"ticker": p.get("ticker", ""), "contracts": p.get("position", p.get("resting_orders_count", 1))}
+                for p in r.get("market_positions", []) if p.get("ticker")]
     return cached("pos", 15, _f)
 
 app = Flask(__name__)
