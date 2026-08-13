@@ -104,7 +104,7 @@ def api_data():
         "settlements": get_settlements(),
         "positions":   get_positions(),
         "blackout":    [15, 17],
-        "ts":          datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
 
 HTML = r"""<!DOCTYPE html>
