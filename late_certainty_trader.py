@@ -152,7 +152,9 @@ SERIES_LIST     = [
 
 # Series excluded from live trading but scanned each run for shadow-test data collection.
 # Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
-SHADOW_SERIES   = ["KXHYPE15M"]
+# KXBTCD/KXETHD: hourly crypto price markets, 188 strikes/close — multi-strike candidate.
+# KXWTIH: hourly WTI oil — positive OOS in 150-600s window (backtest 2026-08-14, only 6d data).
+SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
 STRATEGY_VERSION = "v5.8"  # bump when strategy logic changes; resets WR/pnl counter
 
@@ -327,7 +329,9 @@ def shadow_log(reason, ticker, side, ask, secs_left):
 
 def open_markets_near_close(series):
     """Return open markets for series with 60-900s remaining."""
-    code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": 10})
+    # KXBTCD/KXETHD have 100+ strikes per close time — need higher limit to capture all qualifying
+    lim = 100 if series in ("KXBTCD", "KXETHD") else 10
+    code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": lim})
     if code != 200:
         return []
     now = datetime.now(timezone.utc)
