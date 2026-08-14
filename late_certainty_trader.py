@@ -142,28 +142,25 @@ SERIES_LIST     = [
     # 13d backtest: 94.5% WR full, 95.5% OOS, +$1.75/trade OOS, ~13/day → +$14/day expected.
     # Gold and silver backtested same day — both negative OOS. Not added.
     "KXWTI15M",
-    # Hourly WTI oil multi-strike — added v5.9 (2026-08-14):
-    # 2nd qualifying strike (sorted by ask desc) is +EV: OOS 32 trades, 93.8% WR, +$0.77/trade.
-    # 1st strike is -EV (OOS 92.2% WR, -$0.32/trade) — skipped via MULTISTRIKE_SKIP1_SERIES.
-    "KXWTIH",
     # Explicitly EXCLUDED:
     # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → shadow-testing
     # - KXNEAR15M — live break-even WR 95.5% (avg loss $30), actual 92% → EV-negative (2026-08-09)
     # - KXZEC15M  — OOS test still -$3.88 (WR 93.9%)
     # - KXGOLD15M — 86.5% OOS WR, -$2.59/trade OOS. Dead.
     # - KXSILVER15M — 84.8% OOS WR, -$3.52/trade OOS. Dead.
+    # - KXWTIH — reverted v5.9→v5.10 (2026-08-14): n=32 OOS insufficient (95% CI -$6.34 to +$3.45/trade,
+    #   p=0.54 vs break-even); implementation had close-time grouping bug; possible regime break
+    #   (KXWTIH settlement feed changed July 30 — pre/post data should not be pooled). Shadow-only pending
+    #   re-backtest on post-July-30 data only with paired first/second strike comparison.
 ]
-
-# For these series, sort markets by yes_ask desc and skip the 1st qualifying strike,
-# targeting the 2nd. The highest-ask strike is -EV; the 2nd is +EV (see KXWTIH note above).
-MULTISTRIKE_SKIP1_SERIES = {"KXWTIH"}
 
 # Series excluded from live trading but scanned each run for shadow-test data collection.
 # Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
 # KXBTCD/KXETHD: hourly crypto price markets, 188 strikes/close — multi-strike candidate.
-SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD"]
+# KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
+SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.9"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.10"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -337,7 +334,7 @@ def shadow_log(reason, ticker, side, ask, secs_left):
 def open_markets_near_close(series):
     """Return open markets for series with 60-900s remaining."""
     # KXBTCD/KXETHD have 100+ strikes per close time — need higher limit to capture all qualifying
-    lim = 100 if series in ("KXBTCD", "KXETHD") else 50 if series == "KXWTIH" else 10
+    lim = 100 if series in ("KXBTCD", "KXETHD") else 10
     code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": lim})
     if code != 200:
         return []
@@ -899,26 +896,11 @@ def run_once(dry_run=False):
     for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
-        if series in MULTISTRIKE_SKIP1_SERIES:
-            # Sort by yes_ask desc, skip the highest-ask strike (1st, -EV), take the 2nd.
-            def _ask_cents(m):
-                return int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
-            in_band = sorted(
-                [m for m in markets if MIN_ASK_CENTS <= _ask_cents(m) <= MAX_ASK_CENTS],
-                key=_ask_cents,
-                reverse=True,
-            )
-            if len(in_band) >= 2:
-                before = len(state.get("positions", {}))
-                try_trade(in_band[1], state, dry_run, balance=balance, live_tickers=live_tickers)
-                if len(state.get("positions", {})) > before:
-                    n_tradeable += 1
-        else:
-            for m in markets:
-                before = len(state.get("positions", {}))
-                try_trade(m, state, dry_run, balance=balance, live_tickers=live_tickers)
-                if len(state.get("positions", {})) > before:
-                    n_tradeable += 1
+        for m in markets:
+            before = len(state.get("positions", {}))
+            try_trade(m, state, dry_run, balance=balance, live_tickers=live_tickers)
+            if len(state.get("positions", {})) > before:
+                n_tradeable += 1
 
     # Shadow scan — no orders placed, just logging for future re-entry analysis
     for series in SHADOW_SERIES:
