@@ -160,7 +160,7 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.10"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.11"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -200,7 +200,7 @@ SERIES_BET_MULTIPLIER = {}
 # Flat bet: $45 targets ~$31/day at ~68 trades/day across 6 series.
 # Math: live EV/trade ≈ $0.354 at $35 bet → 1.01¢/$ bet;
 # $45 × 68 × 0.01011 ≈ $31/day expected.
-FLAT_BET_DOLLARS = 45
+FLAT_BET_DOLLARS = 100
 
 
 def compute_bet_dollars(balance):
@@ -231,7 +231,7 @@ def daily_pnl(state, now_ts=None):
     ), 2)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE            = 300  # halt if balance drops below this
+STOP_BALANCE            = 650  # halt if balance drops below this (raised from 300 with bet bump $45→$100, 2026-08-14)
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
 MAX_CONCURRENT_POSITIONS = 2  # correlated crypto basket: effective independent bets ~1.3 at 0.7ρ; 6×$45=$270=33% account
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
