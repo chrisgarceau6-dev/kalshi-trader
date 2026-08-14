@@ -1,20 +1,20 @@
 name: Late-Certainty Trader
 
 # ┌────────────────────────────────────────────────────────────────────┐
-# │  v5 DEPLOYED 2026-08-01 — max-return filter (replaces v4).         │
+# │  v5.12 — order-safety hardened.                                   │
 # │                                                                     │
-# │  Filter: ask in [90, 99] AND prior 3 candles (same side) all >= 80c │
-# │  Both YES and NO sides eligible.                                    │
+# │  YES 90-93c, 150-600s, prior two 1m asks >=75c; UTC17 excluded.     │
+# │  Flat $100 principal-risk budget; max concurrent exposure = 2.      │
 # │                                                                     │
-# │  Backtest of 7 crypto series (BTC/ETH/SOL/DOGE/BNB/XRP + HYPE):     │
-# │    60d net @ $50: +$5,692 (2.9x v4's +$1,972)                       │
-# │    60d WR:        ~96%    (v4 was 98.5%, more variance now)         │
-# │    60d trades:    ~18,555 (v4 was 8,811)                            │
-# │  OOS test (0-20d): +$3,574 for main 6 crypto (edge strengthened)    │
+# │  Live: BTC/ETH/SOL/DOGE/BNB/XRP 15m plus KXWTI15M.                 │
+# │  Exact fixed-point prices; size from worst-case limit price.        │
+# │  GTC orders have server expiry and are reconciled to terminal state.│
+# │  Position/order API ambiguity halts entries instead of failing open.│
+# │  Unit safety checks must pass before every trading cycle.           │
 # │                                                                     │
-# │  Expected: ~309 trades/day, ~$95/day at $50 bets = ~$34K/year.      │
-# │  Losses ~4% of trades = ~12/day at $50 → ~-$580 gross loss/day      │
-# │  offset by ~$675 gross wins. Kill switches active.                  │
+# │  Strategy evidence is tracked separately from operational safety.   │
+# │  Kill switches remain active.                                       │
+# │                                                                     │
 # └────────────────────────────────────────────────────────────────────┘
 
 on:
@@ -46,8 +46,10 @@ jobs:
           key: certainty-state-${{ github.run_id }}
           restore-keys: certainty-state-
 
-      - name: Syntax check
-        run: python -m py_compile late_certainty_trader.py
+      - name: Order-safety checks
+        run: |
+          python -m py_compile kalshi_auth.py late_certainty_trader.py test_order_safety.py
+          python -m unittest -v test_order_safety.py
 
       - name: Run trader
         env:

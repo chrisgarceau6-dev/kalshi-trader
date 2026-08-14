@@ -14,7 +14,8 @@ usage as CLI:
     python kalshi_auth.py test        # test signed GET /portfolio/balance
     python kalshi_auth.py place --ticker <t> --side yes --count 100 --yes-price 55
 """
-import argparse, base64, os, sys, time, json
+import argparse, base64, os, sys, time, json, uuid
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
@@ -90,7 +91,7 @@ def delete(path):
 
 def cancel_order(order_id):
     """Cancel an open GTC order by order_id. Returns (status_code, response)."""
-    return delete(f"/portfolio/orders/{order_id}")
+    return delete(f"/portfolio/events/orders/{order_id}")
 
 
 # ---------------------------------------------------------------- orders
@@ -100,7 +101,8 @@ def get_balance():
 
 
 def place_order(ticker, side, count, yes_price_cents=None, no_price_cents=None,
-                order_type="limit", action="buy", time_in_force="GTC"):
+                order_type="limit", action="buy", time_in_force="good_till_canceled",
+                expiration_time=None, client_order_id=None):
     """Place an order on Kalshi using the V2 endpoint.
     - ticker: market ticker, e.g. 'KXETH15M-26JUL271100-T3491.25'
     - side: 'yes' or 'no' (which token to buy)
@@ -111,23 +113,46 @@ def place_order(ticker, side, count, yes_price_cents=None, no_price_cents=None,
     # V2 always quotes from the YES side: bid=buy YES, ask=sell YES (= buy NO)
     v2_side = "bid" if side == "yes" else "ask"
 
-    if side == "yes" and yes_price_cents is not None:
-        price_str = f"{int(yes_price_cents) / 100:.4f}"
-    elif side == "no" and no_price_cents is not None:
-        # buying NO at X¢ = selling YES at (100−X)¢
-        price_str = f"{(100 - int(no_price_cents)) / 100:.4f}"
-    else:
-        price_str = "0.5000"
+    try:
+        if side == "yes" and yes_price_cents is not None:
+            price = Decimal(str(yes_price_cents)) / Decimal("100")
+        elif side == "no" and no_price_cents is not None:
+            # buying NO at X cents = selling YES at (100-X) cents
+            price = (Decimal("100") - Decimal(str(no_price_cents))) / Decimal("100")
+        else:
+            price = Decimal("0.5000")
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("invalid order price") from exc
+
+    if not (Decimal("0") < price < Decimal("1")):
+        raise ValueError(f"order price out of range: {price}")
+    price_str = f"{price:.4f}"
+
+    tif_aliases = {
+        "GTC": "good_till_canceled",
+        "IOC": "immediate_or_cancel",
+        "FOK": "fill_or_kill",
+    }
+    time_in_force = tif_aliases.get(time_in_force, time_in_force)
+    if time_in_force not in {"good_till_canceled", "immediate_or_cancel", "fill_or_kill"}:
+        raise ValueError(f"invalid time_in_force: {time_in_force}")
+    if expiration_time is not None and time_in_force != "good_till_canceled":
+        raise ValueError("expiration_time requires good_till_canceled")
+
+    client_order_id = client_order_id or str(uuid.uuid4())
 
     body = {
         "ticker":                    ticker,
         "side":                      v2_side,
         "count":                     str(int(count)),
         "price":                     price_str,
-        "time_in_force":             "good_till_canceled",
+        "time_in_force":             time_in_force,
         "self_trade_prevention_type": "taker_at_cross",
-        "client_order_id":           f"arb-{int(time.time()*1000)}",
+        "client_order_id":           client_order_id,
+        "cancel_order_on_pause":     True,
     }
+    if expiration_time is not None:
+        body["expiration_time"] = int(expiration_time)
     return post("/portfolio/events/orders", body)
 
 

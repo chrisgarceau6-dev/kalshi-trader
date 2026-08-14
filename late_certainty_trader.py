@@ -1,61 +1,29 @@
 #!/usr/bin/env python3
-"""Late-certainty trader v5 — max-return filter from OOS-validated search.
+"""Late-certainty trader v5.12 — late-certainty YES entries.
 
 STRATEGY:
-  Buy YES or NO when its ask is in [90, 99] cents AND the window has
-  150-900 seconds remaining AND all 3 preceding 1-min candles had ask
-  (same side) >= 80 cents. Hold to settlement.
+  Buy YES at a 90-93 cent ask with 150-600 seconds remaining when each of
+  the two preceding 1-minute YES asks was at least 75 cents. Hold through
+  settlement. UTC hour 17 is excluded. Live series are the six 15-minute
+  crypto markets plus KXWTI15M; excluded candidates are shadow-logged only.
 
-WHY v5 REPLACES v4:
-  v4 was ranked #1 by WR. v5 is ranked #1 by TOTAL RETURN.
-  User feedback: pursue max return, WR need not be 100%.
-
-  Both filters pass OOS validation (train days 40-60 -> test days 0-20).
-  v5 accepts slightly lower per-trade WR in exchange for ~4x volume and
-  ~3x total profit.
-
-BACKTEST (2026-08-01, 6 crypto series over 60 days):
-                      v4 filter        v5 filter (this)
-  60-day WR:          98.51%          95.96%
-  60-day trades:      7,608            15,900
-  60-day net@$50:     +$1,972         +$5,240
-  20-day OOS WR:      98.72%           96.72% (edge STRENGTHENED)
-  20-day OOS net:     +$821            +$3,574
-  Per-series 60d:     98.3-98.6%       ~95-97% (all positive)
-
-  Plus KXHYPE15M (added earlier):
-    v5 filter:  60d n=2,655  WR=95.52%  net@$50=+$452
-
-  Combined 7-series total: ~$5,692/60d @ $50 bets = ~$95/day expected.
-
-ECONOMICS (avg entry ~93c):
-  Win  (~96%):    +$0.13 per $2 bet, scales linearly to bet size
-  Loss (~4%):     -$1.86 per $2 bet, scales linearly to bet size
-  EV per trade:   +$0.05 per $2 bet
-
-  Volume: ~265 trades/day across 7 crypto series (BTC/ETH/SOL/DOGE/BNB/XRP/HYPE).
-  Expected losses: ~10-12/day (4% loss rate).
-
-BET SIZING (auto-scales with balance):
-  5% of balance, rounded to nearest $5, min $20, no cap
-  $380 balance -> $20 bets
-  $500         -> $25
-  $700         -> $35
-  $1000        -> $50
-  $2000        -> $100
-  $4000        -> $200
+BET SIZING:
+  Flat $100 principal-risk budget per order. Contract count is sized from
+  the limit price so principal at the worst allowed fill cannot exceed $100.
+  Exchange fees are additional.
 
 KILL SWITCHES:
-  STOP_BALANCE=$300 (halt if balance drops here)
-  DAILY_LOSS_LIMIT = 8x bet_size = $160/day at $20 bets
-  5 consecutive losses -> 60-min cooldown
-
-usage: --once | --dry-run | --status
+  STOP_BALANCE=$650
+  trailing-24h loss limit = 8x bet size ($800 at current sizing)
+  5 consecutive losses -> 60-minute cooldown
+  50-trade WR below 84% -> 2-hour degradation halt
+  ambiguous execution state -> persistent fail-closed halt
 
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, os, random, smtplib, time, urllib.request, urllib.error
+import argparse, base64, json, os, random, smtplib, time, urllib.request, urllib.error, uuid
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -160,7 +128,7 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.11"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.12"  # order safety + remove unvalidated BTC hourly blackout
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -196,10 +164,7 @@ LONGSHOT_BET       = 5
 SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
-# 5% of balance, rounded to nearest $5, min $20, no cap. Reads fresh balance
-# Flat bet: $45 targets ~$31/day at ~68 trades/day across 6 series.
-# Math: live EV/trade ≈ $0.354 at $35 bet → 1.01¢/$ bet;
-# $45 × 68 × 0.01011 ≈ $31/day expected.
+# Flat $100 principal-risk budget per order; fees are additional.
 FLAT_BET_DOLLARS = 100
 
 
@@ -208,8 +173,7 @@ def compute_bet_dollars(balance):
 
 
 def compute_daily_loss_limit(bet_dollars):
-    """Daily loss floor scales with bet size — otherwise a single loss auto-halts
-       when scaled up. Allows ~10-15 losing bets/day of net loss before halt."""
+    """Trailing-24h realized-loss floor scaled to the configured bet size."""
     return max(30, bet_dollars * 8)
 
 ROLLING_PNL_SECONDS = 86400  # trailing 24h window avoids double-limit at midnight UTC
@@ -238,6 +202,31 @@ EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
 EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
+ORDER_TTL_SECONDS       = 4    # server-enforced expiry is the final guard against stranded GTC orders
+ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and recover exact exposure
+
+
+def price_cents(raw):
+    """Parse a fixed-point dollar price into exact cents without bucket rounding."""
+    if raw is None:
+        return None
+    try:
+        value = Decimal(str(raw)) * Decimal("100")
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return value if value.is_finite() else None
+
+
+def contracts_for_risk(bet_dollars, limit_cents):
+    """Largest whole-contract count whose worst-case limit cost is <= the bet."""
+    try:
+        budget = Decimal(str(bet_dollars))
+        price = Decimal(str(limit_cents)) / Decimal("100")
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("invalid risk sizing input") from exc
+    if budget <= 0 or price <= 0:
+        raise ValueError("bet and limit price must be positive")
+    return max(1, int(budget / price))
 
 
 # ── infrastructure (reused from crypto15m_trader pattern) ─────────────────────
@@ -266,13 +255,17 @@ def load_state():
         try:
             s = json.loads(STATE_FILE.read_text())
             if s.get("strategy_version") != STRATEGY_VERSION:
-                log(f"Strategy version changed ({s.get('strategy_version')} → {STRATEGY_VERSION}); resetting stats")
+                old_version = s.get("strategy_version")
+                log(f"Strategy version changed ({old_version} → {STRATEGY_VERSION}); resetting stats")
+                for position in s.get("positions", {}).values():
+                    if not position.get("settled"):
+                        position.setdefault("strategy_version", old_version)
                 s["stats"] = {"trades": 0, "wins": 0, "pnl": 0.0}
                 s["recent_results"] = []
                 s["strategy_version"] = STRATEGY_VERSION
             return s
-        except Exception:
-            pass
+        except Exception as exc:
+            raise RuntimeError(f"state exists but is unreadable; fail closed: {exc}") from exc
     return {
         "positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
         "recent_results": [], "strategy_version": STRATEGY_VERSION,
@@ -280,7 +273,9 @@ def load_state():
 
 
 def save_state(s):
-    STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
+    temporary = STATE_FILE.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(s, indent=2, default=str))
+    os.replace(temporary, STATE_FILE)
 
 
 def log(msg):
@@ -385,6 +380,8 @@ def open_markets_longshot(series):
 
 def check_halts(state, balance):
     """Returns (halt: bool, reason: str). Daily loss limit is dynamic based on bet size."""
+    if state.get("execution_halt_reason"):
+        return True, f"execution safety halt: {state['execution_halt_reason']}"
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
     bet_dollars = compute_bet_dollars(balance)
@@ -442,10 +439,40 @@ def cleanup_state(state):
 
 def fetch_live_position_tickers():
     """Return set of tickers with unsettled Kalshi positions. One call per run."""
-    code, r = kalshi_get("/portfolio/positions", {"settlement_status": "unsettled", "limit": 200})
-    if code != 200:
-        return set()
-    return {p.get("ticker") for p in r.get("market_positions", []) if p.get("ticker")}
+    tickers = set()
+    cursor = None
+    while True:
+        params = {"settlement_status": "unsettled", "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        code, r = kalshi_get("/portfolio/positions", params)
+        if code != 200 or not isinstance(r, dict):
+            return None
+        tickers.update(
+            p.get("ticker") for p in r.get("market_positions", []) if p.get("ticker")
+        )
+        next_cursor = r.get("cursor")
+        if not next_cursor or next_cursor == cursor:
+            return tickers
+        cursor = next_cursor
+
+
+def fetch_resting_order_tickers():
+    """Return one ticker entry per resting order, preserving duplicate exposure."""
+    tickers = []
+    cursor = None
+    while True:
+        params = {"status": "resting", "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        code, r = kalshi_get("/portfolio/orders", params)
+        if code != 200 or not isinstance(r, dict):
+            return None
+        tickers.extend(o.get("ticker") for o in r.get("orders", []) if o.get("ticker"))
+        next_cursor = r.get("cursor")
+        if not next_cursor or next_cursor == cursor:
+            return tickers
+        cursor = next_cursor
 
 
 def query_actual_fill(ticker, side, order_id=None):
@@ -456,7 +483,7 @@ def query_actual_fill(ticker, side, order_id=None):
         params["order_id"] = order_id
     code, r = kalshi_get("/portfolio/fills", params)
     if code != 200:
-        return 0.0, 0.0, 0.0
+        return None
     total_ct = total_cost = total_fee = 0.0
     for f in r.get("fills", []):
         if f.get("ticker") != ticker: continue
@@ -479,6 +506,69 @@ def query_actual_fill(ticker, side, order_id=None):
     return total_ct, total_cost, total_fee
 
 
+def query_order(order_id):
+    """Return the authoritative order record, or None on an API/read error."""
+    code, r = kalshi_get(f"/portfolio/orders/{order_id}")
+    if code != 200 or not isinstance(r, dict):
+        return None
+    order = r.get("order", r)
+    return order if isinstance(order, dict) else None
+
+
+def reconcile_terminal_order(order_id, ticker, side):
+    """Prove an order is terminal and return exact (contracts, cost, fees).
+
+    The order record is authoritative for total fill count/cost, which avoids
+    undercounting fills that propagate after the first fills-API query.
+    """
+    deadline = time.monotonic() + ORDER_RECONCILE_SECONDS
+    last_order = None
+    while time.monotonic() < deadline:
+        order = query_order(order_id)
+        if order is not None:
+            last_order = order
+            try:
+                remaining = Decimal(str(order.get("remaining_count_fp", "0") or "0"))
+                filled = Decimal(str(order.get("fill_count_fp", "0") or "0"))
+            except (InvalidOperation, TypeError, ValueError):
+                remaining = Decimal("-1")
+                filled = Decimal("-1")
+            status = str(order.get("status", "")).lower()
+            if remaining == 0 and status != "resting" and filled >= 0:
+                try:
+                    cost = (
+                        Decimal(str(order.get("taker_fill_cost_dollars", "0") or "0"))
+                        + Decimal(str(order.get("maker_fill_cost_dollars", "0") or "0"))
+                    )
+                    fees = (
+                        Decimal(str(order.get("taker_fees_dollars", "0") or "0"))
+                        + Decimal(str(order.get("maker_fees_dollars", "0") or "0"))
+                    )
+                except (InvalidOperation, TypeError, ValueError):
+                    cost = fees = Decimal("-1")
+                if filled == 0:
+                    return 0.0, 0.0, 0.0
+                # A terminal filled order cannot genuinely cost $0. Treat that
+                # as an eventually-consistent record and keep reconciling.
+                if cost > 0 and fees >= 0:
+                    return float(filled), float(cost), float(fees)
+
+                fill_totals = query_actual_fill(ticker, side, order_id)
+                if (
+                    fill_totals is not None
+                    and fill_totals[1] > 0
+                    and abs(fill_totals[0] - float(filled)) < 1e-6
+                ):
+                    return fill_totals
+        time.sleep(0.5)
+
+    status = last_order.get("status") if last_order else "unavailable"
+    remaining = last_order.get("remaining_count_fp") if last_order else "unknown"
+    raise RuntimeError(
+        f"order reconciliation unresolved for {order_id}: status={status}, remaining={remaining}"
+    )
+
+
 def _fresh_ask_cents(ticker, side):
     """Refetch best ask right before order placement — narrows the race window
     from scan-to-order (5-30s) down to ~200ms. Returns None on error."""
@@ -490,10 +580,7 @@ def _fresh_ask_cents(ticker, side):
     raw = m.get(field)
     if raw is None:
         return None
-    try:
-        return int(round(float(raw) * 100))
-    except Exception:
-        return None
+    return price_cents(raw)
 
 
 def _prior_k_candle_asks(ticker, series, side, k):
@@ -525,44 +612,52 @@ def _prior_k_candle_asks(ticker, series, side, k):
     for c in latest_k:
         try:
             if side == "yes":
-                out.append(int(round(float(c["yes_ask"]["close_dollars"]) * 100)))
+                ask = price_cents(c["yes_ask"]["close_dollars"])
+                if ask is None:
+                    return None
+                out.append(ask)
             else:
-                yes_bid = int(round(float(c["yes_bid"]["close_dollars"]) * 100))
-                out.append(100 - yes_bid if yes_bid > 0 else 100)
-        except (KeyError, ValueError, TypeError):
+                yes_bid = price_cents(c["yes_bid"]["close_dollars"])
+                if yes_bid is None:
+                    return None
+                out.append(Decimal("100") - yes_bid if yes_bid > 0 else Decimal("100"))
+        except (KeyError, ValueError, TypeError, InvalidOperation):
             return None
     return out
 
 
-def try_trade(market, state, dry_run, balance=None, live_tickers=None):
+def try_trade(
+    market,
+    state,
+    dry_run,
+    balance=None,
+    live_position_tickers=None,
+    resting_order_tickers=None,
+):
     ticker = market.get("ticker", "")
     series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
+    live_position_tickers = set(live_position_tickers or ())
+    resting_order_tickers = list(resting_order_tickers or ())
     if ticker in state.get("positions", {}):
         return  # already entered this market
-    if live_tickers and ticker in live_tickers:
-        log(f"  SKIP {ticker} — live Kalshi position exists (state was stale)")
+    if ticker in live_position_tickers or ticker in resting_order_tickers:
+        log(f"  SKIP {ticker} — live Kalshi position/order exists (state was stale)")
         return
-    open_cnt = sum(1 for p in state.get("positions", {}).values() if not p.get("settled"))
+    state_open = {
+        t for t, p in state.get("positions", {}).items() if not p.get("settled")
+    }
+    # Kalshi positions are aggregated by ticker, while every resting order is
+    # separate potential exposure and must consume its own concurrency slot.
+    open_cnt = len(state_open | live_position_tickers) + len(resting_order_tickers)
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
         return
     bet_dollars = compute_bet_dollars(balance)
     secs_left = market.get("_secs_left", 0)
-    yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
-    no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
-
-    # Pre-registered hypothesis (2026-08-14): KXBTC15M at UTC 09 and 21 is -EV.
-    # 60d backtest: 09:xx = 82.5% WR -$3.69/trade (n=40), 21:xx = 83.3% WR -$3.36/trade (n=42).
-    # Live BTC is -$0.87/trade vs +$0.94 backtest overall — these hours likely explain the gap.
-    # Shadow-skip until 500+ live settlements in each bucket confirm or deny.
-    if series == "KXBTC15M":
-        try:
-            close_hour = int(ticker.split("-")[1][-4:-2])
-        except Exception:
-            close_hour = -1
-        if close_hour in (9, 21) and MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
-            shadow_log("BTC-09-21", ticker, "yes", yes_ask, secs_left)
-            return
+    yes_ask   = price_cents(market.get("yes_ask_dollars"))
+    no_ask    = price_cents(market.get("no_ask_dollars"))
+    yes_ask   = yes_ask if yes_ask is not None else Decimal("-1")
+    no_ask    = no_ask if no_ask is not None else Decimal("-1")
 
     # Pick side within target band. YES-only per backtest — NO side is -EV.
     side, ask_cents = None, None
@@ -616,14 +711,16 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
 
     # TIGHT limit based on FRESH ask. Cap at MAX_ASK_CENTS so slippage can't
     # push us above the OOS-validated range (96c+ is EV-negative after fee).
-    limit_cents = min(MAX_ASK_CENTS, fresh_ask + LIMIT_BUFFER)
-    contracts   = max(1, int(bet_dollars * 100 / fresh_ask) + 1)
-    est_cost    = contracts * fresh_ask / 100
-    est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
+    limit_cents = min(Decimal(MAX_ASK_CENTS), fresh_ask + Decimal(LIMIT_BUFFER))
+    contracts   = contracts_for_risk(bet_dollars, limit_cents)
+    est_cost    = float(Decimal(contracts) * fresh_ask / Decimal("100"))
+    max_cost    = float(Decimal(contracts) * limit_cents / Decimal("100"))
+    est_profit  = float(Decimal(contracts) * (Decimal("100") - fresh_ask) / Decimal("100") * Decimal("0.93"))
 
     log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} "
         f"scan={ask_cents}c fresh={fresh_ask}c  limit={limit_cents}c  "
-        f"{contracts} contracts  bet=${bet_dollars}  est.cost=${est_cost:.2f}  est.win=+${est_profit:.2f}")
+        f"{contracts} contracts  bet=${bet_dollars}  est.cost=${est_cost:.2f}  "
+        f"max.cost=${max_cost:.2f}  est.win=+${est_profit:.2f}")
 
     if dry_run:
         log(f"    [dry-run] skipped")
@@ -633,33 +730,51 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
         log(f"    KALSHI_API_KEY_ID not set — cannot trade")
         return
 
+    client_order_id = str(uuid.uuid4())
+    expiration_time = int(time.time()) + ORDER_TTL_SECONDS
     code, resp = place_order(
         ticker, side, contracts,
         yes_price_cents=limit_cents if side == "yes" else None,
         no_price_cents=limit_cents  if side == "no"  else None,
+        time_in_force="good_till_canceled",
+        expiration_time=expiration_time,
+        client_order_id=client_order_id,
     )
-    order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
+    order_id = None
+    if isinstance(resp, dict):
+        order_id = resp.get("order_id") or resp.get("order", {}).get("order_id")
     if code in (200, 201):
+        if not order_id:
+            reason = f"accepted {ticker} order had no order_id; manual account reconciliation required"
+            state["execution_halt_reason"] = reason
+            save_state(state)
+            log(f"    DANGER — {reason}; server expiry={expiration_time}")
+            send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
+            raise RuntimeError(reason)
         log(f"    order accepted (id={order_id})")
         time.sleep(3)  # wait for fills to propagate before cancelling
         # Cancel GTC FIRST so the fill picture is final when we query.
-        if order_id:
-            c_code, _ = cancel_order(order_id)
-            log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
-        time.sleep(0.5)  # brief settle after cancel
-        actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
-        if actual_contracts == 0:
-            time.sleep(1.5)
-            actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
+        c_code, _ = cancel_order(order_id)
+        log(f"    cancel GTC order {order_id} (HTTP {c_code})")
+        if c_code not in (200, 204, 404):
+            log(f"    WARNING — cancel returned HTTP {c_code}; waiting for server expiry")
+        try:
+            actual_contracts, actual_cost, actual_fee = reconcile_terminal_order(order_id, ticker, side)
+        except RuntimeError as exc:
+            reason = f"{ticker}: {exc}"
+            state["execution_halt_reason"] = reason
+            save_state(state)
+            send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
+            raise
         outside_safe_zone = False
         if actual_contracts > 0:
-            avg_price_cents = int(round(100 * actual_cost / actual_contracts))
-            contracts_intended = max(1, int(bet_dollars * 100 / fresh_ask) + 1)
+            avg_price_cents = Decimal(str(actual_cost)) / Decimal(str(actual_contracts)) * Decimal("100")
+            contracts_intended = contracts
             if actual_contracts < contracts_intended * 0.9:
                 log(f"    PARTIAL FILL: {actual_contracts}/{contracts_intended} contracts "
                     f"(${actual_cost:.2f} vs ${est_cost:.2f} expected)")
             log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, "
-                f"avg={avg_price_cents}c  fee=${actual_fee:.4f}")
+                f"avg={avg_price_cents:.2f}c  fee=${actual_fee:.4f}")
             final_contracts = actual_contracts
             final_cost      = actual_cost
             final_fee       = actual_fee
@@ -673,7 +788,7 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
                     f"race slipped — trade has elevated loss risk.")
                 send_email(
                     f"[Kalshi-C] DANGER FILL {avg_price_cents}c — {ticker}",
-                    f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents}c\n"
+                    f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents:.2f}c\n"
                     f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n"
                     f"Scan saw: {ask_cents}c, refetch saw: {fresh_ask}c\n"
                     f"Fill was BELOW safe zone — market crashed in the ~200ms\n"
@@ -684,14 +799,15 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
             return  # don't record a phantom position
         state["positions"][ticker] = {
             "side":        side,
-            "limit_cents": limit_cents,
-            "ask_at_entry": fresh_ask,
-            "ask_at_scan":  ask_cents,
+            "limit_cents": float(limit_cents),
+            "ask_at_entry": float(fresh_ask),
+            "ask_at_scan":  float(ask_cents),
             "outside_safe_zone": outside_safe_zone,
             "contracts":   final_contracts,
             "cost":        final_cost,
             "fee_cost":    final_fee,
             "order_id":    order_id,
+            "strategy_version": STRATEGY_VERSION,
             "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":     False,
         }
@@ -719,8 +835,10 @@ def try_longshot_trade(market, state, dry_run):
         return
 
     secs_left = market.get("_secs_left", 0)
-    yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
-    no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
+    yes_ask   = price_cents(market.get("yes_ask_dollars"))
+    no_ask    = price_cents(market.get("no_ask_dollars"))
+    yes_ask   = yes_ask if yes_ask is not None else Decimal("-1")
+    no_ask    = no_ask if no_ask is not None else Decimal("-1")
 
     side, ask_cents = None, None
     if LONGSHOT_MIN_ASK <= yes_ask <= LONGSHOT_MAX_ASK:
@@ -741,10 +859,10 @@ def try_longshot_trade(market, state, dry_run):
     if fresh_ask is None or not (LONGSHOT_MIN_ASK <= fresh_ask <= LONGSHOT_MAX_ASK):
         return
 
-    limit_cents = min(LONGSHOT_MAX_ASK, fresh_ask + LIMIT_BUFFER)
-    contracts   = max(1, int(LONGSHOT_BET * 100 / fresh_ask) + 1)
-    est_cost    = contracts * fresh_ask / 100
-    est_profit  = contracts * (100 - fresh_ask) / 100 * (1 - 0.07)
+    limit_cents = min(Decimal(LONGSHOT_MAX_ASK), fresh_ask + Decimal(LIMIT_BUFFER))
+    contracts   = contracts_for_risk(LONGSHOT_BET, limit_cents)
+    est_cost    = float(Decimal(contracts) * fresh_ask / Decimal("100"))
+    est_profit  = float(Decimal(contracts) * (Decimal("100") - fresh_ask) / Decimal("100") * Decimal("0.93"))
 
     log(f"  LONGSHOT: {ticker}  {secs_left:.0f}s left  {side.upper()} "
         f"scan={ask_cents}c fresh={fresh_ask}c prior_avg={prior_avg:.0f}c  "
@@ -758,38 +876,51 @@ def try_longshot_trade(market, state, dry_run):
     if not os.environ.get("KALSHI_API_KEY_ID"):
         return
 
+    client_order_id = str(uuid.uuid4())
+    expiration_time = int(time.time()) + ORDER_TTL_SECONDS
     code, resp = place_order(
         ticker, side, contracts,
         yes_price_cents=limit_cents if side == "yes" else None,
         no_price_cents=limit_cents  if side == "no"  else None,
+        time_in_force="good_till_canceled",
+        expiration_time=expiration_time,
+        client_order_id=client_order_id,
     )
-    order_id = resp.get("order", {}).get("order_id") if isinstance(resp, dict) else None
+    order_id = None
+    if isinstance(resp, dict):
+        order_id = resp.get("order_id") or resp.get("order", {}).get("order_id")
     if code in (200, 201):
+        if not order_id:
+            reason = f"accepted {ticker} longshot order had no order_id; manual reconciliation required"
+            state["execution_halt_reason"] = reason
+            save_state(state)
+            raise RuntimeError(reason)
         log(f"    order accepted (id={order_id})")
         time.sleep(3)
-        if order_id:
-            c_code, _ = cancel_order(order_id)
-            log(f"    cancelled GTC order {order_id} (HTTP {c_code})")
-        time.sleep(0.5)
-        actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
-        if actual_contracts == 0:
-            time.sleep(1.5)
-            actual_contracts, actual_cost, actual_fee = query_actual_fill(ticker, side, order_id)
+        c_code, _ = cancel_order(order_id)
+        log(f"    cancel GTC order {order_id} (HTTP {c_code})")
+        try:
+            actual_contracts, actual_cost, actual_fee = reconcile_terminal_order(order_id, ticker, side)
+        except RuntimeError as exc:
+            state["execution_halt_reason"] = f"{ticker}: {exc}"
+            save_state(state)
+            raise
         if actual_contracts == 0:
             log(f"    no fill")
             return
-        avg_price_cents = int(round(100 * actual_cost / actual_contracts))
-        log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, avg={avg_price_cents}c  fee=${actual_fee:.4f}")
+        avg_price_cents = Decimal(str(actual_cost)) / Decimal(str(actual_contracts)) * Decimal("100")
+        log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, avg={avg_price_cents:.2f}c  fee=${actual_fee:.4f}")
         state["positions"][ticker] = {
             "side":         side,
-            "limit_cents":  limit_cents,
-            "ask_at_entry": fresh_ask,
-            "ask_at_scan":  ask_cents,
+            "limit_cents":  float(limit_cents),
+            "ask_at_entry": float(fresh_ask),
+            "ask_at_scan":  float(ask_cents),
             "outside_safe_zone": False,
             "contracts":    actual_contracts,
             "cost":         actual_cost,
             "fee_cost":     actual_fee,
             "order_id":     order_id,
+            "strategy_version": STRATEGY_VERSION,
             "opened_at":    datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":      False,
             "strategy":     "longshot",
@@ -864,20 +995,28 @@ def check_outcomes(state, balance):
             log(f"  SETTLED(LS) {ticker} result={result.upper()}  side={pos['side'].upper()}  "
                 f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  LS WR={ls_wr:.1f}%")
         else:
-            state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
             if won:
-                state["stats"]["wins"] = state["stats"].get("wins", 0) + 1
                 state["consec_losses"] = 0
             else:
                 state["consec_losses"] = state.get("consec_losses", 0) + 1
                 state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
-            recent = state.setdefault("recent_results", [])
-            recent.append([int(won), pos.get("limit_cents", 92)])
-            state["recent_results"] = recent[-EDGE_DEGRADE_WINDOW * 2:]
+            position_version = pos.get("strategy_version", STRATEGY_VERSION)
+            if position_version == STRATEGY_VERSION:
+                state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
+                if won:
+                    state["stats"]["wins"] = state["stats"].get("wins", 0) + 1
+                recent = state.setdefault("recent_results", [])
+                recent.append([int(won), pos.get("limit_cents", 92)])
+                state["recent_results"] = recent[-EDGE_DEGRADE_WINDOW * 2:]
             save_state(state)
             wr = state["stats"]["wins"] / state["stats"]["trades"] if state["stats"]["trades"] else 0
+            suffix = (
+                f"cumul WR={wr*100:.1f}%"
+                if position_version == STRATEGY_VERSION
+                else f"carried from {position_version}; excluded from {STRATEGY_VERSION} stats"
+            )
             log(f"  SETTLED {ticker} result={result.upper()}  side={pos['side'].upper()}  "
-                f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  cumul WR={wr*100:.1f}%")
+                f"pnl=${pnl:+.2f}  daily=${daily['pnl']:+.2f}  {suffix}")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -904,22 +1043,33 @@ def run_once(dry_run=False):
     bet = compute_bet_dollars(balance)
     dll = compute_daily_loss_limit(bet)
     log(f"  bet_size=${bet} (flat)  balance=${balance:.2f}  daily_loss_limit=${dll}")
-    live_tickers = fetch_live_position_tickers()
+    live_positions = fetch_live_position_tickers()
+    resting_order_tickers = fetch_resting_order_tickers()
+    if live_positions is None or resting_order_tickers is None:
+        log("  WARNING: cannot prove live positions/resting orders — skipping this cycle")
+        return
     n_scanned, n_tradeable = 0, 0
     for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
             before = len(state.get("positions", {}))
-            try_trade(m, state, dry_run, balance=balance, live_tickers=live_tickers)
+            try_trade(
+                m,
+                state,
+                dry_run,
+                balance=balance,
+                live_position_tickers=live_positions,
+                resting_order_tickers=resting_order_tickers,
+            )
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
 
     # Shadow scan — no orders placed, just logging for future re-entry analysis
     for series in SHADOW_SERIES:
         for m in open_markets_near_close(series):
-            yes_ask = int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
-            if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+            yes_ask = price_cents(m.get("yes_ask_dollars"))
+            if yes_ask is not None and MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
                 shadow_log(f"EXCL-{series}", m.get("ticker",""), "yes", yes_ask, m.get("_secs_left", 0))
 
     # Shadow log 600-700s window for OOS validation of MAX_SECS_LEFT=700 candidate
@@ -941,8 +1091,8 @@ def run_once(dry_run=False):
                 continue
             if not (600 < secs <= 700):
                 continue
-            yes_ask = int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
-            if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+            yes_ask = price_cents(m.get("yes_ask_dollars"))
+            if yes_ask is not None and MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
                 shadow_log("600-700s", m.get("ticker", ""), "yes", yes_ask, secs)
 
     stats = state["stats"]
