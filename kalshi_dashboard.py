@@ -112,6 +112,12 @@ def get_market(ticker):
         "title":      m.get("subtitle", m.get("title", "")),
     }
 
+def get_fills_contracts(ticker):
+    """Sum count_fp across all fills for this ticker to get actual contracts held."""
+    r = kalshi("/portfolio/fills", {"ticker": ticker, "limit": 50})
+    if not r: return 0
+    return int(sum(float(f.get("count_fp", 0) or 0) for f in r.get("fills", [])))
+
 def get_positions():
     def _f():
         r = kalshi("/portfolio/positions", {"settlement_status": "unsettled", "limit": 200})
@@ -121,8 +127,9 @@ def get_positions():
             if not p.get("ticker"): continue
             ticker = p.get("ticker", "")
             mkt = get_market(ticker)
+            contracts = get_fills_contracts(ticker) or int(p.get("position") or 0)
             out.append({"ticker":     ticker,
-                        "contracts":  p.get("position", p.get("resting_orders_count", 1)),
+                        "contracts":  contracts,
                         "yes_ask":    mkt.get("yes_ask"),
                         "yes_bid":    mkt.get("yes_bid"),
                         "close_time": mkt.get("close_time", ""),
@@ -345,27 +352,33 @@ function render(d){
   if(pos.length){
     posEl.innerHTML=pos.map(p=>{
       const tl=timeLeft(p.close_time);
+      const msLeft=p.close_time?new Date(p.close_time).getTime()-Date.now():Infinity;
+      const nearExpiry=msLeft<120000&&msLeft>0;
+      const settling=msLeft<=0;
       const spread=p.yes_ask!=null&&p.yes_bid!=null?p.yes_ask-p.yes_bid:null;
-      const payout=(p.contracts||0).toFixed(2);
-      const estVal=p.yes_bid!=null?((p.contracts||0)*p.yes_bid/100).toFixed(2):null;
-      const mktVal=p.yes_ask!=null?((p.contracts||0)*p.yes_ask/100).toFixed(2):null;
+      const cts=p.contracts||0;
+      const payout=cts.toFixed(2);
+      const askDisp=p.yes_ask!=null?p.yes_ask+'¢':(nearExpiry||settling?'<span style="color:#f59e0b">Locked</span>':'—');
+      const bidDisp=p.yes_bid!=null?p.yes_bid+'¢':(nearExpiry||settling?'<span style="color:#f59e0b">Locked</span>':'—');
+      const spreadDisp=spread!=null?spread+'¢':'—';
+      const mktValDisp=p.yes_bid!=null?'~$'+(cts*p.yes_bid/100).toFixed(2):(nearExpiry||settling?`<span style="color:#f59e0b">~$${payout}</span>`:'—');
       return`<div class="pos-row" style="flex-wrap:wrap;align-items:flex-start">
         <div style="flex:1;min-width:0">
           <div class="pos-ticker">${p.ticker.split('-')[0]}</div>
           <div class="pos-sub" style="font-size:11px">${p.ticker}</div>
         </div>
         <div style="flex-shrink:0;text-align:right">
-          <div class="pos-ask">${tl||'LIVE'}</div>
+          <div class="pos-ask">${settling?'Settling…':tl||'LIVE'}</div>
           <div class="pos-time">● LIVE</div>
         </div>
         ${p.title?`<div class="pos-question">${p.title}</div>`:''}
         <div class="pos-grid">
-          <div class="pos-grid-cell"><div class="lbl">Contracts</div><div class="val">${p.contracts}</div></div>
-          <div class="pos-grid-cell"><div class="lbl">Ask</div><div class="val">${p.yes_ask!=null?p.yes_ask+'¢':'—'}</div></div>
-          <div class="pos-grid-cell"><div class="lbl">Bid</div><div class="val">${p.yes_bid!=null?p.yes_bid+'¢':'—'}</div></div>
-          <div class="pos-grid-cell"><div class="lbl">Spread</div><div class="val">${spread!=null?spread+'¢':'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Contracts</div><div class="val">${cts||'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Ask</div><div class="val">${askDisp}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Bid</div><div class="val">${bidDisp}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Spread</div><div class="val">${spreadDisp}</div></div>
           <div class="pos-grid-cell"><div class="lbl">Win Payout</div><div class="val g">+$${payout}</div></div>
-          <div class="pos-grid-cell"><div class="lbl">Mkt Value</div><div class="val">${mktVal?'~$'+mktVal:'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Mkt Value</div><div class="val">${mktValDisp}</div></div>
         </div>
       </div>`;
     }).join('');
