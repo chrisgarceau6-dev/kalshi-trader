@@ -4,7 +4,7 @@ name: Late-Certainty Trader
 # │  v5.12 — order-safety hardened.                                   │
 # │                                                                     │
 # │  YES 90-93c, 150-600s, prior two 1m asks >=75c; UTC17 excluded.     │
-# │  Flat $100 principal-risk budget; max concurrent exposure = 2.      │
+# │  Flat $75 principal-risk budget; max concurrent exposure = 2.       │
 # │                                                                     │
 # │  Live: BTC/ETH/SOL/DOGE/BNB/XRP 15m plus KXWTI15M.                 │
 # │  Exact fixed-point prices; size from worst-case limit price.        │

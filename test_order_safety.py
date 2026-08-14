@@ -66,13 +66,14 @@ class OrderSafetyTests(unittest.TestCase):
 
         cancel.assert_called_once_with("order-123")
 
-    def test_contract_count_never_exceeds_flat_risk_at_limit(self):
+    def test_configured_contract_count_never_exceeds_flat_risk_at_limit(self):
         count = trader.contracts_for_risk(
-            bet_dollars=100,
+            bet_dollars=trader.FLAT_BET_DOLLARS,
             limit_cents=Decimal("93"),
         )
-        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("100"))
-        self.assertEqual(count, 107)
+        self.assertEqual(trader.FLAT_BET_DOLLARS, 75)
+        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("75"))
+        self.assertEqual(count, 80)
 
     def test_subpenny_boundaries_are_not_rounded_into_band(self):
         with patch.object(trader, "kalshi_get", return_value=(200, {"market": {"yes_ask_dollars": "0.8950"}})):

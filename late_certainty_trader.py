@@ -8,13 +8,13 @@ STRATEGY:
   crypto markets plus KXWTI15M; excluded candidates are shadow-logged only.
 
 BET SIZING:
-  Flat $100 principal-risk budget per order. Contract count is sized from
-  the limit price so principal at the worst allowed fill cannot exceed $100.
+  Flat $75 principal-risk budget per order. Contract count is sized from
+  the limit price so principal at the worst allowed fill cannot exceed $75.
   Exchange fees are additional.
 
 KILL SWITCHES:
   STOP_BALANCE=$650
-  trailing-24h loss limit = 8x bet size ($800 at current sizing)
+  trailing-24h loss limit = 8x bet size ($600 at current sizing)
   5 consecutive losses -> 60-minute cooldown
   50-trade WR below 84% -> 2-hour degradation halt
   ambiguous execution state -> persistent fail-closed halt
@@ -164,8 +164,8 @@ LONGSHOT_BET       = 5
 SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
-# Flat $100 principal-risk budget per order; fees are additional.
-FLAT_BET_DOLLARS = 100
+# Flat $75 principal-risk budget per order; fees are additional.
+FLAT_BET_DOLLARS = 75
 
 
 def compute_bet_dollars(balance):
@@ -195,7 +195,7 @@ def daily_pnl(state, now_ts=None):
     ), 2)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE            = 650  # halt if balance drops below this (raised from 300 with bet bump $45→$100, 2026-08-14)
+STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
 MAX_CONCURRENT_POSITIONS = 2  # correlated crypto basket: effective independent bets ~1.3 at 0.7ρ; 6×$45=$270=33% account
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
