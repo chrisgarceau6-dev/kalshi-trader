@@ -99,12 +99,26 @@ def get_settlements():
         out.reverse(); return out
     return cached("sett", 120, _f)
 
+def get_market(ticker):
+    r = kalshi(f"/markets/{ticker}")
+    if not r: return {}
+    m = r.get("market", r)
+    return {"yes_ask": m.get("yes_ask"), "close_time": m.get("close_time", "")}
+
 def get_positions():
     def _f():
         r = kalshi("/portfolio/positions", {"settlement_status": "unsettled", "limit": 200})
         if not r: return []
-        return [{"ticker": p.get("ticker", ""), "contracts": p.get("position", p.get("resting_orders_count", 1))}
-                for p in r.get("market_positions", []) if p.get("ticker")]
+        out = []
+        for p in r.get("market_positions", []):
+            if not p.get("ticker"): continue
+            ticker = p.get("ticker", "")
+            mkt = get_market(ticker)
+            out.append({"ticker": ticker,
+                        "contracts": p.get("position", p.get("resting_orders_count", 1)),
+                        "yes_ask": mkt.get("yes_ask"),
+                        "close_time": mkt.get("close_time", "")})
+        return out
     return cached("pos", 15, _f)
 
 app = Flask(__name__)
@@ -162,6 +176,9 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 .trade-pnl{font-size:14px;font-weight:600;margin-left:auto}
 .g{color:#22c55e}.r{color:#ef4444}.m{color:#6b7280}
 .empty{color:#6b7280;font-size:13px;padding:20px 0;text-align:center}
+.pos-ask{font-size:14px;font-weight:600;color:#22c55e;text-align:right}
+.pos-time{font-size:11px;color:#6b7280;text-align:right;margin-top:2px}
+.trade-detail{width:100%;padding:6px 0 2px;font-size:11px;color:#6b7280;display:flex;flex-direction:column;gap:3px;border-top:1px solid #1c1c1c;margin-top:6px}
 </style>
 </head>
 <body>
@@ -192,7 +209,7 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 <h3>Recent Trades</h3>
 <div id="trades"><div class="empty">Loading...</div></div>
 <script>
-let chart=null, range='1D', last=null;
+let chart=null, range='1D', last=null, expandedTrades=new Set();
 
 const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'All time'};
 
@@ -211,6 +228,15 @@ function fmt(n){
 }
 function wr(wins,n){return n?((wins/n)*100).toFixed(1)+'%':'—';}
 function cls(n){return n>0?'g':n<0?'r':'m';}
+
+function timeLeft(closeTime){
+  if(!closeTime)return'';
+  const ms=new Date(closeTime).getTime()-Date.now();
+  if(ms<=0)return'settling…';
+  const s=Math.floor(ms/1000);
+  if(s<60)return s+'s left';
+  return Math.floor(s/60)+'m '+(s%60)+'s left';
+}
 
 function buildChart(labels,vals){
   const last=vals.length?vals[vals.length-1]:0;
@@ -308,7 +334,10 @@ function render(d){
           <div class="pos-ticker">${p.ticker}</div>
           <div class="pos-sub">${p.contracts} contracts · YES</div>
         </div>
-        <span style="color:#f59e0b;font-size:12px;font-weight:600">LIVE</span>
+        <div style="flex-shrink:0">
+          <div class="pos-ask">${p.yes_ask!=null?p.yes_ask+'¢':'LIVE'}</div>
+          <div class="pos-time">${timeLeft(p.close_time)||''}</div>
+        </div>
       </div>`).join('');
   } else {
     posEl.innerHTML='<div class="empty">No open positions</div>';
@@ -318,12 +347,25 @@ function render(d){
   const recent=sett.slice(-60).reverse();
   const trEl=document.getElementById('trades');
   if(recent.length){
-    trEl.innerHTML=recent.map(s=>`
-      <div class="trade-row">
+    trEl.innerHTML=recent.map(s=>{
+      const key=s.ticker+'|'+s.ts;
+      const exp=expandedTrades.has(key);
+      const dt=new Date(s.ts);
+      const timeStr=dt.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC',hour12:false})+' UTC';
+      return`<div class="trade-row" data-key="${key}" style="cursor:pointer;flex-wrap:wrap">
         <span class="badge ${s.won?'badge-w':'badge-l'}">${s.won?'W':'L'}</span>
         <span class="trade-series">${s.series}</span>
         <span class="trade-pnl ${cls(s.pnl)}">${fmt(s.pnl)}</span>
-      </div>`).join('');
+        ${exp?`<div class="trade-detail"><span>${s.ticker}</span><span>${s.side.toUpperCase()} · $${s.cost.toFixed(2)} bet · ${timeStr}</span></div>`:''}
+      </div>`;
+    }).join('');
+    trEl.querySelectorAll('.trade-row').forEach(row=>{
+      row.addEventListener('click',()=>{
+        const k=row.dataset.key;
+        expandedTrades.has(k)?expandedTrades.delete(k):expandedTrades.add(k);
+        if(last)render(last);
+      });
+    });
   } else {
     trEl.innerHTML='<div class="empty">No settled trades yet</div>';
   }
