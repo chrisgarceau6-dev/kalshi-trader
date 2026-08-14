@@ -136,21 +136,25 @@ LOG_FILE   = BASE / "certainty.log"
 
 # ── strategy constants ─────────────────────────────────────────────────────────
 SERIES_LIST     = [
-    # 15m crypto series where v4 filter (ask[95,99] prior_k=3 pmin=92 both)
-    # showed +EV in 60-day backtest:
+    # 15m crypto series — v5.7 OOS-validated config:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
+    # WTI crude oil — added v5.8 (2026-08-13):
+    # 13d backtest: 94.5% WR full, 95.5% OOS, +$1.75/trade OOS, ~13/day → +$14/day expected.
+    # Gold and silver backtested same day — both negative OOS. Not added.
+    "KXWTI15M",
     # Explicitly EXCLUDED:
     # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → shadow-testing
     # - KXNEAR15M — live break-even WR 95.5% (avg loss $30), actual 92% → EV-negative (2026-08-09)
     # - KXZEC15M  — OOS test still -$3.88 (WR 93.9%)
-    # - WTI/Gold/Silver 15m — TBD, backtest pending
+    # - KXGOLD15M — 86.5% OOS WR, -$2.59/trade OOS. Dead.
+    # - KXSILVER15M — 84.8% OOS WR, -$3.52/trade OOS. Dead.
 ]
 
 # Series excluded from live trading but scanned each run for shadow-test data collection.
 # Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
 SHADOW_SERIES   = ["KXHYPE15M"]
 
-STRATEGY_VERSION = "v5.7"  # bump when strategy logic changes; resets WR/pnl counter
+STRATEGY_VERSION = "v5.8"  # bump when strategy logic changes; resets WR/pnl counter
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
