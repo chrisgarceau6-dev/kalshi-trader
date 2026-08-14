@@ -551,6 +551,19 @@ def try_trade(market, state, dry_run, balance=None, live_tickers=None):
     yes_ask   = int(round(float(market.get("yes_ask_dollars", 0) or 0) * 100))
     no_ask    = int(round(float(market.get("no_ask_dollars",  0) or 0) * 100))
 
+    # Pre-registered hypothesis (2026-08-14): KXBTC15M at UTC 09 and 21 is -EV.
+    # 60d backtest: 09:xx = 82.5% WR -$3.69/trade (n=40), 21:xx = 83.3% WR -$3.36/trade (n=42).
+    # Live BTC is -$0.87/trade vs +$0.94 backtest overall — these hours likely explain the gap.
+    # Shadow-skip until 500+ live settlements in each bucket confirm or deny.
+    if series == "KXBTC15M":
+        try:
+            close_hour = int(ticker.split("-")[1][-4:-2])
+        except Exception:
+            close_hour = -1
+        if close_hour in (9, 21) and MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+            shadow_log("BTC-09-21", ticker, "yes", yes_ask, secs_left)
+            return
+
     # Pick side within target band. YES-only per backtest — NO side is -EV.
     side, ask_cents = None, None
     if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
