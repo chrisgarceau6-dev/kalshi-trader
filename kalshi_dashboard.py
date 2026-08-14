@@ -91,6 +91,8 @@ def get_settlements():
                     "pnl":    round(rev - yc - nc - fee, 2),
                     "won":    rev > 0.01,
                     "cost":   round(yc + nc, 2),
+                    "rev":    round(rev, 2),
+                    "fee":    round(fee, 2),
                     "ts":     s.get("settled_time", ""),
                 })
             cursor = r.get("cursor")
@@ -103,7 +105,12 @@ def get_market(ticker):
     r = kalshi(f"/markets/{ticker}")
     if not r: return {}
     m = r.get("market", r)
-    return {"yes_ask": m.get("yes_ask"), "close_time": m.get("close_time", "")}
+    return {
+        "yes_ask":    m.get("yes_ask"),
+        "yes_bid":    m.get("yes_bid"),
+        "close_time": m.get("close_time", ""),
+        "title":      m.get("subtitle", m.get("title", "")),
+    }
 
 def get_positions():
     def _f():
@@ -114,10 +121,12 @@ def get_positions():
             if not p.get("ticker"): continue
             ticker = p.get("ticker", "")
             mkt = get_market(ticker)
-            out.append({"ticker": ticker,
-                        "contracts": p.get("position", p.get("resting_orders_count", 1)),
-                        "yes_ask": mkt.get("yes_ask"),
-                        "close_time": mkt.get("close_time", "")})
+            out.append({"ticker":     ticker,
+                        "contracts":  p.get("position", p.get("resting_orders_count", 1)),
+                        "yes_ask":    mkt.get("yes_ask"),
+                        "yes_bid":    mkt.get("yes_bid"),
+                        "close_time": mkt.get("close_time", ""),
+                        "title":      mkt.get("title", "")})
         return out
     return cached("pos", 15, _f)
 
@@ -176,9 +185,15 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 .trade-pnl{font-size:14px;font-weight:600;margin-left:auto}
 .g{color:#22c55e}.r{color:#ef4444}.m{color:#6b7280}
 .empty{color:#6b7280;font-size:13px;padding:20px 0;text-align:center}
-.pos-ask{font-size:14px;font-weight:600;color:#22c55e;text-align:right}
-.pos-time{font-size:11px;color:#6b7280;text-align:right;margin-top:2px}
-.trade-detail{width:100%;padding:6px 0 2px;font-size:11px;color:#6b7280;display:flex;flex-direction:column;gap:3px;border-top:1px solid #1c1c1c;margin-top:6px}
+.pos-ask{font-size:16px;font-weight:700;color:#22c55e;text-align:right}
+.pos-time{font-size:11px;color:#f59e0b;text-align:right;margin-top:2px;font-weight:600}
+.pos-grid{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #1c1c1c}
+.pos-grid-cell .lbl{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.pos-grid-cell .val{font-size:15px;font-weight:600}
+.pos-question{width:100%;font-size:12px;color:#9ca3af;margin-top:8px;line-height:1.45;font-style:italic}
+.trade-detail{width:100%;padding:8px 0 2px;border-top:1px solid #1c1c1c;margin-top:8px}
+.trade-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 20px;font-size:11px;color:#6b7280;margin-top:6px}
+.trade-grid strong{font-weight:600}
 </style>
 </head>
 <body>
@@ -328,17 +343,32 @@ function render(d){
   set('s-open',pos.length,pos.length>0?'g':'m');
   const posEl=document.getElementById('positions');
   if(pos.length){
-    posEl.innerHTML=pos.map(p=>`
-      <div class="pos-row">
+    posEl.innerHTML=pos.map(p=>{
+      const tl=timeLeft(p.close_time);
+      const spread=p.yes_ask!=null&&p.yes_bid!=null?p.yes_ask-p.yes_bid:null;
+      const payout=(p.contracts||0).toFixed(2);
+      const estVal=p.yes_bid!=null?((p.contracts||0)*p.yes_bid/100).toFixed(2):null;
+      const mktVal=p.yes_ask!=null?((p.contracts||0)*p.yes_ask/100).toFixed(2):null;
+      return`<div class="pos-row" style="flex-wrap:wrap;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div class="pos-ticker">${p.ticker}</div>
-          <div class="pos-sub">${p.contracts} contracts · YES</div>
+          <div class="pos-ticker">${p.ticker.split('-')[0]}</div>
+          <div class="pos-sub" style="font-size:11px">${p.ticker}</div>
         </div>
-        <div style="flex-shrink:0">
-          <div class="pos-ask">${p.yes_ask!=null?p.yes_ask+'¢':'LIVE'}</div>
-          <div class="pos-time">${timeLeft(p.close_time)||''}</div>
+        <div style="flex-shrink:0;text-align:right">
+          <div class="pos-ask">${tl||'LIVE'}</div>
+          <div class="pos-time">● LIVE</div>
         </div>
-      </div>`).join('');
+        ${p.title?`<div class="pos-question">${p.title}</div>`:''}
+        <div class="pos-grid">
+          <div class="pos-grid-cell"><div class="lbl">Contracts</div><div class="val">${p.contracts}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Ask</div><div class="val">${p.yes_ask!=null?p.yes_ask+'¢':'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Bid</div><div class="val">${p.yes_bid!=null?p.yes_bid+'¢':'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Spread</div><div class="val">${spread!=null?spread+'¢':'—'}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Win Payout</div><div class="val g">+$${payout}</div></div>
+          <div class="pos-grid-cell"><div class="lbl">Mkt Value</div><div class="val">${mktVal?'~$'+mktVal:'—'}</div></div>
+        </div>
+      </div>`;
+    }).join('');
   } else {
     posEl.innerHTML='<div class="empty">No open positions</div>';
   }
@@ -356,7 +386,17 @@ function render(d){
         <span class="badge ${s.won?'badge-w':'badge-l'}">${s.won?'W':'L'}</span>
         <span class="trade-series">${s.series}</span>
         <span class="trade-pnl ${cls(s.pnl)}">${fmt(s.pnl)}</span>
-        ${exp?`<div class="trade-detail"><span>${s.ticker}</span><span>${s.side.toUpperCase()} · $${s.cost.toFixed(2)} bet · ${timeStr}</span></div>`:''}
+        ${exp?`<div class="trade-detail">
+          <span style="font-size:12px;color:#9ca3af">${s.ticker}</span>
+          <div class="trade-grid">
+            <span>Side: <strong style="color:#e5e7eb">${s.side.toUpperCase()}</strong></span>
+            <span>Settled: <strong style="color:#e5e7eb">${timeStr}</strong></span>
+            <span>Cost: <strong style="color:#e5e7eb">$${s.cost.toFixed(2)}</strong></span>
+            <span>Gross payout: <strong class="g">$${s.rev!=null?s.rev.toFixed(2):'—'}</strong></span>
+            <span>Fee: <strong class="r">${s.fee!=null?'-$'+s.fee.toFixed(2):'—'}</strong></span>
+            <span>Net P&L: <strong class="${cls(s.pnl)}">${fmt(s.pnl)}</strong></span>
+          </div>
+        </div>`:''}
       </div>`;
     }).join('');
     trEl.querySelectorAll('.trade-row').forEach(row=>{
