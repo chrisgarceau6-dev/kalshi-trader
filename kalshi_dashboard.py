@@ -255,19 +255,22 @@ function render(d){
   const cut=cutoff(range);
   const inRange=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
-  // Chart
-  let cum=0;
+  // Chart — balance over time (reconstruct from current balance + full settlement history)
+  const allPnl=sett.reduce((a,s)=>a+s.pnl,0);
+  const balStart=(bal!=null?bal:0)-allPnl;
+  let runBal=balStart;
+  const balSeries=sett.map(s=>{runBal+=s.pnl;return{ts:s.ts,bal:runBal};});
+  const inRangeBal=balSeries.filter(x=>new Date(x.ts).getTime()>=cut);
   const labels=[],vals=[];
-  for(const s of inRange){
-    cum+=s.pnl;
-    const dt=new Date(s.ts);
+  for(const x of inRangeBal){
+    const dt=new Date(x.ts);
     let lbl;
     if(range==='1H'||range==='1D'){
       lbl=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'UTC',hour12:false});
     } else {
       lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'UTC'});
     }
-    labels.push(lbl); vals.push(+cum.toFixed(2));
+    labels.push(lbl); vals.push(+x.bal.toFixed(2));
   }
   buildChart(labels,vals);
 
