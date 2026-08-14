@@ -219,9 +219,9 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 </div>
 <div class="chart-wrap"><canvas id="chart"></canvas></div>
 <div class="stats">
-  <div class="stat"><div class="stat-lbl">Today P&L</div><div class="stat-val" id="s-tpnl">—</div></div>
-  <div class="stat"><div class="stat-lbl">Today WR</div><div class="stat-val" id="s-twr">—</div></div>
-  <div class="stat"><div class="stat-lbl">Trades</div><div class="stat-val m" id="s-tn">—</div></div>
+  <div class="stat"><div class="stat-lbl" id="lbl-rpnl">P&L</div><div class="stat-val" id="s-rpnl">—</div></div>
+  <div class="stat"><div class="stat-lbl" id="lbl-rwr">WR</div><div class="stat-val" id="s-rwr">—</div></div>
+  <div class="stat"><div class="stat-lbl" id="lbl-rn">Trades</div><div class="stat-val m" id="s-rn">—</div></div>
   <div class="stat"><div class="stat-lbl">Hour P&L</div><div class="stat-val" id="s-hpnl">—</div></div>
   <div class="stat"><div class="stat-lbl">Hour WR</div><div class="stat-val" id="s-hwr">—</div></div>
   <div class="stat"><div class="stat-lbl">Open</div><div class="stat-val" id="s-open">—</div></div>
@@ -328,14 +328,16 @@ function render(d){
   chgEl.textContent=fmt(rangePnl)+' ('+LABELS[range]+')';
   chgEl.className='hero-chg '+(rangePnl>=0?'g':'r');
 
-  // Today stats
-  const todayCut=cutoff('1D');
-  const ts=sett.filter(s=>new Date(s.ts).getTime()>=todayCut);
-  const tpnl=ts.reduce((a,s)=>a+s.pnl,0);
-  const twin=ts.filter(s=>s.won).length;
-  set('s-tpnl',fmt(tpnl),cls(tpnl));
-  set('s-twr',wr(twin,ts.length),'');
-  set('s-tn',ts.length,'m');
+  // Range stats (top row — tracks selected range button)
+  const rlbl={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'All-time'};
+  const rpnl=inRange.reduce((a,s)=>a+s.pnl,0);
+  const rwin=inRange.filter(s=>s.won).length;
+  document.getElementById('lbl-rpnl').textContent=rlbl[range]+' P&L';
+  document.getElementById('lbl-rwr').textContent=rlbl[range]+' WR';
+  document.getElementById('lbl-rn').textContent=rlbl[range]+' Trades';
+  set('s-rpnl',fmt(rpnl),cls(rpnl));
+  set('s-rwr',wr(rwin,inRange.length),'');
+  set('s-rn',inRange.length,'m');
 
   // Hour stats
   const hrCut=cutoff('1H');
