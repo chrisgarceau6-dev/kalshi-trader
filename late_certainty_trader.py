@@ -174,7 +174,7 @@ def compute_bet_dollars(balance):
 
 def compute_daily_loss_limit(bet_dollars):
     """Trailing-24h realized-loss floor scaled to the configured bet size."""
-    return max(30, bet_dollars * 8)
+    return max(30, bet_dollars * 4)
 
 ROLLING_PNL_SECONDS = 86400  # trailing 24h window avoids double-limit at midnight UTC
 
@@ -196,6 +196,7 @@ def daily_pnl(state, now_ts=None):
 
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
+HWM_DRAWDOWN_PCT        = 0.10 # halt if balance drops 10% below rolling high-water mark
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
 MAX_CONCURRENT_POSITIONS = 3  # 3×$75=$225=16% of balance; original cap of 2 was sized for $45 bets
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
@@ -387,6 +388,10 @@ def check_halts(state, balance):
         return True, f"execution safety halt: {state['execution_halt_reason']}"
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
+    hwm = state.get("high_water_balance", 0)
+    if hwm > 0 and balance is not None and balance < hwm * (1 - HWM_DRAWDOWN_PCT):
+        return True, (f"HWM drawdown: ${balance:.2f} is >{HWM_DRAWDOWN_PCT*100:.0f}% "
+                      f"below peak ${hwm:.2f} (threshold ${hwm*(1-HWM_DRAWDOWN_PCT):.2f})")
     bet_dollars = compute_bet_dollars(balance)
     daily_loss_limit = compute_daily_loss_limit(bet_dollars)
     d_pnl = daily_pnl(state)
@@ -1114,6 +1119,10 @@ def run_once(dry_run=False):
     log(f"  balance=${balance:.2f}")
 
     check_outcomes(state, balance)
+
+    if balance > state.get("high_water_balance", 0):
+        state["high_water_balance"] = balance
+        log(f"  high-water mark: ${balance:.2f}")
 
     halted, reason = check_halts(state, balance)
     if halted:
