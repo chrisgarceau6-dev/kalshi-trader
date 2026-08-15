@@ -197,14 +197,14 @@ def daily_pnl(state, now_ts=None):
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
-MAX_CONCURRENT_POSITIONS = 2  # correlated crypto basket: effective independent bets ~1.3 at 0.7ρ; 6×$45=$270=33% account
+MAX_CONCURRENT_POSITIONS = 3  # 3×$75=$225=16% of balance; original cap of 2 was sized for $45 bets
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
 EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 ORDER_TTL_SECONDS       = 4    # server-enforced expiry is the final guard against stranded GTC orders
 ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and recover exact exposure
-ORDER_FILL_WAIT_SECONDS = 3    # short resting window before each explicit cancel
+ORDER_FILL_WAIT_SECONDS = 1    # 1s: top-up fires sooner while ask still <=93c; most fills happen <500ms
 ORDER_MAX_ATTEMPTS      = 3    # bounded top-ups, each with a fresh price/prior validation
 ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few dollars
 
