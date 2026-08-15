@@ -245,17 +245,20 @@ let chart=null, range='1D', last=null, expandedTrades=new Set();
 
 const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'Since Aug 1'};
 
+const AUG1=new Date('2026-08-01T04:00:00Z').getTime();
 function cutoff(r){
   const now=new Date();
-  if(r==='1H')return now.getTime()-3600000;
-  if(r==='1D'){
-    const t=now.toLocaleTimeString('en-US',{timeZone:'America/New_York',hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    const [h,m,s]=t.split(':').map(Number);
-    return now.getTime()-(((h%24)*3600+m*60+s)*1000);
+  let t;
+  if(r==='1H')t=now.getTime()-3600000;
+  else if(r==='1D'){
+    const s=now.toLocaleTimeString('en-US',{timeZone:'America/New_York',hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const [h,m,sc]=s.split(':').map(Number);
+    t=now.getTime()-(((h%24)*3600+m*60+sc)*1000);
   }
-  if(r==='1W')return now.getTime()-7*86400000;
-  if(r==='1M')return now.getTime()-30*86400000;
-  return new Date('2026-08-01T04:00:00Z').getTime();
+  else if(r==='1W')t=now.getTime()-7*86400000;
+  else if(r==='1M')t=now.getTime()-30*86400000;
+  else t=AUG1;
+  return Math.max(t,AUG1);
 }
 
 function fmt(n){
