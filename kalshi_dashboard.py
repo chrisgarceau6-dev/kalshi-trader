@@ -241,7 +241,7 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 <script>
 let chart=null, range='1D', last=null, expandedTrades=new Set();
 
-const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'All time'};
+const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'Since Aug 1'};
 
 function cutoff(r){
   const now=new Date();
@@ -253,7 +253,7 @@ function cutoff(r){
   }
   if(r==='1W')return now.getTime()-7*86400000;
   if(r==='1M')return now.getTime()-30*86400000;
-  return 0;
+  return new Date('2026-08-01T04:00:00Z').getTime();
 }
 
 function fmt(n){
@@ -339,7 +339,7 @@ function render(d){
   chgEl.className='hero-chg '+(rangePnl>=0?'g':'r');
 
   // Range stats (top row — tracks selected range button)
-  const rlbl={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'All-time'};
+  const rlbl={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'Since Aug 1'};
   const rpnl=inRange.reduce((a,s)=>a+s.pnl,0);
   const rwin=inRange.filter(s=>s.won).length;
   document.getElementById('lbl-rpnl').textContent=rlbl[range]+' P&L';
