@@ -317,12 +317,10 @@ function render(d){
   const cut=cutoff(range);
   const inRange=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
-  // Chart — balance over time (reconstruct from current balance + full settlement history)
-  const allPnl=sett.reduce((a,s)=>a+s.pnl,0);
-  const balStart=(bal!=null?bal:0)-allPnl;
-  let runBal=balStart;
-  const balSeries=sett.map(s=>{runBal+=s.pnl;return{ts:s.ts,bal:runBal};});
-  const inRangeBal=balSeries.filter(x=>new Date(x.ts).getTime()>=cut);
+  // Chart — cumulative P&L over time (unaffected by deposits)
+  let runPnl=0;
+  const pnlSeries=sett.map(s=>{runPnl+=s.pnl;return{ts:s.ts,bal:runPnl};});
+  const inRangeBal=pnlSeries.filter(x=>new Date(x.ts).getTime()>=cut);
   const labels=[],vals=[];
   for(const x of inRangeBal){
     const dt=new Date(x.ts);
