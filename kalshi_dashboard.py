@@ -246,11 +246,15 @@ let chart=null, range='1D', last=null, expandedTrades=new Set();
 const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'All time'};
 
 function cutoff(r){
-  const now=Date.now();
-  if(r==='1H')return now-3600000;
-  if(r==='1D'){const d=new Date();d.setUTCHours(0,0,0,0);return d.getTime();}
-  if(r==='1W')return now-7*86400000;
-  if(r==='1M')return now-30*86400000;
+  const now=new Date();
+  if(r==='1H')return now.getTime()-3600000;
+  if(r==='1D'){
+    const t=now.toLocaleTimeString('en-US',{timeZone:'America/New_York',hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const [h,m,s]=t.split(':').map(Number);
+    return now.getTime()-(((h%24)*3600+m*60+s)*1000);
+  }
+  if(r==='1W')return now.getTime()-7*86400000;
+  if(r==='1M')return now.getTime()-30*86400000;
   return 0;
 }
 
@@ -307,7 +311,7 @@ function render(d){
   const now=new Date(d.ts);
   document.getElementById('ts').textContent=
     now.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',
-    timeZone:'UTC',hour12:false})+' UTC · 30s refresh';
+    timeZone:'America/New_York',hour12:false})+' ET · 30s refresh';
 
   const sett=d.settlements||[];
   const cut=cutoff(range);
@@ -324,9 +328,9 @@ function render(d){
     const dt=new Date(x.ts);
     let lbl;
     if(range==='1H'||range==='1D'){
-      lbl=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'UTC',hour12:false});
+      lbl=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'America/New_York',hour12:false});
     } else {
-      lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'UTC'});
+      lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'});
     }
     labels.push(lbl); vals.push(+x.bal.toFixed(2));
   }
@@ -406,7 +410,7 @@ function render(d){
       const key=s.ticker+'|'+s.ts;
       const exp=expandedTrades.has(key);
       const dt=new Date(s.ts);
-      const timeStr=dt.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC',hour12:false})+' UTC';
+      const timeStr=dt.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'America/New_York',hour12:false})+' ET';
       return`<div class="trade-row" data-key="${key}" style="cursor:pointer;flex-wrap:wrap">
         <span class="badge ${s.won?'badge-w':'badge-l'}">${s.won?'W':'L'}</span>
         <span class="trade-series">${s.series}</span>
