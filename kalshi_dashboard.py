@@ -4,6 +4,8 @@ Env: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY (base64 PEM), PORT (set by Render)
 """
 import base64, os, time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+ET = ZoneInfo("America/New_York")
 from pathlib import Path
 from flask import Flask, jsonify
 
@@ -153,8 +155,8 @@ def api_data():
         "balance":     get_balance(),
         "settlements": get_settlements(),
         "positions":   get_positions(),
-        "blackout":    [17],
-        "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "blackout":    [13],
+        "ts":          datetime.now(ET).isoformat(timespec="seconds"),
         "errors":      dict(_last_err),
         "key_set":     bool(os.environ.get("KALSHI_PRIVATE_KEY_PATH") or os.environ.get("KALSHI_PRIVATE_KEY")),
         "key_id_set":  bool(os.environ.get("KALSHI_API_KEY_ID")),
@@ -302,9 +304,9 @@ function render(d){
   const bal=d.balance;
   document.getElementById('bal').textContent=bal!=null?'$'+bal.toFixed(2):'—';
 
-  const utcHr=new Date().getUTCHours();
+  const etHr=parseInt(new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false}))||0;
   document.getElementById('blackout').style.display=
-    (d.blackout||[]).includes(utcHr)?'block':'none';
+    (d.blackout||[]).includes(etHr)?'block':'none';
 
   const now=new Date(d.ts);
   document.getElementById('ts').textContent=
