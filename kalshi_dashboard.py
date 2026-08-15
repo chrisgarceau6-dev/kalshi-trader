@@ -79,6 +79,8 @@ def get_settlements():
             if not batch: break
             pages += 1
             for s in batch:
+                if "15M" not in s.get("ticker", ""):
+                    continue
                 rev  = int(s.get("revenue", 0)) / 100.0
                 yc   = float(s.get("yes_total_cost_dollars", 0) or 0)
                 nc   = float(s.get("no_total_cost_dollars",  0) or 0)
