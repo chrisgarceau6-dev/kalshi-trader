@@ -204,6 +204,9 @@ EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses <
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 ORDER_TTL_SECONDS       = 4    # server-enforced expiry is the final guard against stranded GTC orders
 ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and recover exact exposure
+ORDER_FILL_WAIT_SECONDS = 3    # short resting window before each explicit cancel
+ORDER_MAX_ATTEMPTS      = 3    # bounded top-ups, each with a fresh price/prior validation
+ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few dollars
 
 
 def price_cents(raw):
@@ -730,30 +733,74 @@ def try_trade(
         log(f"    KALSHI_API_KEY_ID not set — cannot trade")
         return
 
-    client_order_id = str(uuid.uuid4())
-    expiration_time = int(time.time()) + ORDER_TTL_SECONDS
-    code, resp = place_order(
-        ticker, side, contracts,
-        yes_price_cents=limit_cents if side == "yes" else None,
-        no_price_cents=limit_cents  if side == "no"  else None,
-        time_in_force="good_till_canceled",
-        expiration_time=expiration_time,
-        client_order_id=client_order_id,
-    )
-    order_id = None
-    if isinstance(resp, dict):
-        order_id = resp.get("order_id") or resp.get("order", {}).get("order_id")
-    if code in (200, 201):
+    target_budget = Decimal(str(bet_dollars))
+    total_contracts = Decimal("0")
+    total_cost = Decimal("0")
+    total_fee = Decimal("0")
+    order_ids = []
+    attempt_asks = []
+    attempt_limits = []
+    outside_safe_zone = False
+
+    for attempt in range(1, ORDER_MAX_ATTEMPTS + 1):
+        remaining_budget = target_budget - total_cost
+        if remaining_budget < Decimal(str(ORDER_MIN_TOPUP_DOLLARS)):
+            break
+
+        if attempt > 1:
+            # Never leave a stale bid resting just to reach the target size.
+            # Every top-up must independently remain inside the validated zone.
+            fresh_ask = _fresh_ask_cents(ticker, side)
+            if fresh_ask is None or not (MIN_ASK_CENTS <= fresh_ask <= MAX_ASK_CENTS):
+                log(f"    TOP-UP STOP — fresh {side} ask {fresh_ask}c is outside "
+                    f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c")
+                break
+            retry_priors = _prior_k_candle_asks(ticker, series, side, PRIOR_LOOKBACK)
+            if retry_priors is None or any(pa < PRIOR_MIN_CENTS for pa in retry_priors):
+                log(f"    TOP-UP STOP — prior-candle gate no longer provable: {retry_priors}")
+                break
+            limit_cents = min(Decimal(MAX_ASK_CENTS), fresh_ask + Decimal(LIMIT_BUFFER))
+            contracts = contracts_for_risk(remaining_budget, limit_cents)
+            est_cost = float(Decimal(contracts) * fresh_ask / Decimal("100"))
+            log(f"    TOP-UP {attempt}/{ORDER_MAX_ATTEMPTS}: fresh={fresh_ask}c "
+                f"remaining=${remaining_budget:.2f} limit={limit_cents}c "
+                f"contracts={contracts}")
+
+        attempt_asks.append(fresh_ask)
+        attempt_limits.append(limit_cents)
+        client_order_id = str(uuid.uuid4())
+        expiration_time = int(time.time()) + ORDER_TTL_SECONDS
+        code, resp = place_order(
+            ticker, side, contracts,
+            yes_price_cents=limit_cents if side == "yes" else None,
+            no_price_cents=limit_cents  if side == "no"  else None,
+            time_in_force="good_till_canceled",
+            expiration_time=expiration_time,
+            client_order_id=client_order_id,
+        )
+        order_id = None
+        if isinstance(resp, dict):
+            order_id = resp.get("order_id") or resp.get("order", {}).get("order_id")
+        if code not in (200, 201):
+            log(f"    order attempt {attempt} FAILED — HTTP {code}: {str(resp)[:200]}")
+            break
         if not order_id:
             reason = f"accepted {ticker} order had no order_id; manual account reconciliation required"
             state["execution_halt_reason"] = reason
+            state["execution_halt_context"] = {
+                "ticker": ticker,
+                "known_contracts": float(total_contracts),
+                "known_cost": float(total_cost),
+                "client_order_id": client_order_id,
+            }
             save_state(state)
             log(f"    DANGER — {reason}; server expiry={expiration_time}")
             send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
             raise RuntimeError(reason)
-        log(f"    order accepted (id={order_id})")
-        time.sleep(3)  # wait for fills to propagate before cancelling
-        # Cancel GTC FIRST so the fill picture is final when we query.
+
+        order_ids.append(order_id)
+        log(f"    order accepted attempt {attempt} (id={order_id})")
+        time.sleep(ORDER_FILL_WAIT_SECONDS)
         c_code, _ = cancel_order(order_id)
         log(f"    cancel GTC order {order_id} (HTTP {c_code})")
         if c_code not in (200, 204, 404):
@@ -763,66 +810,84 @@ def try_trade(
         except RuntimeError as exc:
             reason = f"{ticker}: {exc}"
             state["execution_halt_reason"] = reason
+            state["execution_halt_context"] = {
+                "ticker": ticker,
+                "known_contracts": float(total_contracts),
+                "known_cost": float(total_cost),
+                "order_ids": order_ids,
+            }
             save_state(state)
             send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
             raise
-        outside_safe_zone = False
-        if actual_contracts > 0:
-            avg_price_cents = Decimal(str(actual_cost)) / Decimal(str(actual_contracts)) * Decimal("100")
-            contracts_intended = contracts
-            if actual_contracts < contracts_intended * 0.9:
-                log(f"    PARTIAL FILL: {actual_contracts}/{contracts_intended} contracts "
+
+        actual_contracts_dec = Decimal(str(actual_contracts))
+        actual_cost_dec = Decimal(str(actual_cost))
+        actual_fee_dec = Decimal(str(actual_fee))
+        if actual_contracts_dec > 0:
+            avg_price_cents = actual_cost_dec / actual_contracts_dec * Decimal("100")
+            if actual_contracts_dec < Decimal(contracts) * Decimal("0.9"):
+                log(f"    PARTIAL FILL attempt {attempt}: {actual_contracts}/{contracts} contracts "
                     f"(${actual_cost:.2f} vs ${est_cost:.2f} expected)")
-            log(f"    actual fill: {actual_contracts} contracts, cost ${actual_cost:.2f}, "
-                f"avg={avg_price_cents:.2f}c  fee=${actual_fee:.4f}")
-            final_contracts = actual_contracts
-            final_cost      = actual_cost
-            final_fee       = actual_fee
-            # POST-FILL SAFETY — even with preflight, ~200ms race can slip a
-            # bad fill through (e.g., stale resting ask well below our limit
-            # gets consumed). Alert loudly so user can manually exit if needed.
+            log(f"    actual fill attempt {attempt}: {actual_contracts} contracts, "
+                f"cost ${actual_cost:.2f}, avg={avg_price_cents:.2f}c fee=${actual_fee:.4f}")
+            total_contracts += actual_contracts_dec
+            total_cost += actual_cost_dec
+            total_fee += actual_fee_dec
+            if total_cost > target_budget + Decimal("0.01"):
+                reason = (f"{ticker}: cumulative principal ${total_cost:.4f} exceeded "
+                          f"budget ${target_budget:.2f}")
+                state["execution_halt_reason"] = reason
+                save_state(state)
+                send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
+                raise RuntimeError(reason)
             if avg_price_cents < MIN_ASK_CENTS:
                 outside_safe_zone = True
                 log(f"    DANGER — filled at {avg_price_cents}c, BELOW "
-                    f"safe zone [{MIN_ASK_CENTS},{MAX_ASK_CENTS}]. Preflight "
-                    f"race slipped — trade has elevated loss risk.")
+                    f"safe zone [{MIN_ASK_CENTS},{MAX_ASK_CENTS}].")
                 send_email(
                     f"[Kalshi-C] DANGER FILL {avg_price_cents}c — {ticker}",
                     f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents:.2f}c\n"
-                    f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n"
-                    f"Scan saw: {ask_cents}c, refetch saw: {fresh_ask}c\n"
-                    f"Fill was BELOW safe zone — market crashed in the ~200ms\n"
-                    f"between refetch and order landing. Consider manual exit.\n",
+                    f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n",
                 )
+                break
         else:
-            log(f"    no fill after 3s — order already cancelled above")
-            return  # don't record a phantom position
-        state["positions"][ticker] = {
+            log(f"    no fill on attempt {attempt}; order is terminal")
+
+    if total_contracts <= 0:
+        log(f"    no fill after {len(order_ids)} bounded attempt(s)")
+        return
+
+    final_contracts = float(total_contracts)
+    final_cost = float(total_cost)
+    final_fee = float(total_fee)
+    log(f"    FILL TOTAL: {final_contracts} contracts, principal=${final_cost:.2f}, "
+        f"fees=${final_fee:.4f}, unused_budget=${float(target_budget-total_cost):.2f}, "
+        f"attempts={len(order_ids)}")
+    state["positions"][ticker] = {
             "side":        side,
-            "limit_cents": float(limit_cents),
-            "ask_at_entry": float(fresh_ask),
+            "limit_cents": float(max(attempt_limits)),
+            "ask_at_entry": float(attempt_asks[0]),
             "ask_at_scan":  float(ask_cents),
+            "attempt_asks": [float(v) for v in attempt_asks],
             "outside_safe_zone": outside_safe_zone,
             "contracts":   final_contracts,
             "cost":        final_cost,
             "fee_cost":    final_fee,
-            "order_id":    order_id,
+            "order_id":    order_ids[-1],
+            "order_ids":   order_ids,
             "strategy_version": STRATEGY_VERSION,
             "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "settled":     False,
-        }
-        state["stats"]["trades"] += 1
-        # track trades per day
-        today = datetime.now(timezone.utc).date().isoformat()
-        daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
-        if daily.get("date") != today:
-            daily["date"] = today
-            daily["pnl"]  = 0.0
-            daily["trades_today"] = 0
-        daily["trades_today"] = daily.get("trades_today", 0) + 1
-        save_state(state)
-    else:
-        log(f"    order FAILED — HTTP {code}: {str(resp)[:200]}")
+    }
+    state["stats"]["trades"] += 1
+    today = datetime.now(timezone.utc).date().isoformat()
+    daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
+    if daily.get("date") != today:
+        daily["date"] = today
+        daily["pnl"]  = 0.0
+        daily["trades_today"] = 0
+    daily["trades_today"] = daily.get("trades_today", 0) + 1
+    save_state(state)
 
 
 def try_longshot_trade(market, state, dry_run):

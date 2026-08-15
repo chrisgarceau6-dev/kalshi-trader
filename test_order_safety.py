@@ -60,11 +60,76 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-123", "fill_count": "1.00", "remaining_count": "0.00"})), \
              patch.object(trader, "cancel_order", return_value=(200, {})) as cancel, \
              patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
+             patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
              patch.object(trader.time, "sleep"), \
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
 
         cancel.assert_called_once_with("order-123")
+
+    def test_partial_fill_is_topped_up_without_exceeding_budget(self):
+        state = {
+            "positions": {},
+            "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        }
+        market = {
+            "ticker": "KXETH15M-TEST",
+            "event_ticker": "KXETH15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("91")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "place_order", side_effect=[
+                 (201, {"order_id": "order-1"}),
+                 (201, {"order_id": "order-2"}),
+             ]) as place, \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", side_effect=[
+                 (13.51, 12.5643, 0.0),
+                 (67.0, 62.31, 0.0),
+             ]), \
+             patch.object(trader.time, "sleep"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+
+        self.assertEqual([call.args[2] for call in place.call_args_list], [80, 67])
+        position = state["positions"][market["ticker"]]
+        self.assertAlmostEqual(position["cost"], 74.8743)
+        self.assertLessEqual(position["cost"], trader.FLAT_BET_DOLLARS)
+        self.assertEqual(position["order_ids"], ["order-1", "order-2"])
+        self.assertEqual(state["stats"]["trades"], 1)
+
+    def test_top_up_stops_when_fresh_ask_leaves_safe_zone(self):
+        state = {
+            "positions": {},
+            "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        }
+        market = {
+            "ticker": "KXETH15M-TEST",
+            "event_ticker": "KXETH15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("89")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "place_order", return_value=(201, {"order_id": "order-1"})) as place, \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", return_value=(13.51, 12.5643, 0.0)), \
+             patch.object(trader.time, "sleep"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+
+        self.assertEqual(place.call_count, 1)
+        self.assertAlmostEqual(state["positions"][market["ticker"]]["cost"], 12.5643)
 
     def test_configured_contract_count_never_exceeds_flat_risk_at_limit(self):
         count = trader.contracts_for_risk(
