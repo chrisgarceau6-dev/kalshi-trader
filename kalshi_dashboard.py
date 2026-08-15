@@ -67,8 +67,6 @@ def get_balance():
         return float(r["balance_dollars"]) if r and "balance_dollars" in r else None
     return cached("bal", 30, _f)
 
-_SERIES = {"KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"}
-
 def get_settlements():
     def _f():
         out, cursor, pages = [], None, 0
@@ -81,7 +79,7 @@ def get_settlements():
             if not batch: break
             pages += 1
             for s in batch:
-                if s.get("ticker", "").split("-")[0] not in _SERIES:
+                if not s.get("ticker", "").split("-")[0].endswith("15M"):
                     continue
                 rev  = int(s.get("revenue", 0)) / 100.0
                 yc   = float(s.get("yes_total_cost_dollars", 0) or 0)
