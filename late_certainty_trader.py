@@ -748,12 +748,13 @@ def try_trade(
             break
 
         if attempt > 1:
-            # Never leave a stale bid resting just to reach the target size.
-            # Every top-up must independently remain inside the validated zone.
+            # Entry was already validated. Top-ups complete the position — the ask
+            # moving above 93c after entry is normal for a winning market (thin book
+            # fills partially, then price rises). Only block if ask collapsed below
+            # MIN_ASK_CENTS (trade going wrong) or priors failed.
             fresh_ask = _fresh_ask_cents(ticker, side)
-            if fresh_ask is None or not (MIN_ASK_CENTS <= fresh_ask <= MAX_ASK_CENTS):
-                log(f"    TOP-UP STOP — fresh {side} ask {fresh_ask}c is outside "
-                    f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c")
+            if fresh_ask is None or fresh_ask < MIN_ASK_CENTS:
+                log(f"    TOP-UP STOP — fresh {side} ask {fresh_ask}c collapsed below {MIN_ASK_CENTS}c")
                 break
             retry_priors = _prior_k_candle_asks(ticker, series, side, PRIOR_LOOKBACK)
             if retry_priors is None or any(pa < PRIOR_MIN_CENTS for pa in retry_priors):
