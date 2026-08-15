@@ -708,6 +708,16 @@ def try_trade(
             f"{prior_asks} (need all >= {PRIOR_MIN_CENTS}c); spike-into-zone entry")
         return
 
+    # LOW-ASK GATE: 90-91c entries require a 3rd prior candle >= 80c.
+    # Cross-tab (n=2035): 90-91c + prior2-only = -$0.08/trade (below break-even).
+    # 90-91c + prior3>=80c = +$0.93/trade. 92-93c is +EV with prior2 alone.
+    if fresh_ask <= 91:
+        ext_priors = _prior_k_candle_asks(ticker, series, side, 3)
+        if ext_priors is None or ext_priors[2] < 80:
+            log(f"  SKIP {ticker} — ask {fresh_ask}c (<=91c) needs 3rd prior >= 80c; "
+                f"3-candle asks={ext_priors}")
+            return
+
     # H4 and near-strike filters removed 2026-08-12:
     # 60-day ablation showed both are net-negative P&L (remove +$431 and +$28
     # respectively) with no statistical case for tail-risk benefit at this bet size.
@@ -759,6 +769,12 @@ def try_trade(
             if retry_priors is None or any(pa < PRIOR_MIN_CENTS for pa in retry_priors):
                 log(f"    TOP-UP STOP — prior-candle gate no longer provable: {retry_priors}")
                 break
+            if fresh_ask <= 91:
+                ext_retry = _prior_k_candle_asks(ticker, series, side, 3)
+                if ext_retry is None or ext_retry[2] < 80:
+                    log(f"    TOP-UP STOP — ask {fresh_ask}c (<=91c) needs 3rd prior >= 80c; "
+                        f"got {ext_retry}")
+                    break
             limit_cents = min(Decimal(MAX_ASK_CENTS), fresh_ask + Decimal(LIMIT_BUFFER))
             contracts = contracts_for_risk(remaining_budget, limit_cents)
             est_cost = float(Decimal(contracts) * fresh_ask / Decimal("100"))
