@@ -56,7 +56,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
-             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-123", "fill_count": "1.00", "remaining_count": "0.00"})), \
              patch.object(trader, "cancel_order", return_value=(200, {})) as cancel, \
              patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
@@ -83,7 +83,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("91")]), \
-             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "place_order", side_effect=[
                  (201, {"order_id": "order-1"}),
                  (201, {"order_id": "order-2"}),
@@ -120,7 +120,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("89")]), \
-             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-1"})) as place, \
              patch.object(trader, "cancel_order", return_value=(200, {})), \
              patch.object(trader, "reconcile_terminal_order", return_value=(13.51, 12.5643, 0.0)), \
@@ -268,7 +268,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
-             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "place_order", return_value=(201, {"fill_count": "0", "remaining_count": "107"})), \
              patch.object(trader, "send_email"), \
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
@@ -292,7 +292,7 @@ class OrderSafetyTests(unittest.TestCase):
             log_file = Path(td) / "trader.log"
             with patch.object(trader, "LOG_FILE", log_file), \
                  patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
-                 patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("75"), Decimal("75")]):
+                 patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]):
                 trader.try_trade(market, state, True, balance=1000, live_position_tickers=set())
             self.assertIn("TRADE:", log_file.read_text())
 
