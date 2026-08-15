@@ -57,6 +57,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-123", "fill_count": "1.00", "remaining_count": "0.00"})), \
              patch.object(trader, "cancel_order", return_value=(200, {})) as cancel, \
              patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
@@ -84,6 +85,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("91")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
              patch.object(trader, "place_order", side_effect=[
                  (201, {"order_id": "order-1"}),
                  (201, {"order_id": "order-2"}),
@@ -121,6 +123,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("89")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-1"})) as place, \
              patch.object(trader, "cancel_order", return_value=(200, {})), \
              patch.object(trader, "reconcile_terminal_order", return_value=(13.51, 12.5643, 0.0)), \
@@ -269,6 +272,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
              patch.object(trader, "place_order", return_value=(201, {"fill_count": "0", "remaining_count": "107"})), \
              patch.object(trader, "send_email"), \
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
@@ -292,7 +296,8 @@ class OrderSafetyTests(unittest.TestCase):
             log_file = Path(td) / "trader.log"
             with patch.object(trader, "LOG_FILE", log_file), \
                  patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
-                 patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]):
+                 patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+                 patch.object(trader, "_book_depth_at_max_ask", return_value=None):
                 trader.try_trade(market, state, True, balance=1000, live_position_tickers=set())
             self.assertIn("TRADE:", log_file.read_text())
 
@@ -326,6 +331,60 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "query_actual_fill", return_value=(49.0, 45.57, 0.0)):
             contracts, cost, fee = trader.reconcile_terminal_order("order-123", "T", "yes")
         self.assertEqual((contracts, cost, fee), (49.0, 45.57, 0.0))
+
+
+    def test_thin_book_skips_trade(self):
+        state = {
+            "positions": {},
+            "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        }
+        market = {
+            "ticker": "KXBNB15M-TEST",
+            "event_ticker": "KXBNB15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        thin_orderbook = {
+            "orderbook_fp": {
+                "no_dollars": [["0.09", "10"], ["0.08", "5"]],
+            }
+        }
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(200, thin_orderbook)), \
+             patch.object(trader, "place_order") as place:
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        place.assert_not_called()
+
+    def test_book_depth_api_error_does_not_block_trade(self):
+        state = {
+            "positions": {},
+            "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        }
+        market = {
+            "ticker": "KXETH15M-TEST",
+            "event_ticker": "KXETH15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(503, {})), \
+             patch.object(trader, "place_order", return_value=(201, {"order_id": "order-123", "fill_count": "1.00", "remaining_count": "0.00"})), \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
+             patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
+             patch.object(trader.time, "sleep"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        self.assertIn("KXETH15M-TEST", state["positions"])
 
 
 if __name__ == "__main__":
