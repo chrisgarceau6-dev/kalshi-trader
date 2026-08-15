@@ -70,7 +70,7 @@ def get_balance():
 def get_settlements():
     def _f():
         out, cursor, pages = [], None, 0
-        while pages < 5:
+        while pages < 20:
             params = {"limit": 200}
             if cursor: params["cursor"] = cursor
             r = kalshi("/portfolio/settlements", params)
@@ -105,9 +105,15 @@ def get_market(ticker):
     r = kalshi(f"/markets/{ticker}")
     if not r: return {}
     m = r.get("market", r)
+    def _cents(key):
+        try:
+            v = round(float(m.get(key, 0) or 0) * 100)
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            return None
     return {
-        "yes_ask":    m.get("yes_ask"),
-        "yes_bid":    m.get("yes_bid"),
+        "yes_ask":    _cents("yes_ask_dollars"),
+        "yes_bid":    _cents("yes_bid_dollars"),
         "close_time": m.get("close_time", ""),
         "title":      m.get("subtitle", m.get("title", "")),
     }
@@ -145,7 +151,7 @@ def api_data():
         "balance":     get_balance(),
         "settlements": get_settlements(),
         "positions":   get_positions(),
-        "blackout":    [15, 17],
+        "blackout":    [17],
         "ts":          datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "errors":      dict(_last_err),
         "key_set":     bool(os.environ.get("KALSHI_PRIVATE_KEY_PATH") or os.environ.get("KALSHI_PRIVATE_KEY")),
@@ -294,7 +300,7 @@ function render(d){
   document.getElementById('blackout').style.display=
     (d.blackout||[]).includes(utcHr)?'block':'none';
 
-  const now=new Date(d.ts+'Z');
+  const now=new Date(d.ts);
   document.getElementById('ts').textContent=
     now.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',
     timeZone:'UTC',hour12:false})+' UTC · 30s refresh';
