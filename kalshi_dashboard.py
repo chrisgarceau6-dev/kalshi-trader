@@ -232,8 +232,8 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
   <div class="stat"><div class="stat-lbl" id="lbl-rpnl">P&L</div><div class="stat-val" id="s-rpnl">—</div></div>
   <div class="stat"><div class="stat-lbl" id="lbl-rwr">WR</div><div class="stat-val" id="s-rwr">—</div></div>
   <div class="stat"><div class="stat-lbl" id="lbl-rn">Trades</div><div class="stat-val m" id="s-rn">—</div></div>
-  <div class="stat"><div class="stat-lbl">Hour P&L</div><div class="stat-val" id="s-hpnl">—</div></div>
-  <div class="stat"><div class="stat-lbl">Hour WR</div><div class="stat-val" id="s-hwr">—</div></div>
+  <div class="stat"><div class="stat-lbl" id="lbl-hpnl">Hour P&L</div><div class="stat-val" id="s-hpnl">—</div></div>
+  <div class="stat"><div class="stat-lbl" id="lbl-hwr">Hour WR</div><div class="stat-val" id="s-hwr">—</div></div>
   <div class="stat"><div class="stat-lbl">Open</div><div class="stat-val" id="s-open">—</div></div>
 </div>
 <h3>Open Positions</h3>
@@ -317,9 +317,11 @@ function render(d){
   const cut=cutoff(range);
   const inRange=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
-  // Chart — cumulative P&L over time (unaffected by deposits)
+  // Chart — cumulative P&L relative to start of selected range (always starts at 0)
   let runPnl=0;
   const pnlSeries=sett.map(s=>{runPnl+=s.pnl;return{ts:s.ts,bal:runPnl};});
+  const preRange=pnlSeries.filter(x=>new Date(x.ts).getTime()<cut);
+  const baseline=preRange.length?preRange[preRange.length-1].bal:0;
   const inRangeBal=pnlSeries.filter(x=>new Date(x.ts).getTime()>=cut);
   const labels=[],vals=[];
   for(const x of inRangeBal){
@@ -330,7 +332,7 @@ function render(d){
     } else {
       lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'});
     }
-    labels.push(lbl); vals.push(+x.bal.toFixed(2));
+    labels.push(lbl); vals.push(+(x.bal-baseline).toFixed(2));
   }
   buildChart(labels,vals);
 
@@ -351,13 +353,26 @@ function render(d){
   set('s-rwr',wr(rwin,inRange.length),'');
   set('s-rn',inRange.length,'m');
 
-  // Hour stats
+  // Bottom stats row — shows Hour stats normally; swaps to Today when range is already 1H
   const hrCut=cutoff('1H');
   const hs=sett.filter(s=>new Date(s.ts).getTime()>=hrCut);
   const hpnl=hs.reduce((a,s)=>a+s.pnl,0);
   const hwin=hs.filter(s=>s.won).length;
-  set('s-hpnl',fmt(hpnl),cls(hpnl));
-  set('s-hwr',wr(hwin,hs.length),'');
+  if(range==='1H'){
+    const dayCut=cutoff('1D');
+    const ds=sett.filter(s=>new Date(s.ts).getTime()>=dayCut);
+    const dpnl=ds.reduce((a,s)=>a+s.pnl,0);
+    const dwin=ds.filter(s=>s.won).length;
+    document.getElementById('lbl-hpnl').textContent='Today P&L';
+    document.getElementById('lbl-hwr').textContent='Today WR';
+    set('s-hpnl',fmt(dpnl),cls(dpnl));
+    set('s-hwr',wr(dwin,ds.length),'');
+  } else {
+    document.getElementById('lbl-hpnl').textContent='Hour P&L';
+    document.getElementById('lbl-hwr').textContent='Hour WR';
+    set('s-hpnl',fmt(hpnl),cls(hpnl));
+    set('s-hwr',wr(hwin,hs.length),'');
+  }
 
   // Open positions
   const pos=d.positions||[];
