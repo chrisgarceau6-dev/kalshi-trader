@@ -313,8 +313,8 @@ function render(d){
 
   const now=new Date(d.ts);
   document.getElementById('ts').textContent=
-    now.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',
-    timeZone:'America/New_York',hour12:false})+' ET · 30s refresh';
+    now.toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',
+    timeZone:'America/New_York',hour12:true})+' ET · 30s refresh';
 
   const sett=d.settlements||[];
   const cut=cutoff(range);
@@ -331,7 +331,7 @@ function render(d){
     const dt=new Date(x.ts);
     let lbl;
     if(range==='1H'||range==='1D'){
-      lbl=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'America/New_York',hour12:false});
+      lbl=dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',hour12:true});
     } else {
       lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'});
     }
@@ -426,7 +426,7 @@ function render(d){
       const key=s.ticker+'|'+s.ts;
       const exp=expandedTrades.has(key);
       const dt=new Date(s.ts);
-      const timeStr=dt.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'America/New_York',hour12:false})+' ET';
+      const timeStr=dt.toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/New_York',hour12:true})+' ET';
       return`<div class="trade-row" data-key="${key}" style="cursor:pointer;flex-wrap:wrap">
         <span class="badge ${s.won?'badge-w':'badge-l'}">${s.won?'W':'L'}</span>
         <span class="trade-series">${s.series}</span>
