@@ -128,7 +128,7 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.12"  # order safety + remove unvalidated BTC hourly blackout
+STRATEGY_VERSION = "v5.13"  # prior3>=80c gate for ask<=91c entries
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -198,14 +198,14 @@ def daily_pnl(state, now_ts=None):
 STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
 HWM_DRAWDOWN_PCT        = 0.10 # halt if balance drops 10% below rolling high-water mark
 CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
-MAX_CONCURRENT_POSITIONS = 3  # 3×$75=$225=16% of balance; original cap of 2 was sized for $45 bets
+MAX_CONCURRENT_POSITIONS = 2  # 2×$75=$150=10.9% of balance; matches old $90=10.5% exposure ratio
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
 EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
 MAX_POSITIONS_STATE     = 500  # keep only most recent settled positions in state
 ORDER_TTL_SECONDS       = 4    # server-enforced expiry is the final guard against stranded GTC orders
 ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and recover exact exposure
-ORDER_FILL_WAIT_SECONDS = 1    # 1s: top-up fires sooner while ask still <=93c; most fills happen <500ms
+ORDER_FILL_WAIT_SECONDS = 3    # resting window before cancel; preserves queue priority for thin books
 ORDER_MAX_ATTEMPTS      = 3    # bounded top-ups, each with a fresh price/prior validation
 ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few dollars
 
@@ -389,9 +389,16 @@ def check_halts(state, balance):
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
     hwm = state.get("high_water_balance", 0)
-    if hwm > 0 and balance is not None and balance < hwm * (1 - HWM_DRAWDOWN_PCT):
-        return True, (f"HWM drawdown: ${balance:.2f} is >{HWM_DRAWDOWN_PCT*100:.0f}% "
-                      f"below peak ${hwm:.2f} (threshold ${hwm*(1-HWM_DRAWDOWN_PCT):.2f})")
+    if hwm > 0 and balance is not None:
+        open_cost = sum(
+            p.get("cost", 0) for p in state.get("positions", {}).values()
+            if not p.get("settled")
+        )
+        equity = balance + open_cost
+        if equity < hwm * (1 - HWM_DRAWDOWN_PCT):
+            return True, (f"HWM drawdown: equity ${equity:.2f} (cash ${balance:.2f} + open ${open_cost:.2f}) "
+                          f"is >{HWM_DRAWDOWN_PCT*100:.0f}% below peak ${hwm:.2f} "
+                          f"(threshold ${hwm*(1-HWM_DRAWDOWN_PCT):.2f})")
     bet_dollars = compute_bet_dollars(balance)
     daily_loss_limit = compute_daily_loss_limit(bet_dollars)
     d_pnl = daily_pnl(state)
@@ -1120,9 +1127,14 @@ def run_once(dry_run=False):
 
     check_outcomes(state, balance)
 
-    if balance > state.get("high_water_balance", 0):
-        state["high_water_balance"] = balance
-        log(f"  high-water mark: ${balance:.2f}")
+    open_cost = sum(
+        p.get("cost", 0) for p in state.get("positions", {}).values()
+        if not p.get("settled")
+    )
+    equity = balance + open_cost
+    if equity > state.get("high_water_balance", 0):
+        state["high_water_balance"] = equity
+        log(f"  high-water mark: ${equity:.2f} (cash ${balance:.2f} + open ${open_cost:.2f})")
 
     halted, reason = check_halts(state, balance)
     if halted:
