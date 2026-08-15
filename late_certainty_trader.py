@@ -4,7 +4,7 @@
 STRATEGY:
   Buy YES at a 90-93 cent ask with 150-600 seconds remaining when each of
   the two preceding 1-minute YES asks was at least 75 cents. Hold through
-  settlement. UTC hour 17 is excluded. Live series are the six 15-minute
+  settlement. ET hour 13 (1pm ET) is excluded. Live series are the six 15-minute
   crypto markets plus KXWTI15M; excluded candidates are shadow-logged only.
 
 BET SIZING:
@@ -25,6 +25,8 @@ usage: --once | --dry-run | --status
 import argparse, base64, json, os, random, smtplib, time, urllib.request, urllib.error, uuid
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+ET = ZoneInfo("America/New_York")
 from email.mime.text import MIMEText
 from pathlib import Path
 
@@ -146,7 +148,7 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # 150-239s bucket CI is -$1.86 to +$1.57 — not confirmed negative
 MAX_SECS_LEFT   = 600
-BLACKOUT_HOURS  = {17}    # UTC 15 removed — ablation shows +$0.54/removed trade, no valid mechanism
+BLACKOUT_HOURS  = {13}    # ET hours; ET 11 removed — ablation shows +$0.54/removed trade, no valid mechanism
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
 # IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
@@ -182,9 +184,9 @@ def daily_pnl(state, now_ts=None):
     """Realized P&L over the trailing 24 hours.
     Uses settled_ts when available; falls back to settled_date == today for
     legacy positions recorded before this field existed."""
-    now_ts = now_ts or datetime.now(timezone.utc).timestamp()
+    now_ts = now_ts or datetime.now(ET).timestamp()
     cutoff = now_ts - ROLLING_PNL_SECONDS
-    today  = datetime.fromtimestamp(now_ts, tz=timezone.utc).date().isoformat()
+    today  = datetime.fromtimestamp(now_ts, tz=ET).date().isoformat()
     return round(sum(
         p.get("pnl", 0)
         for p in state.get("positions", {}).values()
@@ -284,7 +286,7 @@ def save_state(s):
 
 
 def log(msg):
-    ts   = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ts   = datetime.now(ET).isoformat(timespec="seconds")
     line = f"[{ts}] {msg}"
     with open(LOG_FILE, "a") as f:
         f.write(line + "\n")
@@ -325,7 +327,7 @@ def send_email(subject, body):
 def shadow_log(reason, ticker, side, ask, secs_left):
     """Log a hypothetical trade that was excluded. Builds shadow-test dataset passively.
     Parse these lines later with grep '[SHADOW:' on workflow logs."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(ET).strftime("%Y-%m-%dT%H:%M:%S ET")
     log(f"  [SHADOW:{reason}] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  ts={now}")
 
 
@@ -338,7 +340,7 @@ def open_markets_near_close(series):
     code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": lim})
     if code != 200:
         return []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(ET)
     out = []
     for m in r.get("markets", []):
         ct = m.get("close_time", "")
@@ -349,7 +351,7 @@ def open_markets_near_close(series):
             secs = (close_dt - now).total_seconds()
         except Exception:
             continue
-        if close_dt.hour in BLACKOUT_HOURS:
+        if close_dt.astimezone(ET).hour in BLACKOUT_HOURS:
             continue
         if MIN_SECS_LEFT <= secs <= MAX_SECS_LEFT:
             m["_secs_left"] = secs
@@ -362,7 +364,7 @@ def open_markets_longshot(series):
     code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": 10})
     if code != 200:
         return []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(ET)
     out = []
     for m in r.get("markets", []):
         ct = m.get("close_time", "")
@@ -373,7 +375,7 @@ def open_markets_longshot(series):
             secs = (close_dt - now).total_seconds()
         except Exception:
             continue
-        if close_dt.hour in BLACKOUT_HOURS:
+        if close_dt.astimezone(ET).hour in BLACKOUT_HOURS:
             continue
         if LONGSHOT_MIN_SECS <= secs <= LONGSHOT_MAX_SECS:
             m["_secs_left"] = secs
@@ -409,7 +411,7 @@ def check_halts(state, balance):
     cl  = state.get("consec_losses", 0)
     ts  = state.get("last_loss_ts", 0)
     if cl >= CONSEC_LOSS_LIMIT:
-        age = datetime.now(timezone.utc).timestamp() - ts
+        age = datetime.now(ET).timestamp() - ts
         if age < 3600:
             return True, f"{cl} consec losses, cooldown {60 - int(age/60)}min"
     # Rolling WR degradation check — with 2h auto-recovery to prevent permanent deadlock
@@ -419,7 +421,7 @@ def check_halts(state, balance):
         rolling_wr = sum(r[0] for r in window) / EDGE_DEGRADE_WINDOW
         if rolling_wr < EDGE_DEGRADE_THRESHOLD:
             halted_at = state.get("edge_degrade_halted_at", 0)
-            now_ts = datetime.now(timezone.utc).timestamp()
+            now_ts = datetime.now(ET).timestamp()
             cl = state.get("consec_losses", 0)
             if halted_at == 0:
                 state["edge_degrade_halted_at"] = now_ts
@@ -929,11 +931,11 @@ def try_trade(
             "order_id":    order_ids[-1],
             "order_ids":   order_ids,
             "strategy_version": STRATEGY_VERSION,
-            "opened_at":   datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "opened_at":   datetime.now(ET).isoformat(timespec="seconds"),
             "settled":     False,
     }
     state["stats"]["trades"] += 1
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(ET).date().isoformat()
     daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
     if daily.get("date") != today:
         daily["date"] = today
@@ -1039,13 +1041,13 @@ def try_longshot_trade(market, state, dry_run):
             "fee_cost":     actual_fee,
             "order_id":     order_id,
             "strategy_version": STRATEGY_VERSION,
-            "opened_at":    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "opened_at":    datetime.now(ET).isoformat(timespec="seconds"),
             "settled":      False,
             "strategy":     "longshot",
         }
         ls = state.setdefault("longshot_stats", {"trades": 0, "wins": 0, "pnl": 0.0})
         ls["trades"] += 1
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(ET).date().isoformat()
         daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
         if daily.get("date") != today:
             daily["date"] = today
@@ -1060,7 +1062,7 @@ def try_longshot_trade(market, state, dry_run):
 # ── outcome tracking ───────────────────────────────────────────────────────────
 
 def check_outcomes(state, balance):
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(ET).date().isoformat()
     daily = state.setdefault("daily", {"date": today, "pnl": 0.0})
     if daily.get("date") != today:
         daily["date"] = today
@@ -1090,7 +1092,7 @@ def check_outcomes(state, balance):
         pnl = round(payout - cost - fee, 2)
 
         pos["settled"]      = True
-        pos["settled_ts"]   = datetime.now(timezone.utc).timestamp()
+        pos["settled_ts"]   = datetime.now(ET).timestamp()
         pos["result"]       = result
         pos["pnl"]          = pnl
         pos["settled_date"] = today  # retained for backward compat
@@ -1107,7 +1109,7 @@ def check_outcomes(state, balance):
                 state["consec_losses"] = 0
             else:
                 state["consec_losses"] = state.get("consec_losses", 0) + 1
-                state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
+                state["last_loss_ts"]  = datetime.now(ET).timestamp()
             ls_wr = ls["wins"] / ls["trades"] * 100 if ls["trades"] else 0
             save_state(state)
             log(f"  SETTLED(LS) {ticker} result={result.upper()}  side={pos['side'].upper()}  "
@@ -1117,7 +1119,7 @@ def check_outcomes(state, balance):
                 state["consec_losses"] = 0
             else:
                 state["consec_losses"] = state.get("consec_losses", 0) + 1
-                state["last_loss_ts"]  = datetime.now(timezone.utc).timestamp()
+                state["last_loss_ts"]  = datetime.now(ET).timestamp()
             position_version = pos.get("strategy_version", STRATEGY_VERSION)
             if position_version == STRATEGY_VERSION:
                 state["stats"]["pnl"] = round(state["stats"].get("pnl", 0.0) + pnl, 2)
@@ -1141,8 +1143,8 @@ def check_outcomes(state, balance):
 
 def run_once(dry_run=False):
     state   = load_state()
-    now_utc = datetime.now(timezone.utc)
-    log(f"=== CERTAINTY @ {now_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC ===")
+    now_et = datetime.now(ET)
+    log(f"=== CERTAINTY @ {now_et.strftime('%Y-%m-%d %H:%M:%S')} ET ===")
 
     balance = fetch_balance()
     if balance is None:
@@ -1204,7 +1206,7 @@ def run_once(dry_run=False):
         code, r = kalshi_get("/markets", {"series_ticker": series, "status": "open", "limit": 10})
         if code != 200:
             continue
-        now = datetime.now(timezone.utc)
+        now = datetime.now(ET)
         for m in r.get("markets", []):
             ct = m.get("close_time", "")
             if not ct:
@@ -1214,7 +1216,7 @@ def run_once(dry_run=False):
                 secs = (close_dt - now).total_seconds()
             except Exception:
                 continue
-            if close_dt.hour in BLACKOUT_HOURS:
+            if close_dt.astimezone(ET).hour in BLACKOUT_HOURS:
                 continue
             if not (600 < secs <= 700):
                 continue
