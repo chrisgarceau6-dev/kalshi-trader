@@ -208,6 +208,7 @@ ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and re
 ORDER_FILL_WAIT_SECONDS = 3    # resting window before cancel; preserves queue priority for thin books
 ORDER_MAX_ATTEMPTS      = 3    # bounded top-ups, each with a fresh price/prior validation
 ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few dollars
+MIN_BOOK_DEPTH          = 60   # skip entry if fewer than 60 YES contracts at <=MAX_ASK_CENTS
 
 
 def price_cents(raw):
@@ -598,6 +599,24 @@ def _fresh_ask_cents(ticker, side):
     return price_cents(raw)
 
 
+def _book_depth_at_max_ask(ticker):
+    """Count YES contracts available at <=MAX_ASK_CENTS via NO bid side.
+    NO bid at price P = YES ask at (1-P). Fails open (returns None) on any error."""
+    code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
+    if code != 200 or not r:
+        return None
+    no_bids = (r.get("orderbook_fp") or {}).get("no_dollars", [])
+    min_no_price = 1.0 - MAX_ASK_CENTS / 100.0  # 0.07 for MAX_ASK_CENTS=93
+    total = 0.0
+    for level in no_bids:
+        try:
+            if float(level[0]) >= min_no_price:
+                total += float(level[1])
+        except (IndexError, TypeError, ValueError):
+            continue
+    return total
+
+
 def _prior_k_candle_asks(ticker, series, side, k):
     """Fetch the ask price from the K 1-min candles immediately preceding now.
     Returns list of cents (int) for the given side (length k), or None on error.
@@ -730,9 +749,15 @@ def try_trade(
                 f"3-candle asks={ext_priors}")
             return
 
-    # H4 and near-strike filters removed 2026-08-12:
-    # 60-day ablation showed both are net-negative P&L (remove +$431 and +$28
-    # respectively) with no statistical case for tail-risk benefit at this bet size.
+    # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH YES contracts at <=MAX_ASK_CENTS.
+    # Thin books (KXBNB, KXSOL) cause systematic partial fills — 1-15 contracts
+    # instead of ~80 — making position tracking unreliable and fill costs unpredictable.
+    # Fails open (None) so API errors never block valid entries.
+    depth = _book_depth_at_max_ask(ticker)
+    if depth is not None and depth < MIN_BOOK_DEPTH:
+        log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
+            f"(need {MIN_BOOK_DEPTH})")
+        return
 
     # TIGHT limit based on FRESH ask. Cap at MAX_ASK_CENTS so slippage can't
     # push us above the OOS-validated range (96c+ is EV-negative after fee).
