@@ -130,7 +130,7 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.13"  # prior3>=80c gate for ask<=91c entries
+STRATEGY_VERSION = "v5.14"  # C1 provisional quarantine: SOL + prior2 75-79c
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -750,6 +750,21 @@ def try_trade(
             log(f"  SKIP {ticker} — ask {fresh_ask}c (<=91c) needs 3rd prior >= 80c; "
                 f"3-candle asks={ext_priors}")
             return
+
+    # C1 PROVISIONAL QUARANTINE: SOL + prior2 75-79c
+    # IS: 60 trades -$3.42/tr; OOS (Jul13-Aug12): 80 trades -$7.25/tr. Persistent across
+    # all three 20-day periods. Reversible — reassess after 60 calendar days + 100 signals.
+    if series == "KXSOL15M" and 75 <= int(prior_asks[1]) <= 79:
+        log(f"[SHADOW:C1-SOL-LOW-P2] {ticker} — SOL prior2={int(prior_asks[1])}c "
+            f"(quarantine; ask={fresh_ask}c secs={secs_left})")
+        return
+
+    # C5 SHADOW-ONLY: prior1>=95c + prior3>=95c (54 OOS trades, not yet blockable)
+    if int(prior_asks[0]) >= 95:
+        _c5 = _prior_k_candle_asks(ticker, series, side, 3)
+        if _c5 is not None and int(_c5[2]) >= 95:
+            log(f"[SHADOW:C5-HIGH-P1P3] {ticker} — prior1={int(prior_asks[0])}c "
+                f"prior3={int(_c5[2])}c (shadow only; ask={fresh_ask}c)")
 
     # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH YES contracts at <=MAX_ASK_CENTS.
     # Thin books (KXBNB, KXSOL) cause systematic partial fills — 1-15 contracts
