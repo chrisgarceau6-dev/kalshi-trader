@@ -105,6 +105,30 @@ def get_settlements():
         out.reverse(); return out
     return cached("sett", 120, _f)
 
+def get_deposits():
+    def _f():
+        out, cursor, pages = [], None, 0
+        while pages < 10:
+            params = {"limit": 100}
+            if cursor: params["cursor"] = cursor
+            r = kalshi("/portfolio/deposits", params)
+            if not r: break
+            batch = r.get("deposits", [])
+            if not batch: break
+            pages += 1
+            for d in batch:
+                if d.get("status") != "applied": continue
+                net = (int(d.get("amount_cents", 0)) - int(d.get("fee_cents", 0))) / 100.0
+                ts_unix = int(d.get("finalized_ts", d.get("created_ts", 0)))
+                if not ts_unix: continue
+                dt = datetime.fromtimestamp(ts_unix, tz=ET)
+                out.append({"ts": dt.isoformat(timespec="seconds"), "amount": round(net, 2)})
+            cursor = r.get("cursor")
+            if not cursor: break
+        out.sort(key=lambda x: x["ts"])
+        return out
+    return cached("deps", 300, _f)
+
 def get_market(ticker):
     r = kalshi(f"/markets/{ticker}")
     if not r: return {}
@@ -154,6 +178,7 @@ def api_data():
     return jsonify({
         "balance":     get_balance(),
         "settlements": get_settlements(),
+        "deposits":    get_deposits(),
         "positions":   get_positions(),
         "blackout":    [13],
         "ts":          datetime.now(ET).isoformat(timespec="seconds"),
@@ -328,15 +353,22 @@ function render(d){
   const cut=cutoff(range);
   const inRange=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
-  // Build cumulative P&L series
+  // Build cumulative P&L series (relative, starts at 0 for range)
   let runPnl=0;
   const pnlSeries=sett.map(s=>{runPnl+=s.pnl;return{ts:s.ts,pnl:runPnl};});
 
-  // Build absolute balance series: reconstruct by working backwards from current balance
-  const totalPnl=sett.reduce((a,s)=>a+s.pnl,0);
-  const initialBal=(d.balance||0)-totalPnl;
-  let runBal2=0;
-  const balSeries=sett.map(s=>{runBal2+=s.pnl;return{ts:s.ts,bal:+(initialBal+runBal2).toFixed(2)};});
+  // Build absolute balance series using real deposit events + trade P&L
+  // Merge deposits and settlements into one timeline, sorted by timestamp
+  const deps=(d.deposits||[]).map(x=>({ts:x.ts,dep:x.amount,pnl:0}));
+  const trades=sett.map(x=>({ts:x.ts,dep:0,pnl:x.pnl}));
+  const combined=[...deps,...trades].sort((a,b)=>a.ts<b.ts?-1:1);
+  let runBal=0;
+  const balSeries=combined.map(ev=>{runBal+=ev.dep+ev.pnl;return{ts:ev.ts,bal:+runBal.toFixed(2)};});
+  // Scale so the final point matches current live balance (accounts for open positions, rounding)
+  const liveBal=d.balance||0;
+  const computedFinal=balSeries.length?balSeries[balSeries.length-1].bal:liveBal;
+  const drift=+(liveBal-computedFinal).toFixed(2);
+  balSeries.forEach(x=>x.bal=+(x.bal+drift).toFixed(2));
 
   const labels=[],vals=[];
   if(chartMode==='pnl'){
