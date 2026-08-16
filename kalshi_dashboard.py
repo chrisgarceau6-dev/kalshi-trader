@@ -183,6 +183,9 @@ body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Se
 .ranges button{background:none;border:none;color:#6b7280;font-size:14px;font-weight:500;padding:7px 14px;border-radius:20px;cursor:pointer;font-family:inherit;transition:all .15s}
 .ranges button.active{background:#1c1c1c;color:#fff}
 .chart-wrap{position:relative;height:210px;margin:0 -4px 4px}
+.chart-toggle{display:flex;justify-content:flex-end;gap:2px;margin:6px 0 0}
+.chart-toggle button{background:none;border:1px solid #2a2a2a;color:#6b7280;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;cursor:pointer;font-family:inherit;letter-spacing:.3px;transition:all .15s}
+.chart-toggle button.active{background:#1c1c1c;color:#fff;border-color:#444}
 .divider{height:1px;background:#1c1c1c;margin:20px 0}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#1c1c1c;border-radius:14px;overflow:hidden;margin:16px 0}
 .stat{background:#111;padding:16px 14px}
@@ -227,6 +230,10 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
   <button data-r="1M">1M</button>
   <button data-r="ALL">All</button>
 </div>
+<div class="chart-toggle">
+  <button id="ct-pnl" class="active" data-m="pnl">P&amp;L</button>
+  <button id="ct-bal" data-m="bal">Balance</button>
+</div>
 <div class="chart-wrap"><canvas id="chart"></canvas></div>
 <div class="stats">
   <div class="stat"><div class="stat-lbl" id="lbl-rpnl">P&L</div><div class="stat-val" id="s-rpnl">—</div></div>
@@ -241,7 +248,7 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 <h3>Recent Trades</h3>
 <div id="trades"><div class="empty">Loading...</div></div>
 <script>
-let chart=null, range='1D', last=null, expandedTrades=new Set();
+let chart=null, range='1D', chartMode='pnl', last=null, expandedTrades=new Set();
 
 const LABELS={'1H':'Last 1h','1D':'Today','1W':'Last 7d','1M':'Last 30d','ALL':'Since Aug 1'};
 
@@ -277,14 +284,15 @@ function timeLeft(closeTime){
   return Math.floor(s/60)+'m '+(s%60)+'s left';
 }
 
-function buildChart(labels,vals){
+function buildChart(labels,vals,mode){
   const last=vals.length?vals[vals.length-1]:0;
-  const color=last>=0?'#22c55e':'#ef4444';
+  const color=mode==='bal'?'#3b82f6':(last>=0?'#22c55e':'#ef4444');
   if(chart){
     chart.data.labels=labels;
     chart.data.datasets[0].data=vals;
     chart.data.datasets[0].borderColor=color;
     chart.data.datasets[0].backgroundColor=color+'1a';
+    chart.options.scales.y.ticks.callback=v=>'$'+v.toFixed(0);
     chart.update('none');return;
   }
   const ctx=document.getElementById('chart').getContext('2d');
@@ -320,24 +328,39 @@ function render(d){
   const cut=cutoff(range);
   const inRange=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
-  // Chart — cumulative P&L relative to start of selected range (always starts at 0)
+  // Build cumulative P&L series
   let runPnl=0;
-  const pnlSeries=sett.map(s=>{runPnl+=s.pnl;return{ts:s.ts,bal:runPnl};});
-  const preRange=pnlSeries.filter(x=>new Date(x.ts).getTime()<cut);
-  const baseline=preRange.length?preRange[preRange.length-1].bal:0;
-  const inRangeBal=pnlSeries.filter(x=>new Date(x.ts).getTime()>=cut);
+  const pnlSeries=sett.map(s=>{runPnl+=s.pnl;return{ts:s.ts,pnl:runPnl};});
+
+  // Build absolute balance series: reconstruct by working backwards from current balance
+  const totalPnl=sett.reduce((a,s)=>a+s.pnl,0);
+  const initialBal=(d.balance||0)-totalPnl;
+  let runBal2=0;
+  const balSeries=sett.map(s=>{runBal2+=s.pnl;return{ts:s.ts,bal:+(initialBal+runBal2).toFixed(2)};});
+
   const labels=[],vals=[];
-  for(const x of inRangeBal){
-    const dt=new Date(x.ts);
-    let lbl;
-    if(range==='1H'||range==='1D'){
-      lbl=dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',hour12:true});
-    } else {
-      lbl=dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'});
+  if(chartMode==='pnl'){
+    const preRange=pnlSeries.filter(x=>new Date(x.ts).getTime()<cut);
+    const baseline=preRange.length?preRange[preRange.length-1].pnl:0;
+    const inRange=pnlSeries.filter(x=>new Date(x.ts).getTime()>=cut);
+    for(const x of inRange){
+      const dt=new Date(x.ts);
+      labels.push(range==='1H'||range==='1D'
+        ?dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',hour12:true})
+        :dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'}));
+      vals.push(+(x.pnl-baseline).toFixed(2));
     }
-    labels.push(lbl); vals.push(+(x.bal-baseline).toFixed(2));
+  } else {
+    const inRange=balSeries.filter(x=>new Date(x.ts).getTime()>=cut);
+    for(const x of inRange){
+      const dt=new Date(x.ts);
+      labels.push(range==='1H'||range==='1D'
+        ?dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',hour12:true})
+        :dt.toLocaleDateString([],{month:'short',day:'numeric',timeZone:'America/New_York'}));
+      vals.push(x.bal);
+    }
   }
-  buildChart(labels,vals);
+  buildChart(labels,vals,chartMode);
 
   // Hero change
   const rangePnl=inRange.reduce((a,s)=>a+s.pnl,0);
@@ -467,6 +490,16 @@ document.querySelectorAll('.ranges button').forEach(btn=>{
     document.querySelectorAll('.ranges button').forEach(b=>b.className='');
     btn.className='active';
     range=btn.dataset.r;
+    if(last)render(last);
+  });
+});
+
+document.querySelectorAll('.chart-toggle button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.chart-toggle button').forEach(b=>b.className='');
+    btn.className='active';
+    chartMode=btn.dataset.m;
+    if(chart){chart.destroy();chart=null;}
     if(last)render(last);
   });
 });
