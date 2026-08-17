@@ -130,7 +130,7 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-STRATEGY_VERSION = "v5.14"  # C1 provisional quarantine: SOL + prior2 75-79c
+STRATEGY_VERSION = "v5.15"  # remove HWM halt, CONSEC 5→9, remove ET13 blackout, shadow ET08/ET13
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
@@ -148,7 +148,7 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
 MIN_SECS_LEFT   = 150    # 150-239s bucket CI is -$1.86 to +$1.57 — not confirmed negative
 MAX_SECS_LEFT   = 600
-BLACKOUT_HOURS  = {13}    # ET hours; ET 11 removed — ablation shows +$0.54/removed trade, no valid mechanism
+BLACKOUT_HOURS  = set()   # no ET hours blocked; ET13 removed (p=0.43, pure noise); ET08 shadow-logged only
 
 # ── Longshot (crash-reversal) — OOS trial ─────────────────────────────────────
 # IS (60d, 8 series, $35): 5-19c +$4,512 (+3.4-4.0pp). OOS (days 61-74):
@@ -198,8 +198,7 @@ def daily_pnl(state, now_ts=None):
 
 # Kill switches (some now dynamic)
 STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
-HWM_DRAWDOWN_PCT        = 0.10 # halt if balance drops 10% below rolling high-water mark
-CONSEC_LOSS_LIMIT       = 5   # halt for 60 min after 5 consecutive losses
+CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
 MAX_CONCURRENT_POSITIONS = 2  # 2×$75=$150=10.9% of balance; matches old $90=10.5% exposure ratio
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
@@ -391,17 +390,6 @@ def check_halts(state, balance):
         return True, f"execution safety halt: {state['execution_halt_reason']}"
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
-    hwm = state.get("high_water_balance", 0)
-    if hwm > 0 and balance is not None:
-        open_cost = sum(
-            p.get("cost", 0) for p in state.get("positions", {}).values()
-            if not p.get("settled")
-        )
-        equity = balance + open_cost
-        if equity < hwm * (1 - HWM_DRAWDOWN_PCT):
-            return True, (f"HWM drawdown: equity ${equity:.2f} (cash ${balance:.2f} + open ${open_cost:.2f}) "
-                          f"is >{HWM_DRAWDOWN_PCT*100:.0f}% below peak ${hwm:.2f} "
-                          f"(threshold ${hwm*(1-HWM_DRAWDOWN_PCT):.2f})")
     bet_dollars = compute_bet_dollars(balance)
     daily_loss_limit = compute_daily_loss_limit(bet_dollars)
     d_pnl = daily_pnl(state)
@@ -765,6 +753,18 @@ def try_trade(
         if _c5 is not None and int(_c5[2]) >= 95:
             log(f"[SHADOW:C5-HIGH-P1P3] {ticker} — prior1={int(prior_asks[0])}c "
                 f"prior3={int(_c5[2])}c (shadow only; ask={fresh_ask}c)")
+
+    # SHADOW: ET08 and ET13 — previously blacklisted hours, now shadow-logging for data.
+    _ct = market.get("close_time", "")
+    if _ct:
+        try:
+            _et_hour = datetime.fromisoformat(_ct.replace("Z", "+00:00")).astimezone(ET).hour
+            if _et_hour == 8:
+                log(f"[SHADOW:ET08] {ticker} — ask={fresh_ask}c secs={secs_left:.0f}s")
+            elif _et_hour == 13:
+                log(f"[SHADOW:ET13] {ticker} — ask={fresh_ask}c secs={secs_left:.0f}s")
+        except Exception:
+            pass
 
     # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH YES contracts at <=MAX_ASK_CENTS.
     # Thin books (KXBNB, KXSOL) cause systematic partial fills — 1-15 contracts
