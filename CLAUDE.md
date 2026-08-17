@@ -12,16 +12,22 @@ You have full context. Just do what's asked. No need for the user to explain the
 - **Backup cron:** `*/5 * * * *` and `2-59/5 * * * *` (staggered) — fires if self-dispatch chain breaks
 - Repo is PUBLIC — unlimited GitHub Actions minutes
 
-## Active Strategy — v5.15 late-certainty (Aug 16, PRs #77–#100)
+## Active Strategy — v5.16 late-certainty (Aug 17)
 
-**Trigger:** buy YES at ask [90, 93]¢ with 150-600s remaining, provided prior 2 same-side 1-min candles all ≥ 75¢. If ask ≤ 91¢, also requires 3rd prior candle ≥ 80¢. Hold to settlement.
+**Trigger:** buy **either side** at ask [90, 93]¢ with 150-600s remaining, provided prior 2 same-side 1-min candles all ≥ 75¢. If ask ≤ 91¢, also requires 3rd prior candle ≥ 80¢. Hold to settlement.
+
+**The single most important fact about this strategy:** you risk $75 to win ~$6.50,
+so break-even is ~92% WR and you run ~94%. The edge is the ~2pp gap, nothing more.
+One cent of entry price is worth ~1pp of break-even WR — i.e. **one tick ≈ half your
+edge**. Measured execution gap is currently **+0.105¢** (see below). Protect that
+number above all else; almost every parameter in this file flips sign if it degrades.
 
 **Current parameters:**
 - `FLAT_BET_DOLLARS = 75` — flat per trade, no balance dependency
 - `MIN_ASK_CENTS = 90`, `MAX_ASK_CENTS = 93`
 - `MIN_SECS_LEFT = 150`, `MAX_SECS_LEFT = 600`
 - `PRIOR_MIN_CENTS = 75`, `PRIOR_LOOKBACK = 2`
-- `YES_ONLY = True` — NO side suspended (see below)
+- `YES_ONLY = False` — **both sides trade as of v5.16** (see below)
 - `BLACKOUT_HOURS = set()` — no hours blocked; ET13 removed (p=0.43, noise); ET08 shadow-logged only
 - `MAX_CONCURRENT_POSITIONS = 2` — correlated basket cap (see below)
 - `MIN_BOOK_DEPTH = 60` — skip if fewer than 60 YES contracts at ≤93¢ (thin-book guard)
@@ -45,7 +51,7 @@ You have full context. Just do what's asked. No need for the user to explain the
 - `[SHADOW:C5-HIGH-P1P3]` — prior1≥95¢ + prior3≥95¢ → shadow only, trade still fires
 - `[SHADOW:ET08]` — close hour ET 8am → shadow only, trade still fires
 - `[SHADOW:ET13]` — close hour ET 1pm → shadow only, trade still fires
-- `[SHADOW:NO-90-91]` — YES_ONLY blocks NO at 90-91¢ → shadow only
+- `[SHADOW:NO-90-91]` — **RETIRED v5.16.** NO trades live; collection disabled.
 - `[SHADOW:EXCL-{series}]` — SHADOW_SERIES qualifying YES market
 
 **Validated backtest performance (YES-only, current config, 60-day dataset):**
@@ -55,11 +61,65 @@ You have full context. Just do what's asked. No need for the user to explain the
 
 ## Key decisions and why
 
-**YES_ONLY = True**
-- Backtest (5,683 trades): YES +$0.87/trade vs NO +$0.23/trade. NO at 92c is -$0.34/trade, NO at 93c is +$0.01/trade. 56% of NO trades hit at 92-93c → effective NO EV is -$0.16/trade.
-- Live (129 settlements): YES 46W/1L (+$116), NO 74W/8L (-$94).
-- NO's backtest +$0.23 overall had a 95% CI of -$0.23 to +$0.70 — never reliably positive even at 2,896 trades.
-- Keep suspended. Shadow-testing NO 90-91c (historically +$0.73/trade in old backtest, but post-hoc slice — needs 90-day clean validation).
+**YES_ONLY = False — NO side re-enabled (v5.16, Aug 17). Supersedes the Aug 11 suspension.**
+
+The suspension rested on live YES 46W/1L vs NO 74W/8L. That difference is **not
+significant**: z=1.64, two-sided **p=0.102**, on n=47 YES trades. At the normal ~94%
+rate, YES "should" have lost ~2.8 of 47 (it lost 1) and NO ~4.9 of 82 (it lost 8) —
+about **five coin flips of luck**, worth roughly the entire $210 P&L gap at the bet
+sizes in use. Half the available markets were cut on five trades.
+
+Full retained history (Jun 11 – Aug 17, 67.8 days, 6,399 close clusters, 83k rows,
+all 7 series — this is *everything* Kalshi still holds):
+
+| | trades | WR | total | $/day |
+|---|---|---|---|---|
+| YES only | 4,129 | 93.78% | +$4,547 | +$67 |
+| both sides | 8,232 | 93.62% | +$8,013 | +$118 |
+
+At the measured +0.105¢ execution gap: **+$62/day → +$108/day**, delta +$3,134,
+P(better)=0.981 (98.75% CI lower bound -$302 — strong, not airtight).
+
+**There is no measurable YES/NO asymmetry, and no mechanism for one:**
+- Cluster-bootstrapped YES-minus-NO win rate: **+0.75pp [-0.36, +1.86]** in-sample,
+  **-1.59pp [-4.54, +1.35]** on holdout. Both include zero; the sign flips.
+- Base rate: these markets settle YES **49.8%** of the time (n=27,908). Honest coin
+  flips — no directional tilt to favour either side.
+- Strike placement: spot is above the strike in 49.5% of markets. Kalshi is not
+  setting strikes in a way that advantages YES.
+- NO wins **93.65%**, YES **93.79%**, over 6,688 trades. Same side of the same bet.
+
+Claims from the old regime that did **not** survive re-testing — do not resurrect:
+- *"NO at 92-93c is -EV"* — did not replicate; NO was **strongest** at 92¢ in holdout.
+- *"Two NOs per close cluster is -$1,211"* — the 2nd NO in a cluster matches the 1st
+  (+$1.04 vs +$1.02/tr) and does **not** widen the tail: `MAX_CONCURRENT_POSITIONS=2`
+  caps a cluster at $150 regardless of side. Worst cluster is -$150 either way.
+- The `[SHADOW:NO-90-91]` apparatus is **retired** — the question is answered.
+  Collection is disabled; settlement scoring drains existing records.
+
+**Execution quality — the master variable (measured Aug 17)**
+
+Reconstructed from 1,486 live fills in the 88-93¢ band (19,245 contracts):
+
+| | |
+|---|---|
+| actual contract-weighted fill | 91.968¢ |
+| backtest-predicted entry ask | 91.863¢ |
+| **execution gap** | **+0.105¢** |
+
+Fills are essentially at the quote, including 32 fills *below* the 90¢ floor (price
+improvement). Method note: compare **distributions**, not per-fill against a candle —
+a per-fill comparison gives +0.85¢ that is pure artifact, because the 1-min candle
+reference is stale 47% of the time and produces textbook regression to the mean.
+
+Sensitivity, full history: baseline +$4,510 at quote → +$1,393 at one tick. **One cent
+removes 69% of all profit.** Slippage is the biggest *risk*, not the biggest
+*opportunity* — it is already near zero, so guard it rather than chase it.
+
+Also verified: the 691 non-late-certainty fills on this account are benign. 510 at
+94-99¢ are the pre-v5.6.4 config (ended Aug 9); 181 sub-88¢ are crash-through fills,
+and they are *profitable* (48.1% WR at ~34¢ average entry, well above the ~34%
+break-even). Nothing on the account is bleeding.
 
 **prior3≥80¢ gate at ask≤91¢**
 - Cross-tab (n=2035): ask 90-91c + prior2-only = -$0.08/trade. Ask 90-91c + prior3≥80c = +$0.93/trade.
@@ -133,6 +193,11 @@ balance grow into a bigger bet rather than sizing up into a good streak.
 - Prevents double-limit exposure around midnight ET.
 
 **C1 provisional quarantine: KXSOL15M + prior2 75-79¢**
+- **Aug 17 re-measure: worth ~$260 total over 67.8 days** (+$8,566 with vs +$8,306
+  without). It is noise, not the load-bearing filter the numbers below imply. It was
+  also quarantined on 60 IS + 80 OOS trades, which violates Rule 4's 500-trade bar.
+  Left in place because it is harmless and reversal is not worth a live change — but
+  do not cite it as precedent for a new quarantine.
 - IS (60 trades): -$3.42/trade. OOS Jul13-Aug12 (80 trades): -$7.25/trade. All 3 sequential 20-day periods negative.
 - Quarantined in v5.14. Shadow-logged as `[SHADOW:C1-SOL-LOW-P2]`. SOL at prior2 ≥ 80¢ still trades normally.
 - Reassess after 60 calendar days + 100 prospective signals (~Oct 15, 2026).
@@ -182,6 +247,8 @@ Live at **https://polymarket-monitor2.onrender.com** (Render free tier, cold-sta
 | File | Purpose |
 |------|---------|
 | `late_certainty_trader.py` | THE live trader — surgical edits only (real money) |
+| `scripts/archive_candles.py` | Nightly candle archival — see "Data archival" below |
+| `data/candles/YYYY-MM-DD.csv.gz` | Permanent candle archive (~13 KB/day) |
 | `.github/workflows/late_certainty.yml` | Workflow — cron backup + self-dispatch chain |
 | `.github/workflows/daily_summary.yml` | Nightly P&L email; `--hours N` and `--trades N` flags |
 | `daily_summary.py` | Ground-truth P&L from Kalshi settlements API (not state) |
@@ -329,7 +396,7 @@ ever reconsidering this; do not rebuild it from scratch.
 
 | Item | When / Criteria |
 |------|----------------|
-| NO 90-91c re-entry (max 1 NO/cluster) | 90 days shadow + cluster-bootstrap CI > $0. **Evidence as of Aug 17:** holdout flanks (Jun 11-12 + Aug 12-17) +$675 vs current; full 60-day discovery window only **+$195**, P(better)=0.567, one-sided 98.75% lower = -$0.62. Directionally positive on 3 samples but far too small to clear the gate. NOTE: allowing TWO NOs per cluster is **-$1,211** over 60 days — the max-1 restriction is load-bearing, not cosmetic. |
+| ~~NO 90-91c re-entry~~ | **RESOLVED Aug 17 — shipped in v5.16 as a full symmetric NO side, not a 90-91¢ slice.** See "YES_ONLY = False" above. The 90-91¢ restriction was itself a post-hoc slice that did not replicate. |
 | KXHYPE15M re-entry | Same shadow criteria as NO. (Aug 17: HYPE as a full series tested at -$1.76/trade — see kill-list.) |
 | ET 08 blackout | 500+ shadow trades + confirmed negative across 3 time periods |
 | ET 13 re-blocking | 500+ shadow trades; currently p=0.43 (noise) |
@@ -341,6 +408,25 @@ ever reconsidering this; do not rebuild it from scratch.
 | C1 quarantine reassessment | ~Oct 15, 2026 (60 days + 100 prospective signals) |
 | C5 blocking | Needs 500+ shadow trades; currently 54 OOS — not blockable |
 | Window-based consecutive loss | Group by common expiry timestamp; count losing windows not individual trades |
+
+## Data archival — read this before proposing any new research
+
+**Kalshi retains settled markets for only ~67 days.** This single fact has blocked
+every strategy question this project has asked. When a hypothesis is formed, the only
+data that exists is the data it was formed on, and the "out-of-sample" window is
+whatever few days fall outside the discovery set. The NO-side question sat unresolved
+for months purely because its re-entry gate demanded 90 days of clean holdout that the
+API can never supply — on Aug 17 the entire available holdout was **7.6 days**.
+
+`.github/workflows/archive_candles.yml` now runs nightly and commits
+`data/candles/YYYY-MM-DD.csv.gz` (all 7 series, both sides, ask 88-96¢, 100-800s —
+deliberately wider than the live gates). Schema matches `backtest_ablation_raw.csv`
+minus `profit`/`spot_*`; `profit` is derivable from `ask` + `won`.
+
+**Every archived day is untouched out-of-sample data for every hypothesis formed after
+it.** Backfill with `--backfill N`. Never delete this directory. If the workflow has
+been failing, fixing it outranks whatever research prompted the check — a day not
+archived is validation capacity permanently destroyed.
 
 ## Rules
 

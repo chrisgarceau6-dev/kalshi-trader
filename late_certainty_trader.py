@@ -151,13 +151,25 @@ SHADOW_NO_MAX_PER_CLOSE = 1
 SHADOW_NO_PRUNE_DAYS    = 14   # settled records older than this leave state
 SHADOW_NO_MAX_SETTLE_CHECKS = 40  # bound per-cycle settlement API calls
 
-STRATEGY_VERSION = "v5.15"  # remove HWM halt, CONSEC 5→9, remove ET13 blackout, shadow ET08/ET13
+STRATEGY_VERSION = "v5.16"  # NO side re-enabled (YES_ONLY=False), side-aware book depth
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
 PRIOR_MIN_CENTS = 75     # v5.6.5: relaxed 80→75c — same WR, +38% volume (filter audit Aug 10)
 PRIOR_LOOKBACK  = 2      # v5.6.5: relaxed 3→2 candles — -0.1pp WR, +53% volume (filter audit Aug 10)
-YES_ONLY        = True   # NO side is -EV: live 74W/8L vs YES 46W/1L (Aug 11 audit)
+# v5.16: NO side re-enabled. The Aug 11 audit that suspended it (live YES 46W/1L
+# vs NO 74W/8L) is not significant — z=1.64, two-sided p=0.102 on n=47 YES trades.
+# Full retained history (Jun 11-Aug 17, 68 days, 6,399 close clusters, all 7 series):
+# YES 93.79% WR vs NO 93.65% WR. Cluster-bootstrapped YES-minus-NO win rate is
+# +0.75pp [-0.36, +1.86] in-sample and -1.59pp [-4.54, +1.35] on the holdout flanks
+# — both CIs include zero, and the sign flips between windows. There is no
+# measurable asymmetry. Base rate confirms it: these markets settle YES 49.8% of
+# the time, so neither side is structurally favoured.
+# Expected effect at measured fill quality (+0.105c): +$62/day -> +$108/day,
+# delta +$3,134 over 68 days, P(better)=0.981 (98.75% CI lower bound -$302).
+# MAX_CONCURRENT_POSITIONS=2 still caps a settlement cluster at $150 regardless
+# of side, so this adds volume without widening the per-cluster tail.
+YES_ONLY        = False
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
@@ -369,11 +381,12 @@ def _shadow_taker_fee(price_dollars, contracts):
     return raw.quantize(Decimal("0.01"), rounding=ROUND_CEILING)
 
 
-def _shadow_book_depth_no(ticker, limit_cents):
+def _book_depth_no(ticker, limit_cents):
     """NO contracts offered at <= limit_cents, via the YES bid side.
 
-    Deliberately separate from _book_depth_at_max_ask so the live YES order path
-    is untouched by research code. Returns None on any API error.
+    v5.16: promoted from research helper to the live NO order path. The YES-side
+    counterpart (_book_depth_at_max_ask) reads NO bids and would measure the wrong
+    side of the book for a NO entry. Returns None on any API error (fails open).
     """
     code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
     if code != 200 or not r:
@@ -445,7 +458,7 @@ def evaluate_shadow_no_candidate(market, state, now_ts=None):
     cost = Decimal(contracts) * price_dollars
     fee = _shadow_taker_fee(price_dollars, contracts)
 
-    depth = _shadow_book_depth_no(ticker, modelled_fill)
+    depth = _book_depth_no(ticker, modelled_fill)
     if depth is None or depth < contracts:
         return False
 
@@ -910,7 +923,14 @@ def try_trade(
     yes_ask   = yes_ask if yes_ask is not None else Decimal("-1")
     no_ask    = no_ask if no_ask is not None else Decimal("-1")
 
-    # Pick side within target band. YES-only per backtest — NO side is -EV.
+    # Pick side within target band. v5.16: both sides trade — the two are
+    # statistically indistinguishable (93.79% vs 93.65% WR over 68 days).
+    # YES is checked first, so when a market somehow qualifies on both it takes
+    # YES; in practice that cannot happen, since a 90-93c YES ask implies a
+    # 7-10c NO ask. Re-entry on the opposite side of a ticker already held is
+    # blocked by the `ticker in state["positions"]` guard at the top of this
+    # function — markets that flip across the strike mid-window lost -$40/trade
+    # in backtest, and that guard is what prevents taking them.
     side, ask_cents = None, None
     if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
         side, ask_cents = "yes", yes_ask
@@ -993,11 +1013,17 @@ def try_trade(
         except Exception:
             pass
 
-    # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH YES contracts at <=MAX_ASK_CENTS.
-    # Thin books (KXBNB, KXSOL) cause systematic partial fills — 1-15 contracts
-    # instead of ~80 — making position tracking unreliable and fill costs unpredictable.
+    # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH contracts at <=MAX_ASK_CENTS
+    # on the side we are actually buying. Thin books (KXBNB, KXSOL) cause systematic
+    # partial fills — 1-15 contracts instead of ~80 — making position tracking
+    # unreliable and fill costs unpredictable.
+    # v5.16: side-aware. _book_depth_at_max_ask reads the NO bid side to price YES
+    # asks; for a NO entry that is the wrong side of the book entirely, so NO entries
+    # use _book_depth_no (YES bid side). We have no live evidence on NO fill quality
+    # — this check is the main guard against thin NO books.
     # Fails open (None) so API errors never block valid entries.
-    depth = _book_depth_at_max_ask(ticker)
+    depth = (_book_depth_at_max_ask(ticker) if side == "yes"
+             else _book_depth_no(ticker, MAX_ASK_CENTS))
     if depth is not None and depth < MIN_BOOK_DEPTH:
         log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
             f"(need {MIN_BOOK_DEPTH})")
@@ -1388,20 +1414,23 @@ def run_once(dry_run=False):
     now_et = datetime.now(ET)
     log(f"=== CERTAINTY @ {now_et.strftime('%Y-%m-%d %H:%M:%S')} ET ===")
 
-    # Research instrumentation runs before the balance fetch and halt checks so
-    # that live halts cannot bias which signals get collected. It has no path to
-    # place_order() and cannot consume exposure. Wrapped so a research failure
-    # can never stop the trader.
+    # v5.16: NO 90-91c shadow collection is retired — the question it existed to
+    # answer (is the NO side tradable?) was settled on the full 68-day retained
+    # history, and NO now trades live. Collection is disabled here rather than
+    # deleted so this change stays a config-level diff on a live-money file; the
+    # functions and test_shadow_no_90_91.py remain green and are removed in a
+    # follow-up PR once NO has live settlements.
+    # Settlement scoring still runs, so any signals already recorded in state
+    # finish resolving and are not orphaned.
     try:
         if check_shadow_no_outcomes(state):
             save_state(state)
-        if collect_shadow_no_signals(state):
-            save_state(state)
         sn = shadow_no_summary(state)
-        wr = f"{sn['win_rate'] * 100:.1f}%" if sn["win_rate"] is not None else "n/a"
-        log(f"  shadow NO90-91: {sn['signals']} signals; selected settled "
-            f"{sn['wins']}/{sn['settled']} WR={wr} P&L=${sn['pnl']:+.2f} "
-            f"clusters={sn['clusters']}")
+        if sn["signals"]:
+            wr = f"{sn['win_rate'] * 100:.1f}%" if sn["win_rate"] is not None else "n/a"
+            log(f"  shadow NO90-91 (retired, draining): {sn['signals']} signals; "
+                f"selected settled {sn['wins']}/{sn['settled']} WR={wr} "
+                f"P&L=${sn['pnl']:+.2f} clusters={sn['clusters']}")
     except Exception as exc:
         log(f"  WARNING: shadow NO instrumentation failed (non-fatal): {exc}")
 

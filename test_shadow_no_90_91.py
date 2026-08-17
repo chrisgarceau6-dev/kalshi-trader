@@ -39,7 +39,7 @@ def good_gates(fresh="90", priors=(Decimal("80"), Decimal("82")), depth=999.0):
     return (
         patch.object(trader, "_fresh_ask_cents", return_value=Decimal(fresh)),
         patch.object(trader, "_prior_k_candle_asks", return_value=list(priors)),
-        patch.object(trader, "_shadow_book_depth_no", return_value=depth),
+        patch.object(trader, "_book_depth_no", return_value=depth),
     )
 
 
@@ -104,7 +104,7 @@ class ShadowFailsClosed(unittest.TestCase):
         state = empty_state()
         a, b, _ = good_gates()
         with patch.object(trader, "save_state"), a, b, \
-             patch.object(trader, "_shadow_book_depth_no", return_value=None):
+             patch.object(trader, "_book_depth_no", return_value=None):
             self.assertFalse(trader.evaluate_shadow_no_candidate(market(), state))
 
     def test_rejects_when_priors_unavailable(self):

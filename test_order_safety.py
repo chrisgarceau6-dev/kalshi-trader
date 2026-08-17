@@ -386,6 +386,108 @@ class OrderSafetyTests(unittest.TestCase):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
         self.assertIn("KXETH15M-TEST", state["positions"])
 
+    # ── v5.16: NO side live ────────────────────────────────────────────────
+    # A NO entry must be liquidity-checked against the YES bid side. The YES-path
+    # helper (_book_depth_at_max_ask) reads NO bids, which for a NO entry is the
+    # opposite side of the book — it would happily pass a NO order into a book with
+    # no YES bids at all.
+
+    def _no_side_market(self, ticker="KXBTC15M-TEST"):
+        return {
+            "ticker": ticker,
+            "event_ticker": ticker,
+            "yes_ask_dollars": "0.0900",   # YES is cheap -> NO is the expensive side
+            "no_ask_dollars": "0.9100",
+            "_secs_left": 300,
+        }
+
+    def test_no_side_trades_when_yes_bid_book_is_deep(self):
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        deep = {"orderbook_fp": {
+            "yes_dollars": [["0.09", "500"], ["0.08", "300"]],   # NO offers, ample
+            "no_dollars":  [["0.91", "500"]],
+        }}
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(200, deep)), \
+             patch.object(trader, "place_order", return_value=(201, {"order_id": "o-1", "fill_count": "1.00", "remaining_count": "0.00"})) as place, \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
+             patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
+             patch.object(trader.time, "sleep"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(self._no_side_market(), state, False, balance=1000,
+                             live_position_tickers=set())
+        place.assert_called()
+        self.assertEqual(state["positions"]["KXBTC15M-TEST"]["side"], "no")
+
+    def test_book_depth_no_reads_yes_bid_side(self):
+        """_book_depth_no must count YES bids at >= (1 - limit), i.e. the offers a
+        NO buyer actually lifts. NO bids must not contribute."""
+        book = {"orderbook_fp": {
+            "yes_dollars": [["0.09", "40"], ["0.08", "25"], ["0.02", "999"]],
+            "no_dollars":  [["0.91", "900"]],
+        }}
+        with patch.object(trader, "kalshi_get", return_value=(200, book)):
+            depth = trader._book_depth_no("KXBTC15M-TEST", trader.MAX_ASK_CENTS)
+        # 0.09 and 0.08 are >= 1-0.93 = 0.07 and count; 0.02 is below and does not.
+        # The 900 NO bids must be ignored entirely.
+        self.assertEqual(depth, 65.0)
+
+    def _depth_helper_used_for(self, market):
+        """Return which depth helper try_trade consulted for this market."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "_book_depth_at_max_ask", return_value=0.0) as yes_helper, \
+             patch.object(trader, "_book_depth_no", return_value=0.0) as no_helper, \
+             patch.object(trader, "place_order") as place:
+            trader.try_trade(market, state, False, balance=1000,
+                             live_position_tickers=set())
+        # Both stubs return 0 depth, so the trade is skipped either way; the point
+        # of the test is purely WHICH side of the book was measured.
+        place.assert_not_called()
+        return yes_helper.called, no_helper.called
+
+    def test_no_entry_measures_the_no_side_of_the_book(self):
+        """Regression: before v5.16 a NO entry was liquidity-checked with
+        _book_depth_at_max_ask, which reads NO bids — the wrong side entirely."""
+        yes_used, no_used = self._depth_helper_used_for(self._no_side_market())
+        self.assertTrue(no_used, "NO entry must consult _book_depth_no")
+        self.assertFalse(yes_used, "NO entry must not consult the YES-side helper")
+
+    def test_yes_entry_still_measures_the_yes_side_of_the_book(self):
+        market = {
+            "ticker": "KXSOL15M-TEST",
+            "event_ticker": "KXSOL15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        yes_used, no_used = self._depth_helper_used_for(market)
+        self.assertTrue(yes_used, "YES entry must consult _book_depth_at_max_ask")
+        self.assertFalse(no_used, "YES entry must not consult the NO-side helper")
+
+    def test_opposite_side_of_held_ticker_is_never_re_entered(self):
+        """A market that flips across its strike mid-window must not be re-entered
+        on the other side — those cost -$40/trade in backtest."""
+        state = {
+            "positions": {"KXETH15M-TEST": {"side": "yes", "settled": False}},
+            "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
+        }
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "place_order") as place:
+            trader.try_trade(self._no_side_market("KXETH15M-TEST"), state, False,
+                             balance=1000, live_position_tickers=set())
+        place.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
