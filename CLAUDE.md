@@ -77,6 +77,44 @@ You have full context. Just do what's asked. No need for the user to explain the
 - Break-even WR at current entry prices is ~92%. 84% threshold tolerates ~24% account drawdown before firing.
 - Treat as last-resort circuit breaker. Do NOT lower further; do NOT raise back to 88% (caused 9h false halt Aug 11).
 
+**Position sizing — $75 is the ceiling until balance ≥ $2,200 (decided Aug 17)**
+
+Bet size is a risk decision, not a win-rate decision. Gate it on balance, never on WR alone.
+
+Rule: **raise bet size only when the new size is ≤ 4.6% of balance** — the ratio $75
+represents at $1,631. So $100 needs ~$2,200; $125 needs ~$2,700.
+
+Evidence (60-day live-rule sequence from a $1,631.59 start, `scripts/sizing.py`):
+
+| | $75 | $100 |
+|---|---|---|
+| Net P&L 60d | +$1,035 | +$1,407 |
+| Max drawdown | -$1,162 (50.2% of peak) | -$1,548 (64.7% of peak) |
+| Worst single day | -$517 | -$690 |
+| Days worse than -$300 | 2 | 7 |
+| Per-trade % of equity | 4.6% | 6.1% |
+| 2 concurrent | 9.2% | 12.3% |
+
+Block bootstrap, 1,000 resampled 60-day runs, contiguous 3-day blocks:
+
+| Sizing | Median worst DD | 5th pct | **P(hit $650 stop)** |
+|---|---|---|---|
+| $75 | -$947 | -$1,965 | **13.3%** |
+| $100 | -$1,249 | -$2,653 | **24.6%** |
+
+Why $100 was rejected: it buys **+$372** of 60-day profit for **-$386** of extra
+drawdown (worse than 1:1) and roughly doubles risk of hitting the stop floor,
+1-in-8 to 1-in-4, for +$6.19/day.
+
+Note the old gate ("200 live settlements ≥93% WR") was technically MET at exactly
+93.0% — it tested the wrong quantity. Break-even is ~92%, so it authorized more
+leverage at a 1pp margin, and the recent 200-settlement WR (93.0%) was *below* the
+Aug 1+ cohort (95.1%), i.e. the trend was softening, not confirming.
+
+Also note $75 itself already implies a 13.3% chance of touching $650 in any 60-day
+stretch. Current sizing is the aggressive end of reasonable, not the middle. Let the
+balance grow into a bigger bet rather than sizing up into a good streak.
+
 **HWM drawdown halt — REMOVED (Aug 16, v5.15)**
 - Added Aug 15 with zero backtest evidence. Self-locking at $75 sizing: 2 correlated losses ≈ 9.6% of equity, making the 10% threshold unreachable in practice.
 - Halted the bot for ~9h on Aug 15 (equity $1,556 vs threshold $1,565). Removed permanently.
@@ -295,7 +333,7 @@ ever reconsidering this; do not rebuild it from scratch.
 | KXHYPE15M re-entry | Same shadow criteria as NO. (Aug 17: HYPE as a full series tested at -$1.76/trade — see kill-list.) |
 | ET 08 blackout | 500+ shadow trades + confirmed negative across 3 time periods |
 | ET 13 re-blocking | 500+ shadow trades; currently p=0.43 (noise) |
-| $100/trade bump | 200 live settlements ≥93% WR (balance already >$1,500 ✓) |
+| $100/trade bump | **Gate replaced Aug 17 — now balance-based: hold until balance ≥ $2,200.** The old "200 settlements ≥93% WR" gate was met (exactly 93.0%) but tested the wrong thing. See "Position sizing" below. |
 | Hourly Kalshi crypto markets | Potential parallel strategy to fill dead zones |
 | Thursday blackout | 349 trades at -$1.20/trade — suggestive but needs 500+ |
 | BNB exclusion | 92.2% WR, +$0.06/trade YES — borderline, watch another month |
