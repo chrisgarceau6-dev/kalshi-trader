@@ -130,34 +130,25 @@ SERIES_LIST     = [
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
 
-# ── preregistered NO 90-91c research candidate — RESEARCH ONLY, NEVER TRADES ──
-# The old `[SHADOW:NO-90-91]` line fired before the fresh-ask and prior-candle
-# checks, so it logged candidates a real order would often reject. Those lines are
-# NOT executable signals. This records only candidates that pass the same
-# just-in-time gates a live order faces, then scores them after settlement.
-# There is deliberately no path from this code to place_order().
-SHADOW_NO_SERIES        = ("KXBTC15M", "KXETH15M", "KXSOL15M",
-                           "KXDOGE15M", "KXBNB15M", "KXXRP15M")
-SHADOW_NO_MIN_ASK       = Decimal("90")
-SHADOW_NO_MAX_ASK       = Decimal("91")
-SHADOW_NO_PRIOR_MIN     = Decimal("75")
-SHADOW_NO_PRIOR_K       = 2
-SHADOW_NO_ADVERSE_CENTS = Decimal("1")   # modelled fill = fresh ask + 1c
-SHADOW_NO_BUDGET        = Decimal("75")
-# Load-bearing: at most ONE NO per settlement cluster. Allowing two is -$1,211
-# over the 60-day window vs +$195 for max-1. Do not raise without re-running
-# scripts/no_60d.py.
-SHADOW_NO_MAX_PER_CLOSE = 1
-SHADOW_NO_PRUNE_DAYS    = 14   # settled records older than this leave state
-SHADOW_NO_MAX_SETTLE_CHECKS = 40  # bound per-cycle settlement API calls
-
-STRATEGY_VERSION = "v5.15"  # remove HWM halt, CONSEC 5→9, remove ET13 blackout, shadow ET08/ET13
+STRATEGY_VERSION = "v5.16"  # NO side re-enabled (YES_ONLY=False), side-aware book depth
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
 PRIOR_MIN_CENTS = 75     # v5.6.5: relaxed 80→75c — same WR, +38% volume (filter audit Aug 10)
 PRIOR_LOOKBACK  = 2      # v5.6.5: relaxed 3→2 candles — -0.1pp WR, +53% volume (filter audit Aug 10)
-YES_ONLY        = True   # NO side is -EV: live 74W/8L vs YES 46W/1L (Aug 11 audit)
+# v5.16: NO side re-enabled. The Aug 11 audit that suspended it (live YES 46W/1L
+# vs NO 74W/8L) is not significant — z=1.64, two-sided p=0.102 on n=47 YES trades.
+# Full retained history (Jun 11-Aug 17, 68 days, 6,399 close clusters, all 7 series):
+# YES 93.79% WR vs NO 93.65% WR. Cluster-bootstrapped YES-minus-NO win rate is
+# +0.75pp [-0.36, +1.86] in-sample and -1.59pp [-4.54, +1.35] on the holdout flanks
+# — both CIs include zero, and the sign flips between windows. There is no
+# measurable asymmetry. Base rate confirms it: these markets settle YES 49.8% of
+# the time, so neither side is structurally favoured.
+# Expected effect at measured fill quality (+0.105c): +$62/day -> +$108/day,
+# delta +$3,134 over 68 days, P(better)=0.981 (98.75% CI lower bound -$302).
+# MAX_CONCURRENT_POSITIONS=2 still caps a settlement cluster at $150 regardless
+# of side, so this adds volume without widening the per-cluster tail.
+YES_ONLY        = False
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
 # way-below-ask prices (which happened in live trading when market crashed
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
@@ -356,24 +347,19 @@ def shadow_log(reason, ticker, side, ask, secs_left):
     log(f"  [SHADOW:{reason}] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  ts={now}")
 
 
-# ── NO 90-91c research instrumentation (never places an order) ────────────────
+# ── order-book depth helpers ──────────────────────────────────────────────────
 
 def _empty_shadow_totals():
     """Cumulative counters that survive record pruning."""
     return {"signals": 0, "settled": 0, "wins": 0, "pnl": 0.0, "clusters": []}
 
 
-def _shadow_taker_fee(price_dollars, contracts):
-    """Kalshi taker fee, rounded up to the cent — matches the historical audit."""
-    raw = Decimal("0.07") * Decimal(contracts) * price_dollars * (Decimal("1") - price_dollars)
-    return raw.quantize(Decimal("0.01"), rounding=ROUND_CEILING)
-
-
-def _shadow_book_depth_no(ticker, limit_cents):
+def _book_depth_no(ticker, limit_cents):
     """NO contracts offered at <= limit_cents, via the YES bid side.
 
-    Deliberately separate from _book_depth_at_max_ask so the live YES order path
-    is untouched by research code. Returns None on any API error.
+    v5.16: promoted from research helper to the live NO order path. The YES-side
+    counterpart (_book_depth_at_max_ask) reads NO bids and would measure the wrong
+    side of the book for a NO entry. Returns None on any API error (fails open).
     """
     code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
     if code != 200 or not r:
@@ -392,169 +378,6 @@ def _shadow_book_depth_no(ticker, limit_cents):
         except (IndexError, InvalidOperation, TypeError, ValueError):
             continue
     return float(total)
-
-
-def _market_close_ts(market):
-    try:
-        close_dt = datetime.fromisoformat(str(market["close_time"]).replace("Z", "+00:00"))
-    except (KeyError, TypeError, ValueError):
-        return None
-    return int(close_dt.timestamp())
-
-
-def evaluate_shadow_no_candidate(market, state, now_ts=None):
-    """Record one executable NO 90-91c signal. Never places an order.
-
-    Fails closed on a stale ask, missing candles, thin book, or missing close
-    time — the same conditions that would abort a real order.
-    """
-    ticker = market.get("ticker", "")
-    series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
-    records = state.setdefault("shadow_no_90_91", {})
-    if not ticker or series not in SHADOW_NO_SERIES or ticker in records:
-        return False
-
-    try:
-        secs_left = float(market.get("_secs_left", 0))
-    except (TypeError, ValueError):
-        return False
-    if not MIN_SECS_LEFT <= secs_left <= MAX_SECS_LEFT:
-        return False
-
-    scan_ask = price_cents(market.get("no_ask_dollars"))
-    if scan_ask is None or not SHADOW_NO_MIN_ASK <= scan_ask <= SHADOW_NO_MAX_ASK:
-        return False
-
-    # Same just-in-time gates a live order faces — this is the whole point.
-    fresh_ask = _fresh_ask_cents(ticker, "no")
-    if fresh_ask is None or not SHADOW_NO_MIN_ASK <= fresh_ask <= SHADOW_NO_MAX_ASK:
-        return False
-
-    prior_asks = _prior_k_candle_asks(ticker, series, "no", SHADOW_NO_PRIOR_K)
-    if (prior_asks is None or len(prior_asks) != SHADOW_NO_PRIOR_K
-            or any(a < SHADOW_NO_PRIOR_MIN for a in prior_asks)):
-        return False
-
-    close_ts = _market_close_ts(market)
-    if close_ts is None:
-        return False
-
-    modelled_fill = fresh_ask + SHADOW_NO_ADVERSE_CENTS
-    price_dollars = modelled_fill / Decimal("100")
-    contracts = contracts_for_risk(SHADOW_NO_BUDGET, modelled_fill)
-    cost = Decimal(contracts) * price_dollars
-    fee = _shadow_taker_fee(price_dollars, contracts)
-
-    depth = _shadow_book_depth_no(ticker, modelled_fill)
-    if depth is None or depth < contracts:
-        return False
-
-    selected_at_close = sum(
-        1 for rec in records.values()
-        if rec.get("close_ts") == close_ts and rec.get("portfolio_selected")
-    )
-    selected = selected_at_close < SHADOW_NO_MAX_PER_CLOSE
-    signal_ts = int(now_ts if now_ts is not None else time.time())
-
-    records[ticker] = {
-        "hypothetical": True, "ticker": ticker, "series": series, "side": "no",
-        "signal_ts": signal_ts, "close_ts": close_ts, "seconds_left": secs_left,
-        "scan_ask_cents": float(scan_ask), "fresh_ask_cents": float(fresh_ask),
-        "prior_asks_cents": [float(a) for a in prior_asks],
-        "modelled_fill_cents": float(modelled_fill), "contracts": contracts,
-        "visible_depth": depth, "cost": float(cost), "fee_cost": float(fee),
-        "portfolio_selected": selected, "settled": False,
-    }
-    totals = state.setdefault("shadow_no_totals", _empty_shadow_totals())
-    totals["signals"] = totals.get("signals", 0) + 1
-    log(f"  [SHADOW:NO-90-91-VALID] {ticker} NO scan={scan_ask}c fresh={fresh_ask}c "
-        f"modelled={modelled_fill}c priors={prior_asks} {secs_left:.0f}s "
-        f"{'SELECTED' if selected else 'UNCAPPED'}")
-    return True
-
-
-def collect_shadow_no_signals(state):
-    """Collect signals independently of live halts, balance, and ordering."""
-    added = 0
-    for series in SHADOW_NO_SERIES:
-        try:
-            markets = sorted(
-                open_markets_near_close(series, apply_blackout=False),
-                key=lambda m: -float(m.get("_secs_left", 0)),
-            )
-        except Exception as exc:          # research must never break the trader
-            log(f"  shadow NO scan failed for {series}: {exc}")
-            continue
-        for m in markets:
-            try:
-                added += int(evaluate_shadow_no_candidate(m, state))
-            except Exception as exc:
-                log(f"  shadow NO eval failed for {m.get('ticker','?')}: {exc}")
-    return added
-
-
-def check_shadow_no_outcomes(state):
-    """Settle hypothetical records. Touches no cash, halts, or live stats."""
-    records = state.get("shadow_no_90_91", {})
-    totals = state.setdefault("shadow_no_totals", _empty_shadow_totals())
-    pending = [(t, r) for t, r in records.items() if not r.get("settled")]
-    changed = False
-
-    for ticker, rec in pending[:SHADOW_NO_MAX_SETTLE_CHECKS]:
-        code, resp = kalshi_get(f"/markets/{ticker}")
-        if code != 200:
-            continue
-        market = resp.get("market", resp)
-        if market.get("status") not in ("settled", "finalized"):
-            continue
-        result = market.get("result", "")
-        if result not in ("yes", "no"):
-            continue
-
-        won = result == "no"
-        contracts = Decimal(str(rec["contracts"]))
-        payout = contracts if won else Decimal("0")
-        pnl = payout - Decimal(str(rec["cost"])) - Decimal(str(rec["fee_cost"]))
-        rec.update({
-            "settled": True, "settled_ts": int(time.time()),
-            "result": result, "won": won,
-            "pnl": float(pnl.quantize(Decimal("0.01"))),
-        })
-        changed = True
-        if rec.get("portfolio_selected"):
-            totals["settled"] = totals.get("settled", 0) + 1
-            totals["wins"] = totals.get("wins", 0) + int(won)
-            totals["pnl"] = round(totals.get("pnl", 0.0) + rec["pnl"], 2)
-            clusters = totals.setdefault("clusters", [])
-            if rec["close_ts"] not in clusters:
-                clusters.append(rec["close_ts"])
-        log(f"  [SHADOW:NO-90-91-SETTLED] {ticker} result={result.upper()} "
-            f"pnl=${rec['pnl']:+.2f} {'SELECTED' if rec.get('portfolio_selected') else 'UNCAPPED'}")
-
-    # Prune old settled records so state (a per-cycle GH artifact) stays small.
-    # Cumulative totals above are never pruned.
-    cutoff = int(time.time()) - SHADOW_NO_PRUNE_DAYS * 86400
-    stale = [t for t, r in records.items()
-             if r.get("settled") and int(r.get("settled_ts", 0)) < cutoff]
-    for t in stale:
-        del records[t]
-    if stale:
-        changed = True
-        log(f"  shadow NO: pruned {len(stale)} settled records older than {SHADOW_NO_PRUNE_DAYS}d")
-    return changed
-
-
-def shadow_no_summary(state):
-    """Cumulative totals for the capped (tradeable) portfolio."""
-    t = dict(_empty_shadow_totals())
-    t.update(state.get("shadow_no_totals", {}) or {})
-    settled = t.get("settled", 0)
-    return {
-        "signals": t.get("signals", 0), "settled": settled, "wins": t.get("wins", 0),
-        "pnl": round(t.get("pnl", 0.0), 2),
-        "win_rate": (t.get("wins", 0) / settled) if settled else None,
-        "clusters": len(t.get("clusters", []) or []),
-    }
 
 
 # ── market scanning ────────────────────────────────────────────────────────────
@@ -910,16 +733,22 @@ def try_trade(
     yes_ask   = yes_ask if yes_ask is not None else Decimal("-1")
     no_ask    = no_ask if no_ask is not None else Decimal("-1")
 
-    # Pick side within target band. YES-only per backtest — NO side is -EV.
+    # Pick side within target band. v5.16: both sides trade — the two are
+    # statistically indistinguishable (93.79% vs 93.65% WR over 68 days).
+    # YES is checked first, so when a market somehow qualifies on both it takes
+    # YES; in practice that cannot happen, since a 90-93c YES ask implies a
+    # 7-10c NO ask. Re-entry on the opposite side of a ticker already held is
+    # blocked by the `ticker in state["positions"]` guard at the top of this
+    # function — markets that flip across the strike mid-window lost -$40/trade
+    # in backtest, and that guard is what prevents taking them.
     side, ask_cents = None, None
     if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
         side, ask_cents = "yes", yes_ask
     elif not YES_ONLY and MIN_ASK_CENTS <= no_ask <= MAX_ASK_CENTS:
         side, ask_cents = "no",  no_ask
-    # NO 90-91c shadow logging used to live here, but it fired before the
-    # fresh-ask and prior-candle checks, so it recorded candidates a real order
-    # would often reject. Replaced by collect_shadow_no_signals() in run_once(),
-    # which applies the same just-in-time gates and scores after settlement.
+    # v5.16: the NO 90-91c shadow apparatus that used to live here is gone —
+    # the NO side trades for real now. state["shadow_no_*"] keys are retained
+    # (unused) so existing cached state stays schema-compatible.
     if side is None:
         return
 
@@ -993,11 +822,17 @@ def try_trade(
         except Exception:
             pass
 
-    # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH YES contracts at <=MAX_ASK_CENTS.
-    # Thin books (KXBNB, KXSOL) cause systematic partial fills — 1-15 contracts
-    # instead of ~80 — making position tracking unreliable and fill costs unpredictable.
+    # BOOK DEPTH: skip if fewer than MIN_BOOK_DEPTH contracts at <=MAX_ASK_CENTS
+    # on the side we are actually buying. Thin books (KXBNB, KXSOL) cause systematic
+    # partial fills — 1-15 contracts instead of ~80 — making position tracking
+    # unreliable and fill costs unpredictable.
+    # v5.16: side-aware. _book_depth_at_max_ask reads the NO bid side to price YES
+    # asks; for a NO entry that is the wrong side of the book entirely, so NO entries
+    # use _book_depth_no (YES bid side). We have no live evidence on NO fill quality
+    # — this check is the main guard against thin NO books.
     # Fails open (None) so API errors never block valid entries.
-    depth = _book_depth_at_max_ask(ticker)
+    depth = (_book_depth_at_max_ask(ticker) if side == "yes"
+             else _book_depth_no(ticker, MAX_ASK_CENTS))
     if depth is not None and depth < MIN_BOOK_DEPTH:
         log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
             f"(need {MIN_BOOK_DEPTH})")
@@ -1387,23 +1222,6 @@ def run_once(dry_run=False):
     state   = load_state()
     now_et = datetime.now(ET)
     log(f"=== CERTAINTY @ {now_et.strftime('%Y-%m-%d %H:%M:%S')} ET ===")
-
-    # Research instrumentation runs before the balance fetch and halt checks so
-    # that live halts cannot bias which signals get collected. It has no path to
-    # place_order() and cannot consume exposure. Wrapped so a research failure
-    # can never stop the trader.
-    try:
-        if check_shadow_no_outcomes(state):
-            save_state(state)
-        if collect_shadow_no_signals(state):
-            save_state(state)
-        sn = shadow_no_summary(state)
-        wr = f"{sn['win_rate'] * 100:.1f}%" if sn["win_rate"] is not None else "n/a"
-        log(f"  shadow NO90-91: {sn['signals']} signals; selected settled "
-            f"{sn['wins']}/{sn['settled']} WR={wr} P&L=${sn['pnl']:+.2f} "
-            f"clusters={sn['clusters']}")
-    except Exception as exc:
-        log(f"  WARNING: shadow NO instrumentation failed (non-fatal): {exc}")
 
     balance = fetch_balance()
     if balance is None:

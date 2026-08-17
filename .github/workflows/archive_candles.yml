@@ -1,0 +1,69 @@
+name: Archive Candle Data
+
+# Kalshi retains settled markets for ~67 days. This job preserves each day's
+# markets + 1-min candles permanently, so that hypotheses formed later have a
+# genuine out-of-sample window to be tested against. Every day this does not run
+# is a day of validation capacity that cannot be recovered.
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # 11:30pm ET (EDT) — after the UTC day is complete
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Specific day to archive (YYYY-MM-DD). Blank = yesterday."
+        required: false
+        default: ""
+      backfill:
+        description: "Archive the last N complete days instead (skips existing)."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests cryptography
+
+      - name: Archive
+        env:
+          KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          if [ -n "${{ inputs.backfill }}" ]; then
+            python3 scripts/archive_candles.py --backfill ${{ inputs.backfill }}
+          elif [ -n "${{ inputs.date }}" ]; then
+            python3 scripts/archive_candles.py ${{ inputs.date }}
+          else
+            python3 scripts/archive_candles.py
+          fi
+
+      - name: Commit archive
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -z "$(git status --porcelain data/candles)" ]; then
+            echo "nothing new to commit"
+            exit 0
+          fi
+          git add data/candles
+          git commit -m "data: archive candles $(date -u +%Y-%m-%d)"
+          # late_certainty.yml persists state via actions/cache and never pushes, so
+          # this job is normally the only writer to main. Retry with rebase anyway to
+          # survive a concurrent human merge.
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "push failed after 3 attempts" >&2
+          exit 1
