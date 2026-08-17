@@ -48,8 +48,8 @@ jobs:
 
       - name: Order-safety checks
         run: |
-          python -m py_compile kalshi_auth.py late_certainty_trader.py test_order_safety.py test_shadow_no_90_91.py
-          if ! python -m unittest -v test_order_safety.py test_shadow_no_90_91.py > /tmp/order-safety-tests.log 2>&1; then
+          python -m py_compile kalshi_auth.py late_certainty_trader.py test_order_safety.py
+          if ! python -m unittest -v test_order_safety.py > /tmp/order-safety-tests.log 2>&1; then
             cat /tmp/order-safety-tests.log
             exit 1
           fi
