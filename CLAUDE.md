@@ -198,6 +198,7 @@ Live at **https://polymarket-monitor2.onrender.com** (Render free tier, cold-sta
 | Candle acceleration filter (require rising prior candles) | Flat/decel outperforms. Dead. |
 | Stuck-market breakout (buy 65-85c after 4+ candles at 50c) | Every bucket -EV, -$8,553. Dead. |
 | Per-series WR kill switch | All 36 param combos lose vs baseline. Dead. |
+| **KXETH15M exclusion** | **Dead — would have COST $978 over 60 days.** ETH is the single best series in backtest: 619 trades, 95.3% WR, +$1.58/trade, and the ONLY series whose cluster-bootstrap CI95 excludes zero ([+0.15, +2.87]). Positive in all four 15-day sub-periods. Live since Aug 1 it shows -$0.35/trade over 164 trades, but that is ~0.2 SE from zero — pure noise. Do not re-raise on a short losing streak. |
 | KXZEC15M, KXNEAR15M | Negative OOS / structural -EV. Dead. |
 | New series (KXADA15M, KXBCH15M, KXTON15M) | Insufficient data. Re-check 4+ weeks. |
 | H4 spot momentum filter | Net -$431 over 60-day ablation. Dead. |
