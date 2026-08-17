@@ -24,15 +24,37 @@ Usage:
     python3 scripts/archive_candles.py --backfill 7  # last 7 days, skip existing
 """
 import argparse
+import base64
 import csv
 import gzip
 import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from kalshi_auth import get as kalshi_get
+
+
+def _ensure_key():
+    """CI passes the key as base64 PEM *content* in KALSHI_PRIVATE_KEY, but
+    kalshi_auth.load_private_key() only reads a file path. Materialise it, same
+    as daily_summary.py. Without this the nightly job fails on every run."""
+    if os.environ.get("KALSHI_PRIVATE_KEY_PATH"):
+        return
+    raw = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
+    if not raw:
+        return
+    p = Path("/tmp/kalshi_archive_key.pem")
+    b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
+    b64 += "=" * (-len(b64) % 4)
+    p.write_bytes(base64.b64decode(b64))
+    p.chmod(0o600)
+    os.environ["KALSHI_PRIVATE_KEY_PATH"] = str(p)
+
+
+_ensure_key()
+from kalshi_auth import get as kalshi_get  # noqa: E402  (must follow _ensure_key)
 
 SERIES_LIST = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M",
                "KXBNB15M", "KXXRP15M", "KXWTI15M"]

@@ -58,7 +58,9 @@ jobs:
           fi
           git add data/candles
           git commit -m "data: archive candles $(date -u +%Y-%m-%d)"
-          # The trader pushes to this branch from other jobs; rebase rather than fail.
+          # late_certainty.yml persists state via actions/cache and never pushes, so
+          # this job is normally the only writer to main. Retry with rebase anyway to
+          # survive a concurrent human merge.
           for i in 1 2 3; do
             git pull --rebase origin main && git push origin HEAD:main && exit 0
             sleep 5
