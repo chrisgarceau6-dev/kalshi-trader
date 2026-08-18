@@ -60,7 +60,22 @@ figure with the harness, treat it as unverified no matter who wrote it down.
 5. **These markets are fair coin flips.** 49.8% settle YES (n=27,908); spot is above
    the strike in 49.5% of markets. Neither side is structurally favoured, and there is
    no drift or strike-placement effect to exploit.
-6. **Post-hoc filter discovery has a terrible track record here.** H4, near-strike,
+6. **Signals are transient — the backtest sees more of them than the bot can.**
+   70% of qualifying signals are in-band for exactly ONE 1-min candle (median 1 of
+   ~8 possible). The ask passes *through* 90-93¢ on its way to 100¢ as certainty
+   resolves; it does not rest there. So **every backtest figure is an upper bound**
+   — it evaluates every candle, while the live bot only sees the ask at poll
+   instants. Before v5.16 the bot polled every ~48s and captured **27%** of the
+   entries the backtest takes (23 of 86 on 2026-08-16). It now polls every ~15s
+   inside a 240s job (~14-16 scans/job, ~18s effective cadence).
+   **When live P&L runs below backtest, check capture rate before suspecting edge
+   decay.** That gap explained a 3x shortfall that had been misread as decay.
+   The missed signals are not worse: transient 93.30% WR / +$0.58 per trade vs
+   persistent 93.27% / +$0.77.
+7. **Kalshi opens a 15M market only ~600s before its close.** `MAX_SECS_LEFT=600`
+   is therefore already at the structural ceiling — there is nothing earlier to
+   capture, and raising it gains nothing.
+8. **Post-hoc filter discovery has a terrible track record here.** H4, near-strike,
    ET13, UTC blackouts, C1, and a "dispersion filter" built on 2026-08-17 all looked
    convincing in-sample; the dispersion filter *inverted* out-of-sample. With ~2pp of
    edge and ~68 days of data, filter-hunting mostly fits noise. **The wins have come
@@ -81,10 +96,11 @@ to settlement.
 | `MIN_SECS_LEFT` / `MAX_SECS_LEFT` | 150 / 600 | `--sweep min_secs 100 150 200 250` |
 | `PRIOR_MIN_CENTS` / `PRIOR_LOOKBACK` | 75 / 2 | `--sweep prior_min 70 75 80 85` |
 | `YES_ONLY` | **False** | `--compare yes_only=1` |
-| `MAX_CONCURRENT_POSITIONS` | 2 | `--sweep max_conc 1 2 3 4` |
+| `MAX_CONCURRENT_POSITIONS` | 2 | `--sweep max_conc 1 2 3 4 --slip 0.105` |
 | `MIN_BOOK_DEPTH` | 60 | not in harness (needs live book) |
 | `STOP_BALANCE` | 650 | — |
 | `CONSEC_LOSS_LIMIT` | 9 | never fires in 68d either way |
+| poll cadence | 240s job / 15s interval | ~14-16 scans per CI job |
 | `EDGE_DEGRADE_THRESHOLD` | 0.84 | catastrophic breaker only |
 | `BLACKOUT_HOURS` | `set()` | — |
 
@@ -131,8 +147,19 @@ stop; $100 → 24.6%. $100 buys +$372 of profit for -$386 of extra drawdown. Rej
 The old "200 settlements ≥93% WR" gate was met at exactly 93.0% but tested the wrong
 quantity — break-even is ~92%, so it authorised leverage on a 1pp margin.
 
-**Daily loss limit ($300, rolling 24h) now fires ~6 days in 68, up from 1.** That is
-the control working correctly on a doubled book, not a malfunction. Do not raise it.
+**Daily loss limit ($300, rolling 24h) — validated, do NOT loosen.** Fires ~7 days in
+68 at full capture. The trades it blocks are genuinely bad: **90.51% WR, -$1.62/trade
+over 495 trades**, against ~92% break-even — blocking them is worth **+$802** over 68
+days. Mechanism: the 7 series settle together, so a -$300 day is a whipsaw regime and
+it persists for hours. Contrast with the polling gap, where missed trades won 93.30%
+vs 93.27% for captured ones — that was a genuine leak; this is a filter that works.
+More halts at higher volume is the control doing its job.
+
+**All other halts check out too.** `CONSEC_LOSS_LIMIT=9` never fires in 68 days at
+either volume. `MAX_CONCURRENT=3` is *worse* than 2 at measured fill quality
+(+$108 vs +$112/day) and collapses under one tick (+$6 vs +$29/day) while doubling
+per-cluster exposure. Nothing here is too conservative — verify with
+`--sweep max_conc 1 2 3 4 --slip 0.105` before revisiting.
 
 ---
 
@@ -166,6 +193,14 @@ a PAT — flagged for rotation.
 4. `git push origin <branch>`
 5. `TOKEN=$(git remote get-url origin | sed 's|https://\([^@]*\)@.*|\1|')`
 6. `GH_TOKEN=$TOKEN gh pr create ...` then `gh pr merge <n> --squash`
+7. **After merging, confirm the next Actions run actually succeeds.** Verifying that
+   `main` has the right code checks the wrong thing. On 2026-08-17 a deleted test
+   file left a stale reference in `late_certainty.yml`'s pre-flight step; the trader
+   failed on every dispatch for **2h46m** and nothing surfaced it.
+   Note runs created within ~1 min of the merge may still use the OLD workflow file —
+   check a run whose `createdAt` is clearly after `mergedAt`.
+8. **Before deleting any file, grep `.github/workflows/` for it.** The workflows
+   hardcode filenames.
 
 **Never `git add -A`** — the working tree holds ~730k lines of untracked research
 CSVs. Stage explicitly. Resolve `.claude-flow/` conflicts with `git checkout --theirs`.
