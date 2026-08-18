@@ -190,6 +190,15 @@ running in Actions needs an `_ensure_key()` helper (see `daily_summary.py` /
 `scripts/archive_candles.py`) or it fails on every run. The GitHub remote URL contains
 a PAT — flagged for rotation.
 
+**PAT rotation — HALF DONE as of 2026-08-18.** The classic PAT (`repo`, `workflow`)
+has been removed from `.git/config` (remote is a plain URL; git authenticates via
+`gh` + osxkeychain) and from `.env` (nothing read it). **The old token is still live
+and still in the `GH_DISPATCH_TOKEN` secret.** To finish: create a new PAT, update
+that secret, confirm a self-dispatched run succeeds, *then* revoke the old one.
+Revoking first drops the trader to the `*/5` backup cron and halves poll cadence.
+Also pending: `gh auth refresh -s workflow` — the keychain token lacks `workflow`
+scope, so pushes touching `.github/workflows/` will be rejected.
+
 **Push flow.** Never push to main.
 1. `git fetch origin && git checkout -b <branch> origin/main`
 2. `python3 -m py_compile late_certainty_trader.py` — must pass
@@ -227,9 +236,29 @@ start. P&L / Balance toggle, auto-refresh 30s, ranges floor at Aug 1. Env vars a
 
 **`DASH_TOKEN` is required on Render.** Until 2026-08-18 the dashboard served live
 balance, full deposit history and open positions to anyone — unauthenticated, at a URL
-published in this public file. Reach it as `/?t=<DASH_TOKEN>` once; it sets a 90-day
-cookie. A hosted instance with no `DASH_TOKEN` returns 503 rather than failing open.
-Local runs bind to 127.0.0.1 and stay open.
+published in this public file. An unauthenticated HTML request now renders a **login
+screen**; submit the token there. `/?t=<DASH_TOKEN>` still works and redirects to a
+clean `/` after setting a 90-day cookie, so the token does not linger in history.
+`/api/*` returns JSON 401. A hosted instance with no `DASH_TOKEN` returns 503 rather
+than failing open; local runs bind to 127.0.0.1 and stay open.
+
+**Cookies are per-context.** An iOS home-screen app keeps its own jar separate from
+Safari, so each device *and* each installed app logs in once. That is why the login
+form exists rather than a token-in-URL flow.
+
+**UI (rebuilt 2026-08-18).** Hand-rolled SVG chart — **no Chart.js, no CDN, the page
+has zero external dependencies.** Time-indexed x-axis, drag-to-scrub with crosshair
+and haptics, tweened hero, skeleton shimmer while loading, PWA meta so it runs
+chromeless from the home screen. Responsive: 620px phone column, 1280px desktop with
+6-across stats and positions/trades side by side. Any chart work happens in the
+`HTML` string in `kalshi_dashboard.py`; keep the phone breakpoint untouched.
+
+**Position-card semantics — do not regress these.** "If win" is *profit*
+(`contracts x (1 - entry) - fee`, ~$6.50), **not** gross settlement (`contracts x $1`,
+~$81) — that bug overstated upside >10x. "At risk" is cost basis from fills. The card
+quotes the side actually held; showing the YES book for a NO position displays ~9c
+against a 91c entry, and v5.16 trades NO about half the time. Entry price is not on
+the positions endpoint — `get_fills_basis()` derives it from fills.
 
 **Trader health pill.** The dashboard reads the Actions API
 (`/actions/workflows/late_certainty.yml/runs`, unauthenticated, 90s cache) and shows
