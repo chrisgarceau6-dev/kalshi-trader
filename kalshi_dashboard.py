@@ -207,6 +207,7 @@ def live_blackout_hours():
     return cached("blackout", 300, _f)
 
 GH_REPO     = os.environ.get("GH_REPO", "chrisgarceau6-dev/polymarket-monitor2")
+# NOTE: if the repo is renamed, set GH_REPO in the Render env to the new full name.
 GH_WORKFLOW = "late_certainty.yml"
 # Cancelled runs are routine: the backup cron collides with the self-dispatch chain
 # and the concurrency group drops one. Only these mean the trader actually broke.

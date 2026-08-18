@@ -91,4 +91,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
         run: |
           sleep 5
-          gh workflow run late_certainty.yml --repo chrisgarceau6-dev/polymarket-monitor2 2>/dev/null || true
+          gh workflow run late_certainty.yml --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
