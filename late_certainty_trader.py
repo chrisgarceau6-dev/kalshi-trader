@@ -154,6 +154,11 @@ YES_ONLY        = False
 # between scan and order-execution). If market moves >LIMIT_BUFFER cents up
 # between scan and fill, we DON'T fill — we miss the trade, no harm.
 LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
+# A fill a cent or two under the band is the book moving between the last look and
+# the match; measured over Aug 18 those all settled +$8-13 each. Only fills deeper
+# than this are a crash-through — a different bet, not a cheaper version of this one
+# — and only those are worth waking someone up for.
+CRASH_FILL_TOLERANCE = 3
 
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
@@ -354,6 +359,51 @@ def _empty_shadow_totals():
     return {"signals": 0, "settled": 0, "wins": 0, "pnl": 0.0, "clusters": []}
 
 
+def _book_side_levels(ticker, side):
+    """Offers we would actually lift, as (cost_cents, qty), cheapest first.
+
+    Kalshi quotes both sides as bids: a NO bid at P is a YES offer at (1-P), and a
+    YES bid at P is a NO offer at (1-P). Buying YES lifts NO bids; buying NO lifts
+    YES bids. Returns None on any API error so callers keep their fail-open contract.
+    """
+    code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
+    if code != 200 or not r:
+        return None
+    field = "no_dollars" if side == "yes" else "yes_dollars"
+    raw = (r.get("orderbook_fp") or {}).get(field, []) or []
+    levels = []
+    for level in raw:
+        try:
+            price, qty = Decimal(str(level[0])), Decimal(str(level[1]))
+        except (IndexError, InvalidOperation, TypeError, ValueError):
+            continue
+        if not (price.is_finite() and qty.is_finite()) or qty <= 0:
+            continue
+        levels.append(((Decimal("1") - price) * Decimal("100"), qty))
+    levels.sort(key=lambda lv: lv[0])
+    return levels
+
+
+def _book_last_look(ticker, side, limit_cents=None):
+    """(best offer we would pay, depth at or below limit) from one book read.
+
+    This is the guard the /markets quote cannot provide. `_fresh_ask_cents` is
+    refetched *before* the candle gates, which cost 2-4 more API calls (~0.5-1.5s)
+    — long enough for a market crossing its strike to reprice completely. Every deep
+    sub-zone fill on Aug 18 (47c, 57c, 83c) had a quote inside the band at that
+    point. The book read here is the last call before the order goes out.
+
+    Returns (None, None) when the book is unavailable, preserving fail-open.
+    """
+    limit = Decimal(str(MAX_ASK_CENTS if limit_cents is None else limit_cents))
+    levels = _book_side_levels(ticker, side)
+    if levels is None:
+        return None, None
+    depth = sum((qty for offer, qty in levels if offer <= limit), Decimal("0"))
+    best = levels[0][0] if levels else None
+    return best, float(depth)
+
+
 def _book_depth_no(ticker, limit_cents):
     """NO contracts offered at <= limit_cents, via the YES bid side.
 
@@ -361,23 +411,7 @@ def _book_depth_no(ticker, limit_cents):
     counterpart (_book_depth_at_max_ask) reads NO bids and would measure the wrong
     side of the book for a NO entry. Returns None on any API error (fails open).
     """
-    code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
-    if code != 200 or not r:
-        return None
-    yes_bids = (r.get("orderbook_fp") or {}).get("yes_dollars", []) or []
-    try:
-        min_yes_price = Decimal("1") - Decimal(str(limit_cents)) / Decimal("100")
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-    total = Decimal("0")
-    for level in yes_bids:
-        try:
-            price, qty = Decimal(str(level[0])), Decimal(str(level[1]))
-            if price.is_finite() and qty.is_finite() and price >= min_yes_price:
-                total += qty
-        except (IndexError, InvalidOperation, TypeError, ValueError):
-            continue
-    return float(total)
+    return _book_last_look(ticker, "no", limit_cents)[1]
 
 
 # ── market scanning ────────────────────────────────────────────────────────────
@@ -642,19 +676,7 @@ def _fresh_ask_cents(ticker, side):
 def _book_depth_at_max_ask(ticker):
     """Count YES contracts available at <=MAX_ASK_CENTS via NO bid side.
     NO bid at price P = YES ask at (1-P). Fails open (returns None) on any error."""
-    code, r = kalshi_get(f"/markets/{ticker}/orderbook", {})
-    if code != 200 or not r:
-        return None
-    no_bids = (r.get("orderbook_fp") or {}).get("no_dollars", [])
-    min_no_price = 1.0 - MAX_ASK_CENTS / 100.0  # 0.07 for MAX_ASK_CENTS=93
-    total = 0.0
-    for level in no_bids:
-        try:
-            if float(level[0]) >= min_no_price:
-                total += float(level[1])
-        except (IndexError, TypeError, ValueError):
-            continue
-    return total
+    return _book_last_look(ticker, "yes")[1]
 
 
 def _prior_k_candle_asks(ticker, series, side, k):
@@ -831,23 +853,36 @@ def try_trade(
     # use _book_depth_no (YES bid side). We have no live evidence on NO fill quality
     # — this check is the main guard against thin NO books.
     # Fails open (None) so API errors never block valid entries.
-    depth = (_book_depth_at_max_ask(ticker) if side == "yes"
-             else _book_depth_no(ticker, MAX_ASK_CENTS))
+    best_offer, depth = _book_last_look(ticker, side)
     if depth is not None and depth < MIN_BOOK_DEPTH:
         log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
             f"(need {MIN_BOOK_DEPTH})")
         return
 
-    # TIGHT limit based on FRESH ask. Cap at MAX_ASK_CENTS so slippage can't
-    # push us above the OOS-validated range (96c+ is EV-negative after fee).
-    limit_cents = min(Decimal(MAX_ASK_CENTS), fresh_ask + Decimal(LIMIT_BUFFER))
+    # LAST LOOK — a buy limit is a ceiling, never a floor: a marketable order sweeps
+    # the book upward from the best offer, so a crashed book is bought at crash
+    # prices no matter what limit we send. The quote checked above is stale by the
+    # 2-4 gate calls since, so the book read is what decides, and it is the last
+    # call before place_order. Aug 18: 12 fills landed below the band, two of them
+    # deep (47c and 57c) on quotes of 92.5c and 92.8c.
+    if best_offer is not None and not (MIN_ASK_CENTS <= best_offer <= MAX_ASK_CENTS):
+        log(f"  SKIP {ticker} — last look: best {side} offer {best_offer}c is outside "
+            f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c while the quote still said {fresh_ask}c")
+        return
+
+    # Price off the book when we have it — that is what we actually pay. Cap at
+    # MAX_ASK_CENTS so slippage can't push us above the OOS-validated range
+    # (96c+ is EV-negative after fee).
+    entry_ask     = best_offer if best_offer is not None else fresh_ask
+    last_look_ts  = time.monotonic()
+    limit_cents = min(Decimal(MAX_ASK_CENTS), entry_ask + Decimal(LIMIT_BUFFER))
     contracts   = contracts_for_risk(bet_dollars, limit_cents)
-    est_cost    = float(Decimal(contracts) * fresh_ask / Decimal("100"))
+    est_cost    = float(Decimal(contracts) * entry_ask / Decimal("100"))
     max_cost    = float(Decimal(contracts) * limit_cents / Decimal("100"))
-    est_profit  = float(Decimal(contracts) * (Decimal("100") - fresh_ask) / Decimal("100") * Decimal("0.93"))
+    est_profit  = float(Decimal(contracts) * (Decimal("100") - entry_ask) / Decimal("100") * Decimal("0.93"))
 
     log(f"  TRADE: {ticker}  {secs_left:.0f}s left  {side.upper()} "
-        f"scan={ask_cents}c fresh={fresh_ask}c  limit={limit_cents}c  "
+        f"scan={ask_cents}c fresh={fresh_ask}c book={best_offer}c  limit={limit_cents}c  "
         f"{contracts} contracts  bet=${bet_dollars}  est.cost=${est_cost:.2f}  "
         f"max.cost=${max_cost:.2f}  est.win=+${est_profit:.2f}")
 
@@ -891,12 +926,25 @@ def try_trade(
                     log(f"    TOP-UP STOP — ask {fresh_ask}c (<=91c) needs 3rd prior >= 80c; "
                         f"got {ext_retry}")
                     break
-            limit_cents = min(Decimal(MAX_ASK_CENTS), fresh_ask + Decimal(LIMIT_BUFFER))
+            # Same last look as the first attempt: a top-up sweeps the book too,
+            # and the retry gates above cost another 1-2 calls of staleness.
+            best_offer, retry_depth = _book_last_look(ticker, side)
+            if best_offer is not None and not (MIN_ASK_CENTS <= best_offer <= MAX_ASK_CENTS):
+                log(f"    TOP-UP STOP — last look: best {side} offer {best_offer}c is "
+                    f"outside [{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c (quote said {fresh_ask}c)")
+                break
+            if retry_depth is not None and retry_depth < MIN_BOOK_DEPTH:
+                log(f"    TOP-UP STOP — thin book: {retry_depth:.0f} contracts "
+                    f"at <={MAX_ASK_CENTS}c (need {MIN_BOOK_DEPTH})")
+                break
+            entry_ask = best_offer if best_offer is not None else fresh_ask
+            last_look_ts = time.monotonic()
+            limit_cents = min(Decimal(MAX_ASK_CENTS), entry_ask + Decimal(LIMIT_BUFFER))
             contracts = contracts_for_risk(remaining_budget, limit_cents)
-            est_cost = float(Decimal(contracts) * fresh_ask / Decimal("100"))
+            est_cost = float(Decimal(contracts) * entry_ask / Decimal("100"))
             log(f"    TOP-UP {attempt}/{ORDER_MAX_ATTEMPTS}: fresh={fresh_ask}c "
-                f"remaining=${remaining_budget:.2f} limit={limit_cents}c "
-                f"contracts={contracts}")
+                f"book={best_offer}c remaining=${remaining_budget:.2f} "
+                f"limit={limit_cents}c contracts={contracts}")
 
         attempt_asks.append(fresh_ask)
         attempt_limits.append(limit_cents)
@@ -931,7 +979,9 @@ def try_trade(
             raise RuntimeError(reason)
 
         order_ids.append(order_id)
-        log(f"    order accepted attempt {attempt} (id={order_id})")
+        last_look_ms = (time.monotonic() - last_look_ts) * 1000
+        log(f"    order accepted attempt {attempt} (id={order_id}) "
+            f"book_age={last_look_ms:.0f}ms")
         time.sleep(ORDER_FILL_WAIT_SECONDS)
         c_code, _ = cancel_order(order_id)
         log(f"    cancel GTC order {order_id} (HTTP {c_code})")
@@ -974,13 +1024,29 @@ def try_trade(
                 raise RuntimeError(reason)
             if avg_price_cents < MIN_ASK_CENTS:
                 outside_safe_zone = True
-                log(f"    DANGER — filled at {avg_price_cents}c, BELOW "
-                    f"safe zone [{MIN_ASK_CENTS},{MAX_ASK_CENTS}].")
-                send_email(
-                    f"[Kalshi-C] DANGER FILL {avg_price_cents}c — {ticker}",
-                    f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents:.2f}c\n"
-                    f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n",
-                )
+                shortfall = Decimal(MIN_ASK_CENTS) - avg_price_cents
+                if shortfall > Decimal(CRASH_FILL_TOLERANCE):
+                    log(f"    CRASH FILL — filled at {avg_price_cents}c, "
+                        f"{shortfall:.2f}c below safe zone "
+                        f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]; book said {entry_ask}c "
+                        f"{last_look_ms:.0f}ms earlier.")
+                    send_email(
+                        f"[Kalshi-C] CRASH FILL {avg_price_cents:.2f}c — {ticker}",
+                        f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents:.2f}c\n"
+                        f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n"
+                        f"Book best offer at last look: {entry_ask}c "
+                        f"({last_look_ms:.0f}ms before the order)\n"
+                        f"The book crashed inside the order's flight time. Position is "
+                        f"held to settlement as usual — it is off-strategy, not "
+                        f"automatically bad: Aug 18's two crash fills were -$47.48 "
+                        f"and +$41.00.\n",
+                    )
+                else:
+                    # Inside tolerance: cheaper than intended, not a crash. Logged
+                    # for the record, no alert.
+                    log(f"    fill {shortfall:.2f}c under the band at {avg_price_cents}c "
+                        f"(tolerance {CRASH_FILL_TOLERANCE}c) — book said {entry_ask}c "
+                        f"{last_look_ms:.0f}ms earlier")
                 break
         else:
             log(f"    no fill on attempt {attempt}; order is terminal")
@@ -999,6 +1065,8 @@ def try_trade(
             "side":        side,
             "limit_cents": float(max(attempt_limits)),
             "ask_at_entry": float(attempt_asks[0]),
+            "book_at_entry": float(entry_ask),
+            "book_age_ms":   round(last_look_ms, 1),
             "ask_at_scan":  float(ask_cents),
             "attempt_asks": [float(v) for v in attempt_asks],
             "outside_safe_zone": outside_safe_zone,

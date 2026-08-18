@@ -57,7 +57,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
+             patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-123", "fill_count": "1.00", "remaining_count": "0.00"})), \
              patch.object(trader, "cancel_order", return_value=(200, {})) as cancel, \
              patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.91, 0.0)), \
@@ -85,7 +85,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("91")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
+             patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
              patch.object(trader, "place_order", side_effect=[
                  (201, {"order_id": "order-1"}),
                  (201, {"order_id": "order-2"}),
@@ -123,7 +123,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("89")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
+             patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-1"})) as place, \
              patch.object(trader, "cancel_order", return_value=(200, {})), \
              patch.object(trader, "reconcile_terminal_order", return_value=(13.51, 12.5643, 0.0)), \
@@ -272,7 +272,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-             patch.object(trader, "_book_depth_at_max_ask", return_value=None), \
+             patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
              patch.object(trader, "place_order", return_value=(201, {"fill_count": "0", "remaining_count": "107"})), \
              patch.object(trader, "send_email"), \
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
@@ -297,7 +297,7 @@ class OrderSafetyTests(unittest.TestCase):
             with patch.object(trader, "LOG_FILE", log_file), \
                  patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
                  patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-                 patch.object(trader, "_book_depth_at_max_ask", return_value=None):
+                 patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)):
                 trader.try_trade(market, state, True, balance=1000, live_position_tickers=set())
             self.assertIn("TRADE:", log_file.read_text())
 
@@ -437,30 +437,28 @@ class OrderSafetyTests(unittest.TestCase):
         # The 900 NO bids must be ignored entirely.
         self.assertEqual(depth, 65.0)
 
-    def _depth_helper_used_for(self, market):
-        """Return which depth helper try_trade consulted for this market."""
+    def _book_side_read_for(self, market):
+        """Return the side try_trade asked the order book about."""
         state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
         with tempfile.TemporaryDirectory() as td, \
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
              patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
-             patch.object(trader, "_book_depth_at_max_ask", return_value=0.0) as yes_helper, \
-             patch.object(trader, "_book_depth_no", return_value=0.0) as no_helper, \
+             patch.object(trader, "_book_side_levels", return_value=[]) as levels, \
              patch.object(trader, "place_order") as place:
             trader.try_trade(market, state, False, balance=1000,
                              live_position_tickers=set())
-        # Both stubs return 0 depth, so the trade is skipped either way; the point
+        # An empty book is zero depth, so the trade is skipped either way; the point
         # of the test is purely WHICH side of the book was measured.
         place.assert_not_called()
-        return yes_helper.called, no_helper.called
+        return [c.args[1] for c in levels.call_args_list]
 
     def test_no_entry_measures_the_no_side_of_the_book(self):
-        """Regression: before v5.16 a NO entry was liquidity-checked with
-        _book_depth_at_max_ask, which reads NO bids — the wrong side entirely."""
-        yes_used, no_used = self._depth_helper_used_for(self._no_side_market())
-        self.assertTrue(no_used, "NO entry must consult _book_depth_no")
-        self.assertFalse(yes_used, "NO entry must not consult the YES-side helper")
+        """Regression: before v5.16 a NO entry was liquidity-checked against NO bids
+        — the wrong side entirely."""
+        sides = self._book_side_read_for(self._no_side_market())
+        self.assertEqual(sides, ["no"], "NO entry must read the NO side of the book")
 
     def test_yes_entry_still_measures_the_yes_side_of_the_book(self):
         market = {
@@ -470,9 +468,124 @@ class OrderSafetyTests(unittest.TestCase):
             "no_ask_dollars": "0.0900",
             "_secs_left": 300,
         }
-        yes_used, no_used = self._depth_helper_used_for(market)
-        self.assertTrue(yes_used, "YES entry must consult _book_depth_at_max_ask")
-        self.assertFalse(no_used, "YES entry must not consult the NO-side helper")
+        sides = self._book_side_read_for(market)
+        self.assertEqual(sides, ["yes"], "YES entry must read the YES side of the book")
+
+    # ── crash-through protection ───────────────────────────────────────────
+    # A buy limit is a ceiling, not a floor: a marketable order sweeps the book
+    # upward from the best offer, so a crashed book gets bought at crash prices
+    # whatever limit we send. On Aug 18 this filled 80 BTC NO at 47c on a 92.5c
+    # quote. The book read is the last call before the order for exactly this.
+
+    def test_crashed_book_blocks_the_order(self):
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        market = {
+            "ticker": "KXBTC15M-TEST",
+            "event_ticker": "KXBTC15M-TEST",
+            "yes_ask_dollars": "0.0900",
+            "no_ask_dollars": "0.9250",
+            "_secs_left": 227,
+        }
+        # Quote still says 92.5c; the book has already collapsed to 47c.
+        crashed = {"orderbook_fp": {"yes_dollars": [["0.53", "400"], ["0.52", "300"]]}}
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("92.5")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(200, crashed)), \
+             patch.object(trader, "place_order") as place, \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        place.assert_not_called()
+
+    def test_spiked_book_blocks_the_order(self):
+        """The same guard upward: a book that ran past MAX_ASK is no longer good EV."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        market = {
+            "ticker": "KXSOL15M-TEST",
+            "event_ticker": "KXSOL15M-TEST",
+            "yes_ask_dollars": "0.9100",
+            "no_ask_dollars": "0.0900",
+            "_secs_left": 300,
+        }
+        spiked = {"orderbook_fp": {"no_dollars": [["0.02", "500"]]}}   # YES offered at 98c
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(200, spiked)), \
+             patch.object(trader, "place_order") as place, \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        place.assert_not_called()
+
+    def test_limit_is_priced_off_the_book_not_the_stale_quote(self):
+        """The quote is refetched before the candle gates and is 2-4 calls stale by
+        the time the order goes out; the book read is what the order is priced on."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        market = {
+            "ticker": "KXETH15M-TEST",
+            "event_ticker": "KXETH15M-TEST",
+            "yes_ask_dollars": "0.9300",
+            "no_ask_dollars": "0.0700",
+            "_secs_left": 300,
+        }
+        # Quote 93c, book best offer 90c: limit must be 92c (90+2), not 93c.
+        book = {"orderbook_fp": {"no_dollars": [["0.10", "500"], ["0.09", "400"]]}}
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal("93")), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+             patch.object(trader, "kalshi_get", return_value=(200, book)), \
+             patch.object(trader, "place_order", return_value=(201, {"order_id": "o-1"})) as place, \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", return_value=(1.0, 0.90, 0.0)), \
+             patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
+             patch.object(trader.time, "sleep"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        self.assertEqual(place.call_args.kwargs["yes_price_cents"], Decimal("92"))
+
+    def test_shallow_underfill_does_not_alert_but_a_crash_fill_does(self):
+        """89c on a 90c band is the book moving, not a crash-through. Only fills
+        deeper than CRASH_FILL_TOLERANCE are worth an email."""
+        book = {"orderbook_fp": {"no_dollars": [["0.09", "500"]]}}   # YES offered at 91c
+
+        def run(fill_price):
+            state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+            market = {
+                "ticker": "KXETH15M-TEST",
+                "event_ticker": "KXETH15M-TEST",
+                "yes_ask_dollars": "0.9100",
+                "no_ask_dollars": "0.0900",
+                "_secs_left": 300,
+            }
+            with tempfile.TemporaryDirectory() as td, \
+                 patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+                 patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+                 patch.object(trader, "_fresh_ask_cents", return_value=Decimal("91")), \
+                 patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
+                 patch.object(trader, "kalshi_get", return_value=(200, book)), \
+                 patch.object(trader, "place_order", return_value=(201, {"order_id": "o-1"})), \
+                 patch.object(trader, "cancel_order", return_value=(200, {})), \
+                 patch.object(trader, "reconcile_terminal_order", return_value=(10.0, fill_price * 10 / 100.0, 0.0)), \
+                 patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
+                 patch.object(trader.time, "sleep"), \
+                 patch.object(trader, "send_email") as mail, \
+                 patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+                trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+            return mail, state
+
+        mail, state = run(89.0)
+        mail.assert_not_called()
+        self.assertTrue(state["positions"]["KXETH15M-TEST"]["outside_safe_zone"])
+
+        mail, _ = run(57.0)
+        self.assertEqual(mail.call_count, 1)
+        self.assertIn("CRASH FILL", mail.call_args.args[0])
 
     def test_opposite_side_of_held_ticker_is_never_re_entered(self):
         """A market that flips across its strike mid-window must not be re-entered

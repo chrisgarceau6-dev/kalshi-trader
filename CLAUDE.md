@@ -102,6 +102,7 @@ to settlement.
 | `YES_ONLY` | **False** | `--compare yes_only=1` |
 | `MAX_CONCURRENT_POSITIONS` | 2 | `--sweep max_conc 1 2 3 4 --slip 0.105` |
 | `MIN_BOOK_DEPTH` | 60 | not in harness (needs live book) |
+| `CRASH_FILL_TOLERANCE` | 3 | fills this far under the band are logged, not emailed |
 | `STOP_BALANCE` | 650 | — |
 | `CONSEC_LOSS_LIMIT` | 9 | never fires in 68d either way |
 | poll cadence | 240s job / 15s interval | ~14-16 scans per CI job |
@@ -111,9 +112,17 @@ to settlement.
 **Series:** KXBTC15M, KXETH15M, KXSOL15M, KXDOGE15M, KXBNB15M, KXXRP15M, KXWTI15M
 (WTI only exists from 2026-08-01 — it is new, not missing.)
 
-**Order flow:** live-position refetch → fresh-ask refetch (~200ms pre-order) →
-side-aware book-depth check → GTC limit at `min(93, fresh_ask+2)` → sleep 3 → cancel →
-query fills by `order_id`.
+**Order flow:** live-position refetch → fresh-ask refetch → prior-candle gates →
+**book last look** (best offer + depth, one read, side-aware) → GTC limit at
+`min(93, book_best+2)` → sleep 3 → cancel → query fills by `order_id`.
+
+**The book read is the last call before the order, and the order is priced off it.**
+The `/markets` quote is refetched *before* the candle gates, which cost 2-4 more API
+calls, so by order time it is ~1s stale — that is the whole crash-fill mechanism (§7).
+A buy limit is a **ceiling, not a floor**: a marketable order sweeps the book upward
+from the best offer, so a crashed book gets bought at crash prices no matter what
+limit is sent. The only guard that works is refusing to send the order when the book
+is outside `[MIN_ASK, MAX_ASK]`. Orders log `book_age=Xms` — the residual race.
 
 ---
 
@@ -303,6 +312,8 @@ Each needs re-checking; none is settled.
 
 | Observation | Date | Status |
 |---|---|---|
+| Crash fills are **+EV so far**, not the leak | Aug 18 | 12 fills landed below the band on Aug 18 and settled **11W/1L, +$90.63** (avg +$7.55/trade vs the ~$6.50 target). The two deep ones netted -$6.48 (-$47.48 DOGE @57.6¢, +$41.00 BTC @47¢). Cheaper entry pays more when it wins. Do **not** auto-exit them on instinct; n=12. |
+| The actual leak is the core, not the fills | Aug 18 | v5.16 sits at **120/135 = 88.9% WR, -$236.20** against a ~92% break-even. Aug 18 alone: about **-$164 from in-band fills** while crash fills added +$90.63. Unexplained — needs its own investigation before any parameter is touched. |
 | C1 quarantine (SOL + prior2 75-79¢) | Aug 17 | Worth **~$260 over 68 days** — noise, not the "-$7.25/tr" originally recorded. Quarantined on 60+80 trades, violating the 500-trade bar. Left in place as harmless; do not cite as precedent. `--compare c1=0` |
 | `MIN_ASK = 89` may beat 90 | Aug 17 | Better at *both* slippage levels — the only parameter that didn't flip. Worth real work. `--sweep min_ask 88 89 90 91` |
 | ET08 hour | — | -$2.39/tr, unconfirmed across periods. Needs 500+ trades. |
@@ -311,6 +322,23 @@ Each needs re-checking; none is settled.
 | C5 (prior1≥95 + prior3≥95) | — | 54 OOS trades — not blockable. |
 | $100/trade bump | Aug 17 | Hold until balance ≥ $2,200. |
 | Window-based consecutive loss | — | Group by expiry timestamp, not individual trades. |
+
+**Crash fills (was "DANGER FILL", renamed Aug 18).** A fill below `MIN_ASK` means the
+order swept a book that had already collapsed — not that a limit was breached. Aug 18's
+worst: 80 BTC NO at **47¢ average on a 92.5¢ quote**, and 80 DOGE YES at **57.6¢ on a
+92.8¢ quote**. The exchange fee confirms the price is real (`0.07·C·P·(1-P)` came to
+$1.40, which only solves near P≈0.47) — this is not an accounting artifact.
+
+Two regimes, and they must not be conflated:
+- **within 3¢ of the band** — the book moving inside the order's flight time. Benign;
+  logged, never emailed. Six of Aug 18's twelve.
+- **deeper** — a genuinely different bet: a ~50¢ contract is a coin flip with ±$40
+  swings, against a strategy sized to risk $75 to win $6.50. Emails as `CRASH FILL`.
+
+Counting them: `gh run list --workflow=late_certainty.yml --limit 400 --json databaseId,createdAt`
+then grep run logs for `SETTLED <ticker>`; the settlement line for a market appears in
+the run that was already in flight at its close, so search from `close-5min`. Alert
+history is in Gmail (`subject:"CRASH FILL"`, `subject:"DANGER FILL"` before Aug 18).
 
 ---
 
