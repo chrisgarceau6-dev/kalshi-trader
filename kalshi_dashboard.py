@@ -852,7 +852,7 @@ function render(d){
   const deps=(d.deposits||[]).map(x=>({t:new Date(x.ts).getTime(),dep:x.amount,pnl:0}));
   const trs=sett.map(x=>({t:new Date(x.ts).getTime(),dep:0,pnl:x.pnl}));
   const comb=deps.concat(trs).sort((a,b)=>a.t-b.t);
-  let rb=0; const balAll=comb.map(e=>{rb+=e.dep+e.pnl;return{t:e.t,v:+rb.toFixed(2)};});
+  let rb=0; const balAll=comb.map(e=>{rb+=e.dep+e.pnl;return{t:e.t,v:+rb.toFixed(2),dep:e.dep,pnl:e.pnl};});
   const liveBal=d.balance||0;
   const drift=balAll.length?+(liveBal-balAll[balAll.length-1].v).toFixed(2):0;
   balAll.forEach(x=>x.v=+(x.v+drift).toFixed(2));
@@ -877,23 +877,38 @@ function render(d){
   const rangePnl=inR.reduce((a,s)=>a+s.pnl,0);
   const bal=$('bal'), chg=$('chg');
   bal.classList.remove('sk');
+
+  // Return % belongs on P&L, never on Balance: the balance line moves on deposits too,
+  // so a $100 deposit into a $400 account would read as a +25% "gain". This is a
+  // time-weighted return — each settlement is chained against the balance it was
+  // actually earned on, so a deposit resets the base for later trades but is never
+  // itself counted as a gain. Dividing range P&L by a single balance would break the
+  // other way: an account funded mid-range shows a huge percent off a tiny base.
+  let walk=0, twr=1, chained=false;
+  for(const e of comb){
+    const before=walk+drift;
+    walk+=e.dep+e.pnl;
+    if(e.t<cut||!e.pnl||before<=0) continue;
+    twr*=1+e.pnl/before; chained=true;
+  }
+  const ret=chained?(twr-1)*100:null;
+  const retTx=ret==null?'':(ret>=0?'+':'-')+Math.abs(ret).toFixed(2)+'%';
+
   if(mode==='bal'){
     $('heroLbl').textContent='Portfolio balance';
     bal.className='hero-bal num';
     tween(bal,liveBal,v=>money(v));
-    const startBal=series.length?series[0].v:0;
-    const delta=series.length?series[series.length-1].v-startBal:0;
+    const delta=series.length?series[series.length-1].v-series[0].v:0;
     chg.className='hero-chg num '+cls(delta);
-    // percent is meaningless off a zero/negative starting balance, so drop it there
-    const pc=startBal>0?' ('+(delta>=0?'+':'-')+Math.abs(delta/startBal*100).toFixed(2)+'%)':'';
-    chg.innerHTML='<span class="arrow">'+(delta>=0?'▲':'▼')+'</span>'+signed(delta)+pc+
-      ' <span class="chg-sub">'+RLBL[range]+'</span>';
+    chg.innerHTML='<span class="arrow">'+(delta>=0?'▲':'▼')+'</span>'+signed(delta)+
+      ' <span class="chg-sub">'+RLBL[range]+(deps.some(x=>x.t>=cut)?' · incl. deposits':'')+'</span>';
   }else{
     $('heroLbl').textContent=RLBL[range]+' P&L';
     bal.className='hero-bal num '+cls(rangePnl);
     tween(bal,rangePnl,v=>signed(v));
-    chg.className='hero-chg num mut';
-    chg.innerHTML='<span class="chg-sub">'+money(liveBal)+' portfolio · '+inR.length+' trades</span>';
+    chg.className='hero-chg num '+cls(rangePnl);
+    chg.innerHTML=(ret==null?'':'<span class="arrow">'+(ret>=0?'▲':'▼')+'</span>'+retTx+' ')+
+      '<span class="chg-sub">'+money(liveBal)+' portfolio · '+inR.length+' trades</span>';
   }
 
   // stats

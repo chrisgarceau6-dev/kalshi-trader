@@ -231,8 +231,10 @@ CSVs. Stage explicitly. Resolve `.claude-flow/` conflicts with `git checkout --t
 - Spot: Coinbase `api.exchange.coinbase.com` (Binance geo-blocked)
 
 **Dashboard.** https://polymarket-monitor2.onrender.com — Render free tier, ~30s cold
-start. P&L / Balance toggle (Balance shows the range's
-dollar and percent change), auto-refresh 30s, ranges floor at Aug 1. Env vars are
+start. P&L / Balance toggle, auto-refresh 30s, ranges floor at
+Aug 1. The P&L tab shows the range's **time-weighted return** — each settlement chained
+against the balance it was earned on. Never show a percent on the Balance tab: that
+line moves on deposits, so a $100 deposit into a $400 account would read as +25%. Env vars are
 `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY` (raw PEM, not base64), plus `DASH_TOKEN`.
 
 **`DASH_TOKEN` is required on Render.** Until 2026-08-18 the dashboard served live
