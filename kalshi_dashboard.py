@@ -144,15 +144,44 @@ def get_market(ticker):
     return {
         "yes_ask":    _cents("yes_ask_dollars"),
         "yes_bid":    _cents("yes_bid_dollars"),
+        "no_ask":     _cents("no_ask_dollars"),
+        "no_bid":     _cents("no_bid_dollars"),
         "close_time": m.get("close_time", ""),
         "title":      m.get("subtitle", m.get("title", "")),
     }
 
-def get_fills_contracts(ticker):
-    """Sum count_fp across all fills for this ticker to get actual contracts held."""
+def get_fills_basis(ticker):
+    """Contracts, side and true cost basis for a ticker, from its fills.
+
+    The positions endpoint does not carry an entry price, so without this the UI can
+    only show contract counts — which is why "if win" previously displayed gross
+    settlement value (contracts x $1) instead of actual profit, overstating the
+    upside by more than 10x on a strategy that risks ~$75 to win ~$6.50.
+
+    Same single API call the contract count already required.
+    """
     r = kalshi("/portfolio/fills", {"ticker": ticker, "limit": 50})
-    if not r: return 0
-    return int(sum(float(f.get("count_fp", 0) or 0) for f in r.get("fills", [])))
+    if not r:
+        return {"contracts": 0, "side": None, "entry": None, "cost": 0.0, "fee": 0.0}
+    n = 0.0; notional = 0.0; fee = 0.0; side = None
+    for f in r.get("fills", []):
+        c = float(f.get("count_fp", 0) or 0)
+        if c <= 0:
+            continue
+        sd = (f.get("side") or "").lower()
+        px = f.get("no_price_dollars") if sd == "no" else f.get("yes_price_dollars")
+        try:
+            px = float(px)
+        except (TypeError, ValueError):
+            continue
+        signed = -c if (f.get("action") or "").lower() == "sell" else c
+        n += signed
+        notional += signed * px
+        fee += float(f.get("fee_cost", 0) or 0)
+        side = side or sd
+    entry = (notional / n) if n else None
+    return {"contracts": int(n), "side": side, "entry": entry,
+            "cost": round(notional, 2), "fee": round(fee, 2)}
 
 def get_positions():
     def _f():
@@ -163,11 +192,21 @@ def get_positions():
             if not p.get("ticker"): continue
             ticker = p.get("ticker", "")
             mkt = get_market(ticker)
-            contracts = get_fills_contracts(ticker) or int(p.get("position") or 0)
+            b = get_fills_basis(ticker)
+            contracts = b["contracts"] or int(p.get("position") or 0)
+            side = b["side"] or "yes"
+            # Quote the side actually held. Showing the YES book for a NO position
+            # displays ~9c against a 91c entry, and v5.16 trades NO about half the time.
+            ask = mkt.get("no_ask") if side == "no" else mkt.get("yes_ask")
+            bid = mkt.get("no_bid") if side == "no" else mkt.get("yes_bid")
             out.append({"ticker":     ticker,
                         "contracts":  contracts,
-                        "yes_ask":    mkt.get("yes_ask"),
-                        "yes_bid":    mkt.get("yes_bid"),
+                        "side":       side,
+                        "entry":      round(b["entry"] * 100, 1) if b["entry"] else None,
+                        "cost":       b["cost"],
+                        "fee":        b["fee"],
+                        "ask":        ask,
+                        "bid":        bid,
                         "close_time": mkt.get("close_time", ""),
                         "title":      mkt.get("title", "")})
         return out
@@ -839,22 +878,27 @@ function render(d){
       const c=p.contracts||0;
       const frac=Math.max(0,Math.min(1,s/600))*100;   // markets open ~600s before close
       const col=ms<=0?'#7C828C':s<120?DOWN:s<300?'#FFA318':UP;
-      const spread=(p.yes_ask!=null&&p.yes_bid!=null)?(p.yes_ask-p.yes_bid)+'¢':'—';
-      const mv=p.yes_bid!=null?'$'+(c*p.yes_bid/100).toFixed(2):(locked?'$'+c.toFixed(2):'—');
+      const spread=(p.ask!=null&&p.bid!=null)?(p.ask-p.bid)+'¢':'—';
+      const mv=p.bid!=null?'$'+(c*p.bid/100).toFixed(2):(locked?'$'+c.toFixed(2):'—');
+      // Profit if this settles in your favour, NOT gross settlement value: you paid
+      // ~92c for a $1 contract, so the upside is the ~8c spread, not the whole dollar.
+      const win=p.entry!=null?(c*(100-p.entry)/100-(p.fee||0)):null;
+      const risk=p.cost!=null?p.cost:null;
       return '<div class="pos"><div class="pos-top"><div style="flex:1;min-width:0">'+
-        '<div class="pos-tick">'+p.ticker.split('-')[0]+'</div>'+
+        '<div class="pos-tick">'+p.ticker.split('-')[0]+
+          (p.entry!=null?' <span class="tr-side">'+(p.side||'yes').toUpperCase()+' @ '+p.entry+'¢</span>':'')+'</div>'+
         '<div class="pos-full">'+p.ticker+'</div></div>'+
         '<div class="pos-clock"><div class="pos-left" style="color:'+col+'">'+lt+'</div></div></div>'+
         (p.title?'<div class="pos-q">'+p.title+'</div>':'')+
         '<div class="bar"><i style="width:'+frac+'%;background:'+col+'"></i></div>'+
         '<div class="pos-grid">'+
         '<div class="pg"><div class="l">Contracts</div><div class="v num">'+(c||'—')+'</div></div>'+
-        '<div class="pg"><div class="l">Bid / Ask</div><div class="v num">'+
-          (p.yes_bid!=null?p.yes_bid+'¢':'—')+' / '+(p.yes_ask!=null?p.yes_ask+'¢':'—')+'</div></div>'+
+        '<div class="pg"><div class="l">'+(p.side||'yes').toUpperCase()+' bid / ask</div><div class="v num">'+
+          (p.bid!=null?p.bid+'¢':'—')+' / '+(p.ask!=null?p.ask+'¢':'—')+'</div></div>'+
         '<div class="pg"><div class="l">Spread</div><div class="v num">'+spread+'</div></div>'+
-        '<div class="pg"><div class="l">If win</div><div class="v num up">+$'+c.toFixed(2)+'</div></div>'+
+        '<div class="pg"><div class="l">If win</div><div class="v num up">'+(win!=null?'+$'+win.toFixed(2):'—')+'</div></div>'+
         '<div class="pg"><div class="l">Mkt value</div><div class="v num">'+mv+'</div></div>'+
-        '<div class="pg"><div class="l">At risk</div><div class="v num">$'+c.toFixed(2)+'</div></div>'+
+        '<div class="pg"><div class="l">At risk</div><div class="v num down">'+(risk!=null?'-$'+risk.toFixed(2):'—')+'</div></div>'+
         '</div></div>';
     }).join('');
   } else pe.innerHTML='<div class="empty">No open positions</div>';
