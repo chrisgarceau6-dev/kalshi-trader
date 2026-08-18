@@ -582,6 +582,35 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   color:var(--down);border-radius:12px;padding:10px 13px;font-size:11.5px;font-weight:650;
   margin-top:16px;text-align:center}
 .foot{text-align:center;color:var(--dimmer);font-size:10.5px;margin-top:26px;font-weight:550}
+.cols{display:block}
+
+/* ── tablet ──────────────────────────────────────────────────────── */
+@media (min-width:760px){
+  body{max-width:720px}
+  .chart-wrap{height:260px}
+  .hero-bal{font-size:60px}
+}
+
+/* ── desktop: use the width instead of a phone column in a black sea ── */
+@media (min-width:1080px){
+  body{max-width:1280px;padding:0 34px calc(60px + var(--safe-b))}
+  .hero{padding:40px 0 4px}
+  .hero-bal{font-size:68px}
+  .hero-chg{font-size:17px}
+  .chart-wrap{height:340px;margin:22px -8px 0}
+  .stats{grid-template-columns:repeat(6,1fr);gap:11px;margin:26px 0 4px}
+  .stat{padding:16px 15px}
+  .stat-val{font-size:22px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start}
+  /* positions stay in view while the trade log scrolls past them */
+  .col-left{position:sticky;top:22px}
+  .col-left h3,.col-right h3{margin-top:26px}
+  #blackout{margin:0 -34px 4px}
+}
+@media (min-width:1500px){
+  body{max-width:1440px}
+  .chart-wrap{height:380px}
+}
 </style>
 </head>
 <body>
@@ -634,11 +663,16 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   <div class="stat"><div class="stat-lbl" id="l5">Open</div><div class="stat-val num sk" id="v5">0</div><div class="stat-sub" id="s5"></div></div>
 </div>
 
-<h3>Open positions <span class="count" id="posN">0</span></h3>
-<div class="card" id="positions"><div class="empty">No open positions</div></div>
-
-<h3>Recent trades</h3>
-<div class="card" id="trades"><div class="empty">Loading…</div></div>
+<div class="cols">
+  <div class="col-left">
+    <h3>Open positions <span class="count" id="posN">0</span></h3>
+    <div class="card" id="positions"><div class="empty">No open positions</div></div>
+  </div>
+  <div class="col-right">
+    <h3>Recent trades</h3>
+    <div class="card" id="trades"><div class="empty">Loading…</div></div>
+  </div>
+</div>
 
 <div class="foot" id="foot">—</div>
 
