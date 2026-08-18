@@ -1318,22 +1318,42 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--status",  action="store_true")
     ap.add_argument("--daemon",  action="store_true",
-                    help="run continuously, polling every 20s (for VPS deployment)")
+                    help="poll repeatedly instead of scanning once")
+    ap.add_argument("--interval", type=int, default=20,
+                    help="seconds between polls in daemon mode (default 20)")
+    ap.add_argument("--duration", type=int, default=0,
+                    help="stop after N seconds (0 = run forever). Used by CI so one "
+                         "job performs many scans instead of one.")
     a = ap.parse_args()
     if a.status:
         print(json.dumps(load_state(), indent=2))
         return
     if a.daemon:
-        log("=== DAEMON MODE — polling every 20s ===")
+        # Signal-capture fix (Aug 17). 70% of qualifying signals are in-band for a
+        # single 1-min candle — the ask passes THROUGH 90-93c on its way to 100c
+        # rather than resting there. One scan per CI job caught only ~27% of the
+        # signals the backtest takes, and the missed ones are not worse
+        # (transient 93.30% WR / +$0.58 per trade vs persistent 93.27% / +$0.77).
+        # Polling many times per job converts CI startup overhead into scans.
+        deadline = time.time() + a.duration if a.duration else None
+        log(f"=== DAEMON — every {a.interval}s"
+            + (f", stopping after {a.duration}s ===" if deadline else ", indefinitely ==="))
+        cycles = 0
         while True:
             try:
                 run_once(dry_run=a.dry_run)
+                cycles += 1
             except KeyboardInterrupt:
                 log("Daemon stopped")
                 break
             except Exception as e:
                 log(f"cycle error: {e}")
-            time.sleep(20)
+            # Stop before sleeping past the deadline so the job ends predictably
+            # and the next dispatch is not delayed.
+            if deadline and time.time() + a.interval >= deadline:
+                log(f"=== DAEMON done — {cycles} scans in {a.duration}s ===")
+                break
+            time.sleep(a.interval)
         return
     try:
         run_once(dry_run=a.dry_run)

@@ -1,9 +1,9 @@
 name: Late-Certainty Trader
 
 # ┌────────────────────────────────────────────────────────────────────┐
-# │  v5.12 — order-safety hardened.                                   │
+# │  v5.16 — both sides trade; multi-scan polling.                    │
 # │                                                                     │
-# │  YES 90-93c, 150-600s, prior two 1m asks >=75c; UTC17 excluded.     │
+# │  YES or NO 90-93c, 150-600s, prior two 1m asks >=75c.              │
 # │  Flat $75 principal-risk budget; max concurrent exposure = 2.       │
 # │                                                                     │
 # │  Live: BTC/ETH/SOL/DOGE/BNB/XRP 15m plus KXWTI15M.                 │
@@ -62,7 +62,12 @@ jobs:
           COPY_EMAIL_FROM: ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_TO: ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
-        run: python late_certainty_trader.py --once
+        # Signal-capture fix (Aug 17): poll many times per job instead of once.
+        # 70% of qualifying signals are in-band for a single 1-min candle, so a
+        # single scan per job caught only ~27% of them. 240s at 15s intervals =
+        # ~16 scans, and amortises the ~20s checkout/pip/cache overhead across all
+        # of them. Effective cadence ~16s/scan vs ~48s before.
+        run: python late_certainty_trader.py --daemon --duration 240 --interval 15
 
       - name: Save state
         if: always()
@@ -85,5 +90,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
         run: |
-          sleep 30
+          sleep 5
           gh workflow run late_certainty.yml --repo chrisgarceau6-dev/polymarket-monitor2 2>/dev/null || true
