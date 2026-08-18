@@ -291,6 +291,17 @@ replicate, and the headline "NO is -EV" verdict was overturned entirely. These a
 verdicts, and none of them can be reproduced from anything in this repo. If a
 question matters, re-run it with `scripts/backtest.py` against current data.
 
+*Volatility / dispersion filter (pre-registered, 2026-08-18):* **refuted.** Bucketing
+entries by prior-candle price range (`max-min` of ask,p1,p2,p3) gives a *non-monotonic*
+WR — MID is the worst bucket in both windows — and the cluster-bootstrapped HIGH-LOW
+delta includes zero in-sample and out-of-sample. Decisive point: HIGH-dispersion entries
+are **66% of volume and 77% of holdout profit**, so excluding them cuts holdout P&L from
++$4,242 to +$992. High dispersion is the ask *transiting* 90-93c toward 100c as certainty
+resolves (Invariant 6) — the strategy working, not a danger signal. Note the prior-candle
+gate (`PRIOR_MIN=75`) is already a volatility filter; this tested for residual signal after
+it. Third attempt at this idea (`backtest_vol_filter.py` Aug 9, dispersion filter Aug 17
+which inverted OOS). `python3 scripts/vol_bucket_test.py`
+
 *Directional / entry variants:* longshot crash-reversal · cross-asset lag · candle
 acceleration · stuck-market breakout · per-series WR kill switch · early-window entry
 (600-800s) · spot-Kalshi dislocation scalp · oracle-lag final 0-150s ·
