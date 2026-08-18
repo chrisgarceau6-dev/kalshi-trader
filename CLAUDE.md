@@ -219,7 +219,26 @@ CSVs. Stage explicitly. Resolve `.claude-flow/` conflicts with `git checkout --t
 
 **Dashboard.** https://polymarket-monitor2.onrender.com — Render free tier, ~30s cold
 start. P&L / Balance toggle, auto-refresh 30s, ranges floor at Aug 1. Env vars are
-`KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY` (raw PEM, not base64).
+`KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY` (raw PEM, not base64), plus `DASH_TOKEN`.
+
+**`DASH_TOKEN` is required on Render.** Until 2026-08-18 the dashboard served live
+balance, full deposit history and open positions to anyone — unauthenticated, at a URL
+published in this public file. Reach it as `/?t=<DASH_TOKEN>` once; it sets a 90-day
+cookie. A hosted instance with no `DASH_TOKEN` returns 503 rather than failing open.
+Local runs bind to 127.0.0.1 and stay open.
+
+**Trader health pill.** The dashboard reads the Actions API
+(`/actions/workflows/late_certainty.yml/runs`, unauthenticated, 90s cache) and shows
+last *successful* run plus consecutive-failure count. Staleness alone would not have
+caught 2026-08-17 — cron kept creating runs every 5 min while every one failed, so the
+failure count is the fast detector. Successful runs land every ~4.2 min (median, n=34),
+so a healthy last-success age cycles 4-9 min; amber >15 min, red >25 min or 2+ failures.
+`cancelled` is routine (cron collides with self-dispatch) and never counts as a failure.
+
+**The blackout banner is read from the trader by AST**, like `scripts/backtest.py`.
+It was hardcoded to `[13]` while the trader ran `BLACKOUT_HOURS = set()` — every day at
+1pm ET the dashboard claimed the strategy was paused while it traded through. Never
+hardcode a strategy constant into the dashboard.
 
 ---
 

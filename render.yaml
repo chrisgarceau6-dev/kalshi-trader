@@ -9,3 +9,11 @@ services:
         sync: false
       - key: KALSHI_PRIVATE_KEY
         sync: false
+      # Required. The service refuses to serve account data without it, because the
+      # dashboard URL is published in a public repo.
+      - key: DASH_TOKEN
+        sync: false
+      # Optional. Raises the GitHub API limit from 60/hr to 5000/hr for the health
+      # check; the check works unauthenticated on this public repo without it.
+      - key: GH_READ_TOKEN
+        sync: false
