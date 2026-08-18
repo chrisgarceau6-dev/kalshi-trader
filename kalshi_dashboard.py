@@ -71,10 +71,18 @@ def get_balance():
         return float(r["balance_dollars"]) if r and "balance_dollars" in r else None
     return cached("bal", 30, _f)
 
+# The UI floors every range at Aug 1, so history older than this is fetched, parsed
+# and then discarded. Keep a week of slack so the pre-range P&L baseline still has
+# something to anchor to.
+SETTLEMENT_FLOOR = "2026-07-25"
+
 def get_settlements():
     def _f():
+        # The date floor below is what should end pagination. This cap only exists so
+        # a cursor bug cannot loop forever — at 20 it would have silently truncated
+        # the oldest history once volume passed ~150 settlements/day.
         out, cursor, pages = [], None, 0
-        while pages < 20:
+        while pages < 60:
             params = {"limit": 200}
             if cursor: params["cursor"] = cursor
             r = kalshi("/portfolio/settlements", params)
@@ -101,6 +109,13 @@ def get_settlements():
                     "fee":    round(fee, 2),
                     "ts":     s.get("settled_time", ""),
                 })
+            # Settlements come newest-first; once a page predates the floor every
+            # later page does too. Stops ~9 API calls per refresh from being spent
+            # on rows the UI throws away, on the same key the trader polls with.
+            oldest = min((x.get("settled_time", "") for x in batch if x.get("settled_time")),
+                         default="")
+            if oldest and oldest[:10] < SETTLEMENT_FLOOR:
+                break
             cursor = r.get("cursor")
             if not cursor: break
             time.sleep(0.05)
