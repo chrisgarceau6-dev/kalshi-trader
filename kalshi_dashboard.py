@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 from pathlib import Path
 import requests
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, redirect
 
 BASE = Path(__file__).parent
 TRADER = BASE / "late_certainty_trader.py"
@@ -262,6 +262,64 @@ def get_health():
     return cached("health", 90, _f)
 
 
+LOGIN_HTML = r"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Kalshi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Cpath d='M7 21l6-7 4 4 8-9' stroke='%2300D181' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:#000;color:#F4F5F7;display:flex;align-items:center;justify-content:center;
+ font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;
+ padding:24px;-webkit-font-smoothing:antialiased}
+.box{width:100%;max-width:330px;text-align:center}
+.mark{width:52px;height:52px;margin:0 auto 20px;display:block}
+h1{font-size:21px;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
+p{font-size:13.5px;color:#7C828C;margin-bottom:26px;line-height:1.5;font-weight:500}
+form{display:flex;flex-direction:column;gap:10px}
+input{background:#0B0C0E;border:1px solid rgba(255,255,255,.09);border-radius:13px;
+ padding:15px 16px;color:#F4F5F7;font-size:16px;font-family:inherit;font-weight:550;
+ outline:none;transition:border-color .2s,background .2s;width:100%}
+input::placeholder{color:#4C525B}
+input:focus{border-color:rgba(0,209,129,.5);background:#131519}
+button{background:#00D181;color:#00160D;border:none;border-radius:13px;padding:15px;
+ font-size:15px;font-weight:750;font-family:inherit;cursor:pointer;letter-spacing:-.01em;
+ transition:opacity .18s}
+button:active{opacity:.75}
+.err{color:#FF453A;font-size:12.5px;font-weight:650;margin-top:15px;min-height:16px}
+.hint{color:#4C525B;font-size:11.5px;margin-top:22px;line-height:1.6;font-weight:500}
+</style></head><body>
+<div class="box">
+  <svg class="mark" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#0B0C0E" stroke="rgba(255,255,255,.09)"/><path d="M7 21l6-7 4 4 8-9" stroke="#00D181" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <h1>Kalshi</h1>
+  <p>Enter your access token to view the account.</p>
+  <form id="f" autocomplete="on">
+    <input id="t" type="password" name="password" placeholder="Access token"
+           autocomplete="current-password" autofocus enterkeyhint="go">
+    <button type="submit">Unlock</button>
+  </form>
+  <div class="err" id="e"></div>
+  <div class="hint">Saved for 90 days on this device. Phones and home-screen apps
+    each keep their own login.</div>
+</div>
+<script>
+document.getElementById('f').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var v=document.getElementById('t').value.trim();
+  if(!v){document.getElementById('e').textContent='Enter a token';return;}
+  // Round-trip through the server so it can set the cookie for THIS context.
+  location.href='/?t='+encodeURIComponent(v);
+});
+if(location.search.indexOf('t=')>-1){document.getElementById('e').textContent='Incorrect token';}
+</script>
+</body></html>"""
+
+
 app = Flask(__name__)
 
 DASH_TOKEN = os.environ.get("DASH_TOKEN", "").strip()
@@ -279,7 +337,12 @@ def _require_token():
     supplied = request.args.get("t") or request.cookies.get("dash_token") or ""
     if hmac.compare_digest(supplied, DASH_TOKEN):
         return None
-    return ("unauthorized", 401)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "unauthorized"}), 401
+    # A form, not a dead end. Cookies are per-browser, and an iOS home-screen app
+    # keeps its own jar separate from Safari, so a token pasted into one context
+    # will not carry into the other. Every context needs somewhere to type it.
+    return make_response(LOGIN_HTML, 401)
 
 @app.route("/api/data")
 def api_data():
@@ -872,11 +935,14 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(
 
 @app.route("/")
 def index():
-    resp = make_response(HTML)
     if DASH_TOKEN and request.args.get("t"):
+        # Token already validated upstream. Set the cookie, then bounce to a clean
+        # URL so it stops living in history, screenshots and the address bar.
+        resp = redirect("/")
         resp.set_cookie("dash_token", DASH_TOKEN, max_age=90 * 86400,
                         httponly=True, samesite="Lax", secure=HOSTED)
-    return resp
+        return resp
+    return make_response(HTML)
 
 if __name__ == "__main__":
     os.chdir(BASE)
