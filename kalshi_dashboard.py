@@ -648,7 +648,7 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
     <button data-r="1H">1H</button><button data-r="1D">1D</button><button data-r="1W">1W</button><button data-r="1M">1M</button><button data-r="ALL">All</button>
   </div>
   <div class="seg mini" id="modes"><div class="pill"></div>
-    <button data-m="pnl">P&amp;L</button><button data-m="bal">Value</button>
+    <button data-m="pnl">P&amp;L</button><button data-m="bal">Balance</button>
   </div>
 </div>
 
@@ -878,12 +878,15 @@ function render(d){
   const bal=$('bal'), chg=$('chg');
   bal.classList.remove('sk');
   if(mode==='bal'){
-    $('heroLbl').textContent='Portfolio value';
+    $('heroLbl').textContent='Portfolio balance';
     bal.className='hero-bal num';
     tween(bal,liveBal,v=>money(v));
-    const delta=series.length?series[series.length-1].v-series[0].v:0;
+    const startBal=series.length?series[0].v:0;
+    const delta=series.length?series[series.length-1].v-startBal:0;
     chg.className='hero-chg num '+cls(delta);
-    chg.innerHTML='<span class="arrow">'+(delta>=0?'▲':'▼')+'</span>'+signed(delta)+
+    // percent is meaningless off a zero/negative starting balance, so drop it there
+    const pc=startBal>0?' ('+(delta>=0?'+':'-')+Math.abs(delta/startBal*100).toFixed(2)+'%)':'';
+    chg.innerHTML='<span class="arrow">'+(delta>=0?'▲':'▼')+'</span>'+signed(delta)+pc+
       ' <span class="chg-sub">'+RLBL[range]+'</span>';
   }else{
     $('heroLbl').textContent=RLBL[range]+' P&L';
