@@ -11,7 +11,11 @@ file* — treat it as leads, not verdicts.
 
 - Chris Garceau — UMass freshman. Real money on Kalshi. Wants concise responses, no
   encouragement without evidence, no emojis. Lead with numbers, then takeaways.
-- Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/polymarket-monitor2` (PUBLIC)
+- Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/kalshi-trader` (PUBLIC)
+  Renamed from `polymarket-monitor2` on 2026-08-18. **The Render service kept the old
+  name**, so the dashboard URL is still `polymarket-monitor2.onrender.com` — that
+  mismatch is expected, not stale. Renaming the service would change the URL with no
+  redirect. Workflow self-dispatch uses `$GITHUB_REPOSITORY`, so it survives renames.
 - Live entrypoint: `late_certainty_trader.py` on `origin/main`, workflow
   `.github/workflows/late_certainty.yml`
 - **Primary trigger:** self-dispatch — each run sleeps ~30s then dispatches itself via
