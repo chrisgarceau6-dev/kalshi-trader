@@ -2,14 +2,16 @@
 """Kalshi trader dashboard — Render hosted.
 Env: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY (base64 PEM), PORT (set by Render)
 """
-import base64, os, time
+import ast, base64, hmac, os, time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 from pathlib import Path
-from flask import Flask, jsonify
+import requests
+from flask import Flask, jsonify, request, make_response
 
 BASE = Path(__file__).parent
+TRADER = BASE / "late_certainty_trader.py"
 
 def _load_dotenv():
     f = BASE / ".env"
@@ -171,7 +173,113 @@ def get_positions():
         return out
     return cached("pos", 15, _f)
 
+def live_blackout_hours():
+    """Read BLACKOUT_HOURS out of the trader by AST — never imports it.
+
+    Same technique as scripts/backtest.py, so the banner cannot drift from what is
+    actually running. Returns None if the constant cannot be read; the UI then shows
+    no banner rather than asserting a pause it has not verified.
+    """
+    def _f():
+        try:
+            tree = ast.parse(TRADER.read_text())
+        except Exception as e:
+            _last_err["blackout"] = f"parse: {str(e)[:80]}"
+            return None
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not (isinstance(t, ast.Name) and t.id == "BLACKOUT_HOURS"):
+                    continue
+                v = node.value
+                # `set()` has no literal form, so literal_eval cannot read it
+                if (isinstance(v, ast.Call) and isinstance(v.func, ast.Name)
+                        and v.func.id == "set" and not v.args):
+                    return []
+                try:
+                    return sorted(int(h) for h in ast.literal_eval(v))
+                except (ValueError, TypeError):
+                    _last_err["blackout"] = "BLACKOUT_HOURS is not a literal"
+                    return None
+        _last_err["blackout"] = "BLACKOUT_HOURS not found in trader"
+        return None
+    return cached("blackout", 300, _f)
+
+GH_REPO     = os.environ.get("GH_REPO", "chrisgarceau6-dev/polymarket-monitor2")
+GH_WORKFLOW = "late_certainty.yml"
+# Cancelled runs are routine: the backup cron collides with the self-dispatch chain
+# and the concurrency group drops one. Only these mean the trader actually broke.
+_FAILED = {"failure", "timed_out", "startup_failure"}
+
+def get_health():
+    """Liveness of the trader itself, from the Actions API.
+
+    A stale-run check alone would not have caught 2026-08-17: cron kept creating runs
+    every 5 min while every one of them failed. So this reports the last *successful*
+    run and the consecutive-failure count, not just the last run.
+    """
+    def _f():
+        url = (f"https://api.github.com/repos/{GH_REPO}/actions/workflows/"
+               f"{GH_WORKFLOW}/runs?per_page=20")
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = os.environ.get("GH_READ_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code != 200:
+                return {"error": f"HTTP {r.status_code}"}
+            runs = r.json().get("workflow_runs", [])
+        except Exception as e:
+            return {"error": str(e)[:120]}
+        if not runs:
+            return {"error": "no runs"}
+        now = datetime.now(timezone.utc)
+        def _age(ts):
+            d = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return round((now - d).total_seconds() / 60.0, 1)
+        last = runs[0]
+        succ = next((x for x in runs if x.get("conclusion") == "success"), None)
+        fails = 0
+        for x in runs:
+            c = x.get("conclusion")
+            if c in _FAILED:
+                fails += 1
+            elif c == "success":
+                break
+        return {
+            "last_run_ts":          last.get("created_at"),
+            "last_run_age_min":     _age(last["created_at"]),
+            "last_run_status":      last.get("status"),
+            "last_run_conclusion":  last.get("conclusion"),
+            "last_success_ts":      succ.get("created_at") if succ else None,
+            "last_success_age_min": _age(succ["created_at"]) if succ else None,
+            "consec_failures":      fails,
+            "error":                None,
+        }
+    # 90s TTL keeps this under the 60 req/hr unauthenticated GitHub limit
+    return cached("health", 90, _f)
+
+
 app = Flask(__name__)
+
+DASH_TOKEN = os.environ.get("DASH_TOKEN", "").strip()
+HOSTED     = bool(os.environ.get("PORT"))   # Render sets PORT; local runs do not
+
+@app.before_request
+def _require_token():
+    """This endpoint serves live balance, deposit history and open positions, and the
+    URL is published in a public repo. Hosted instances must carry a token."""
+    if not DASH_TOKEN:
+        if HOSTED:
+            return ("DASH_TOKEN is not set on this instance — refusing to serve "
+                    "account data.", 503)
+        return None                      # local dev binds to 127.0.0.1 only
+    supplied = request.args.get("t") or request.cookies.get("dash_token") or ""
+    if hmac.compare_digest(supplied, DASH_TOKEN):
+        return None
+    return ("unauthorized", 401)
 
 @app.route("/api/data")
 def api_data():
@@ -180,7 +288,8 @@ def api_data():
         "settlements": get_settlements(),
         "deposits":    get_deposits(),
         "positions":   get_positions(),
-        "blackout":    [13],
+        "health":      get_health(),
+        "blackout":    live_blackout_hours(),
         "ts":          datetime.now(ET).isoformat(timespec="seconds"),
         "errors":      dict(_last_err),
         "key_set":     bool(os.environ.get("KALSHI_PRIVATE_KEY_PATH") or os.environ.get("KALSHI_PRIVATE_KEY")),
@@ -204,6 +313,11 @@ body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Se
 .hero-ts{font-size:12px;color:#6b7280;margin-top:6px}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:5px;animation:pulse 2s infinite;vertical-align:middle}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.health{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.5px;padding:4px 10px;border-radius:12px;margin-top:10px;text-transform:uppercase}
+.health-ok{background:#14532d;color:#22c55e}
+.health-warn{background:#422006;color:#f59e0b}
+.health-bad{background:#450a0a;color:#ef4444}
+.health-unk{background:#1c1c1c;color:#6b7280}
 .ranges{display:flex;justify-content:center;gap:2px;margin:20px 0 4px}
 .ranges button{background:none;border:none;color:#6b7280;font-size:14px;font-weight:500;padding:7px 14px;border-radius:20px;cursor:pointer;font-family:inherit;transition:all .15s}
 .ranges button.active{background:#1c1c1c;color:#fff}
@@ -246,7 +360,8 @@ h3{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;mar
 <div class="hero">
   <div class="hero-bal" id="bal">—</div>
   <div class="hero-chg" id="chg">—</div>
-  <div class="hero-ts"><span class="dot"></span><span id="ts">loading...</span></div>
+  <div class="hero-ts"><span class="dot" id="dot"></span><span id="ts">loading...</span></div>
+  <div id="health" class="health health-unk">checking trader…</div>
 </div>
 <div class="ranges">
   <button data-r="1H">1H</button>
@@ -336,8 +451,32 @@ function buildChart(labels,vals,mode){
   });
 }
 
+function renderHealth(h){
+  const el=document.getElementById('health'), dot=document.getElementById('dot');
+  let cls='health-unk', txt='trader status unknown';
+  if(!h||h.error){
+    txt='trader status unavailable'+(h&&h.error?' ('+h.error+')':'');
+  } else {
+    const age=h.last_success_age_min, f=h.consec_failures||0;
+    const ago=(age==null)?'never':(age<60?Math.round(age)+'m ago'
+      :(age/60).toFixed(1)+'h ago');
+    // Successful runs land every ~4.2 min (median, n=34), so the age of the newest
+    // success cycles through ~4-9 min on a perfectly healthy trader. Thresholds sit
+    // clear of that; consecutive failures are the fast detector, not staleness.
+    if(f>=2){ cls='health-bad'; txt='trader failing — '+f+' consecutive failed runs'; }
+    else if(age==null||age>25){ cls='health-bad'; txt='trader down — last success '+ago; }
+    else if(age>15){ cls='health-warn'; txt='trader lagging — last success '+ago; }
+    else { cls='health-ok'; txt='trader live — last success '+ago; }
+  }
+  el.className='health '+cls;
+  el.textContent=txt;
+  dot.style.background=cls==='health-ok'?'#22c55e'
+    :cls==='health-warn'?'#f59e0b':cls==='health-bad'?'#ef4444':'#6b7280';
+}
+
 function render(d){
   const bal=d.balance;
+  renderHealth(d.health);
   document.getElementById('bal').textContent=bal!=null?'$'+bal.toFixed(2):'—';
 
   const etHr=parseInt(new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false}))||0;
@@ -551,7 +690,12 @@ setInterval(refresh,30000);
 </html>"""
 
 @app.route("/")
-def index(): return HTML
+def index():
+    resp = make_response(HTML)
+    if DASH_TOKEN and request.args.get("t"):
+        resp.set_cookie("dash_token", DASH_TOKEN, max_age=90 * 86400,
+                        httponly=True, samesite="Lax", secure=HOSTED)
+    return resp
 
 if __name__ == "__main__":
     os.chdir(BASE)
