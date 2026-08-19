@@ -200,14 +200,21 @@ running in Actions needs an `_ensure_key()` helper (see `daily_summary.py` /
 `scripts/archive_candles.py`) or it fails on every run. The GitHub remote URL contains
 a PAT — flagged for rotation.
 
-**PAT rotation — HALF DONE as of 2026-08-18.** The classic PAT (`repo`, `workflow`)
-has been removed from `.git/config` (remote is a plain URL; git authenticates via
-`gh` + osxkeychain) and from `.env` (nothing read it). **The old token is still live
-and still in the `GH_DISPATCH_TOKEN` secret.** To finish: create a new PAT, update
-that secret, confirm a self-dispatched run succeeds, *then* revoke the old one.
-Revoking first drops the trader to the `*/5` backup cron and halves poll cadence.
-Also pending: `gh auth refresh -s workflow` — the keychain token lacks `workflow`
-scope, so pushes touching `.github/workflows/` will be rejected.
+**PAT rotation — DONE 2026-08-19.** A fresh classic PAT (`repo`, `workflow`) is in the
+`GH_DISPATCH_TOKEN` secret and the old token is revoked. Verified in the only way that
+actually proves it: `workflow_dispatch` runs kept landing every ~4.2 min *after* the
+revocation (02:34Z, 02:38Z), so the chain is running on the new token. The PAT is also
+gone from `.git/config` (remote is a plain URL; git authenticates via `gh` +
+osxkeychain) and from `.env`.
+
+Order matters if this is ever redone: new PAT → set secret → confirm a self-dispatched
+run succeeds → *then* revoke. Revoking first drops the trader to the `*/5` backup cron
+and halves poll cadence. Note a successful dispatch alone does not prove *which* token
+is in the secret — only a dispatch that survives the revocation does. GitHub exposes no
+API listing personal access tokens, so this check cannot be automated.
+
+Possibly still pending: `gh auth refresh -s workflow` — the keychain token lacked
+`workflow` scope, so pushes touching `.github/workflows/` get rejected. Unverified.
 
 **Push flow.** Never push to main.
 1. `git fetch origin && git checkout -b <branch> origin/main`
