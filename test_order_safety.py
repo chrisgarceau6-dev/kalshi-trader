@@ -86,6 +86,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("91")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
+             patch.object(trader, "FLAT_BET_DOLLARS", 75), \
              patch.object(trader, "place_order", side_effect=[
                  (201, {"order_id": "order-1"}),
                  (201, {"order_id": "order-2"}),
@@ -102,7 +103,9 @@ class OrderSafetyTests(unittest.TestCase):
         self.assertEqual([call.args[2] for call in place.call_args_list], [80, 67])
         position = state["positions"][market["ticker"]]
         self.assertAlmostEqual(position["cost"], 74.8743)
-        self.assertLessEqual(position["cost"], trader.FLAT_BET_DOLLARS)
+        # 75 is the bet this test pins above; reading the module attribute here
+        # would compare against whatever the live config happens to be.
+        self.assertLessEqual(position["cost"], 75)
         self.assertEqual(position["order_ids"], ["order-1", "order-2"])
         self.assertEqual(state["stats"]["trades"], 1)
 
@@ -139,9 +142,11 @@ class OrderSafetyTests(unittest.TestCase):
             bet_dollars=trader.FLAT_BET_DOLLARS,
             limit_cents=Decimal("93"),
         )
-        self.assertEqual(trader.FLAT_BET_DOLLARS, 75)
-        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("75"))
-        self.assertEqual(count, 80)
+        # Tripwire: bet size is a risk decision and must never drift silently.
+        # 75 -> 50 on 2026-08-19 to restore the <=4.6%-of-balance ratio.
+        self.assertEqual(trader.FLAT_BET_DOLLARS, 50)
+        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("50"))
+        self.assertEqual(count, 53)
 
     def test_subpenny_boundaries_are_not_rounded_into_band(self):
         with patch.object(trader, "kalshi_get", return_value=(200, {"market": {"yes_ask_dollars": "0.8950"}})):
