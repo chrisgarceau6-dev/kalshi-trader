@@ -582,6 +582,9 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   background-size:200% 100%;animation:shim 1.4s ease infinite;border-radius:7px;color:transparent!important}
 
 /* stale */
+#recon{display:none;background:rgba(255,163,24,.1);border:1px solid rgba(255,163,24,.35);
+  color:#FFA318;border-radius:12px;padding:10px 13px;font-size:11.5px;font-weight:650;
+  margin-top:16px;text-align:center;line-height:1.5}
 #stale{display:none;background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.3);
   color:var(--down);border-radius:12px;padding:10px 13px;font-size:11.5px;font-weight:650;
   margin-top:16px;text-align:center}
@@ -657,6 +660,7 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
 </div>
 
 <div id="stale">Data may be stale — last refresh failed</div>
+<div id="recon"></div>
 
 <div class="stats" id="stats">
   <div class="stat"><div class="stat-lbl" id="l0">P&L</div><div class="stat-val num sk" id="v0">$0</div><div class="stat-sub" id="s0"></div></div>
@@ -843,6 +847,62 @@ initSeg($('ranges'),'r','1D',v=>{ range=v; firstDraw=true; if(last) render(last)
 initSeg($('modes'),'m','pnl',v=>{ mode=v; firstDraw=true; if(last) render(last); });
 window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes')); });
 
+/* ── reconciliation ─────────────────────────────────────────────────
+   Every percent on this page rests on one assumption: that deposits + settlements
+   explain every dollar the account moved. Nothing in the API proves that — a
+   withdrawal is invisible (Kalshi exposes no withdrawals feed here), and history
+   older than SETTLEMENT_FLOOR is simply absent. Both silently vanish into `drift`,
+   which is the term the whole curve is anchored on.
+
+   So compare two independent things across visits: how much equity actually changed,
+   and how much the event feed says should have changed. A persistent gap means the
+   feed is incomplete and the percentages cannot be trusted.
+
+   Fees are why the tolerance is not zero: Kalshi charges them at fill, but they are
+   only booked into P&L at settlement, so an open position sits fee-low until it
+   resolves. That is tracked explicitly rather than absorbed. */
+const RECON_KEY='dash-recon-v1';
+
+function reconcile(equity, settAll, deps, openFee){
+  const now=Date.now();
+  let prev=null;
+  try{ prev=JSON.parse(localStorage.getItem(RECON_KEY)||'null'); }catch(e){}
+  const save=()=>{ try{
+    localStorage.setItem(RECON_KEY,JSON.stringify({t:now,equity:equity,openFee:openFee}));
+  }catch(e){} };
+  if(!prev||!(prev.t>0)||typeof prev.equity!=='number'){ save(); return null; }
+  // Only events strictly newer than the last sample: older ones were already
+  // counted, and the oldest can age out of the fetch window entirely.
+  const moved=settAll.filter(s=>new Date(s.ts).getTime()>prev.t).reduce((a,s)=>a+s.pnl,0)
+             +deps.filter(x=>x.t>prev.t).reduce((a,x)=>a+x.dep,0);
+  const feeDelta=openFee-(prev.openFee||0);
+  const gap=+(equity-(prev.equity+moved-feeDelta)).toFixed(2);
+  save();
+  return {gap:gap, since:prev.t, moved:+moved.toFixed(2)};
+}
+
+function showRecon(rec, equity, retHidden){
+  const el=$('recon'); const msgs=[];
+  if(retHidden){
+    msgs.push('Percent hidden — deposits and settlements do not account for the '+
+              'current balance, so a return cannot be computed honestly.');
+  }
+  if(rec){
+    // Settlement timestamps can arrive slightly out of order, so require a gap
+    // bigger than a rounding wobble before crying wolf.
+    const tol=Math.max(2, equity*0.0025);
+    if(Math.abs(rec.gap)>tol){
+      msgs.push(money(Math.abs(rec.gap))+(rec.gap<0?' left':' entered')+
+        ' the account since '+et(new Date(rec.since),{month:'short',day:'numeric',
+        hour:'numeric',minute:'2-digit',hour12:true})+
+        ' with no matching deposit or settlement. Percentages are understated'+
+        (rec.gap<0?' — a withdrawal is the usual cause.':' until it is explained.'));
+    }
+  }
+  el.innerHTML=msgs.join('<br>');
+  el.style.display=msgs.length?'block':'none';
+}
+
 /* ── render ─────────────────────────────────────────────────────── */
 function render(d){
   renderHealth(d.health);
@@ -912,6 +972,8 @@ function render(d){
   // drift is the capital that existed before the reconstruction starts; exactly 0
   // is legitimate (account funded inside the window), negative is not.
   const ret=(chained&&!skipped&&drift>=-0.01)?(twr-1)*100:null;
+  const openFee=(d.positions||[]).reduce((a,p)=>a+(+p.fee||0),0);
+  showRecon(reconcile(liveBal,settAll,deps,openFee), liveBal, ret===null);
   const retTx=ret==null?'':(ret>=0?'+':'-')+Math.abs(ret).toFixed(2)+'%';
 
   if(mode==='bal'){
