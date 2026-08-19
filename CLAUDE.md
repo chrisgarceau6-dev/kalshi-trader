@@ -208,6 +208,9 @@ per-cluster exposure. Nothing here is too conservative — verify with
 | `kalshi_auth.py` | RSA-PSS-SHA256 auth + `cancel_order()` |
 | `kalshi_dashboard.py` | Render dashboard entrypoint |
 | `test_order_safety.py` | Order-safety + NO-path regression tests |
+| `scripts/missed_pnl.py` | Prices what a halt cost — replays live gates on public candles |
+| `scripts/calibration.py` · `scripts/entry_timing.py` | Edge by price / by time left |
+| `research/kalshi_incentives/` | Incentive-program investigation (see §8) |
 
 **Auth.** Key ID in GitHub Secret `KALSHI_API_KEY_ID`; private key at
 `~/.kalshi/private_key.pem` (NOT `pm/kalshi_key.pem`). Signature must include the
@@ -373,6 +376,10 @@ holdout was **7.6 days**.
 `.github/workflows/archive_candles.yml` runs nightly and commits
 `data/candles/YYYY-MM-DD.csv.gz` (all series, both sides, ask 88-96¢, 100-800s —
 deliberately wider than the live gates). Backfilled to 2026-06-11, no gaps.
+**Adding a series needs a FORCED backfill.** `--backfill N` skips any date whose file
+already exists, so a new series captures nothing historical without it. The workflow
+takes a `force` input: `gh workflow run archive_candles.yml -f backfill=N -f force=true`.
+Costs ~3 min/day of runtime. Used 2026-08-19 to capture Gold/Silver back to Aug 1.
 
 **Every archived day is untouched out-of-sample data for every hypothesis formed after
 it.** Backfill with `--backfill N`. Never delete this directory. If the workflow has
@@ -387,6 +394,8 @@ Each needs re-checking; none is settled.
 
 | Observation | Date | Status |
 |---|---|---|
+| 94% WR with ~zero P&L is a SIZING artifact | Aug 19 | Win rate counts trades; P&L counts dollars. Bet size ran **$2.79 → $74 (26x)** inside the Aug 1-18 window, so most wins were banked when a win paid **$0.20** while the losses landed at $45-74. One $74 loss erases ~370 early wins. Dashboard showed 94.5% WR and **+$0.16/trade** against a +$1.00 backtest at flat $75. Now that sizing is flat $50 this distortion is gone — and it means the historical figure *understates* the edge. |
+| Kalshi incentives: not worth pursuing | Aug 19 | Public endpoint `GET /trade-api/v2/incentive_programs` (filters `status`, `type`). 145,145 programs, $9.0M liquidity / $0.9M volume. **SOL/DOGE/BNB/XRP/HYPE/NEAR: never incentivized.** BTC/ETH 15M had volume programs that **ended 2026-05-12**, and zero volume programs are active exchange-wide. Even live they paid $20 pool ÷ 1.68M contracts = **$0.00001/contract** — the $0.005/contract cap never binds. Liquidity programs pay real money but the exploitable pattern is parking unfillable penny walls in dead markets, which risks the "abusive behavior and fake trading" clause. Full write-up + scripts: `research/kalshi_incentives/README.md`. |
 | WTI paused; Gold/Silver still out | Aug 19 | All three launched **2026-07-31** (verified: 0 markets pre-July, 24 on Jul 31). WTI was added v5.8 on a 13-day backtest (+$1.75/tr OOS); over its whole life it measures **-$0.33/tr on 290 trades** — the justifying evidence inverted. Silver (+$0.31/tr) was *better* than WTI while excluded, so trading one and not the others was an accident of timing. Paused, not condemned: -$0.33 is ~1.1 SE from break-even. Revisit all three at ~1,000 trades each, together, one standard. |
 | SOL is fine — August was noise | Aug 19 | Full archive: **1,810 trades, 93.15% WR, +$0.41/tr**. August alone reads -$0.12/tr. Picking any 18-day window makes some series look broken; this is exactly what Invariant 8 warns about. Do not act on single-window series stats. |
 | Gold/Silver first real read | Aug 19 | 15 trading days, live gates, no slippage, no concurrency cap: **GOLD 357 trades 89.92% WR -$1.28/tr** (worst in the book), **SILVER 369 trades 92.95% WR +$0.31/tr**. Neither is established (~1.1-1.6 SE). Metals trade weekdays only — ~5/7 the days of crypto, so per-day comparisons mislead. Archived from 2026-08-01 onward. |
