@@ -56,8 +56,13 @@ def _ensure_key():
 _ensure_key()
 from kalshi_auth import get as kalshi_get  # noqa: E402  (must follow _ensure_key)
 
+# Gold and Silver added 2026-08-19: they were skipped as too thin, but Gold now trades
+# MORE than ETH (median 92,518 contracts/market vs 81,877) and Silver sits between SOL
+# and WTI, with zero dead markets across 200 settled each. Archiving is not trading —
+# it only buys the option to backtest them, and Kalshi drops settled markets after ~67
+# days, so every unarchived day is validation capacity destroyed permanently.
 SERIES_LIST = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M",
-               "KXBNB15M", "KXXRP15M", "KXWTI15M"]
+               "KXBNB15M", "KXXRP15M", "KXWTI15M", "KXGOLD15M", "KXSILVER15M"]
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "data", "candles")
 FIELDS = ["series", "ticker", "close_ts", "close_hour", "candle_idx", "side", "ask",
