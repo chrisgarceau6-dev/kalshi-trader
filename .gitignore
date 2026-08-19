@@ -22,3 +22,4 @@ poly_resolved.json
 venv/
 __pycache__/
 *.pyc
+data/.btc_spot_cache.json

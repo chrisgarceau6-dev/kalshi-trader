@@ -587,6 +587,49 @@ class OrderSafetyTests(unittest.TestCase):
         self.assertEqual(mail.call_count, 1)
         self.assertIn("CRASH FILL", mail.call_args.args[0])
 
+    # ── survivor shadow log (logs only, never trades) ──────────────────────
+
+    def _survivor_market(self, no_ask="0.9500", secs=200):
+        return {
+            "ticker": "KXBTC15M-TEST",
+            "event_ticker": "KXBTC15M-TEST",
+            "close_time": "2026-08-18T20:00:00Z",
+            "yes_ask_dollars": "0.0500",
+            "no_ask_dollars": no_ask,
+            "_secs_left": secs,
+        }
+
+    def _run_survivor(self, market, early_yes_bid="0.0750"):
+        """early_yes_bid 0.0750 -> the NO ask six minutes ago was 92.5c."""
+        candles = {"candlesticks": [{
+            "end_period_ts": 1787083200 - 540,     # 540s before the 20:00Z close
+            "yes_ask": {"close_dollars": "0.9250"},
+            "yes_bid": {"close_dollars": early_yes_bid},
+        }]}
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_SURVIVOR_SEEN", set()), \
+             patch.object(trader, "kalshi_get", return_value=(200, candles)), \
+             patch.object(trader, "place_order") as place, \
+             patch.object(trader, "log") as logger:
+            trader.shadow_survivor(market, "KXBTC15M")
+        place.assert_not_called()
+        return " ".join(str(c.args[0]) for c in logger.call_args_list)
+
+    def test_survivor_signal_is_logged_and_never_traded(self):
+        out = self._run_survivor(self._survivor_market())
+        self.assertIn("SHADOW:SURVIVOR94", out)
+        self.assertIn("KXBTC15M-TEST", out)
+
+    def test_survivor_ignores_contracts_that_were_not_92_93c_earlier(self):
+        # yes_bid 0.02 -> the NO ask six minutes ago was 98c, not 92-93c
+        out = self._run_survivor(self._survivor_market(), early_yes_bid="0.0200")
+        self.assertNotIn("SURVIVOR94", out)
+
+    def test_survivor_ignores_wrong_price_or_time(self):
+        self.assertNotIn("SURVIVOR94", self._run_survivor(self._survivor_market(no_ask="0.9100")))
+        self.assertNotIn("SURVIVOR94", self._run_survivor(self._survivor_market(secs=400)))
+
     def test_opposite_side_of_held_ticker_is_never_re_entered(self):
         """A market that flips across its strike mid-window must not be re-entered
         on the other side — those cost -$40/trade in backtest."""

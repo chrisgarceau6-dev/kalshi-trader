@@ -103,6 +103,7 @@ to settlement.
 | `MAX_CONCURRENT_POSITIONS` | 2 | `--sweep max_conc 1 2 3 4 --slip 0.105` |
 | `MIN_BOOK_DEPTH` | 60 | not in harness (needs live book) |
 | `CRASH_FILL_TOLERANCE` | 3 | fills this far under the band are logged, not emailed |
+| `SURVIVOR_*` | shadow | logs 92-93¢→94-96¢ survivors; trades nothing |
 | `STOP_BALANCE` | 650 | — |
 | `CONSEC_LOSS_LIMIT` | 9 | never fires in 68d either way |
 | poll cadence | 240s job / 15s interval | ~14-16 scans per CI job |
@@ -312,6 +313,14 @@ Each needs re-checking; none is settled.
 
 | Observation | Date | Status |
 |---|---|---|
+| Edge by price: dies at 95¢ | Aug 18 | 88¢ **+1.42pp**, 91¢ +0.98, 92¢ +0.70, 93¢ +0.66, 94¢ +0.95 (all significant); 95-96¢ **+0.07pp — gone**. n=83,337 obs / 6,402 clusters. Independent support for the `MIN_ASK=89` lead. `python3 scripts/calibration.py` |
+| Entry timing: earlier is better | Aug 18 | Edge by time left: 100-150s **-1.26pp**, 150-240s -0.57, 360-480s **+1.27**, 480-600s +0.87. The 60s-average settlement is priced, possibly over-priced — late entries are not safer. `python3 scripts/calibration.py` |
+| Waiting for a better price loses | Aug 18 | A 90-91¢ contract at 8-10 min is **gone from the 88-96¢ band 85.8% of the time** by 3-4 min. Buying what is *still* 90-93¢ late: -3.31pp, **-$2.71/trade** — adversely selected. Buying early: +$0.58/trade. `python3 scripts/entry_timing.py` |
+| Survivor re-entry (92-93¢ → 94-96¢) | Aug 18 | +3.95pp in-sample, +4.88pp holdout — but 41 holdout obs with ~zero losses, so the rule-of-three floor (WR≥92.7%) sits **below** the 95.2¢ break-even. **Shadow-logged only** (`[SHADOW:SURVIVOR94]`), revisit at n≈500. |
+| BRTI runs rich vs Coinbase | Aug 18 | Strike (a BRTI print) is **+0.96bp above** Coinbase at the same minute, sd 2.41bp, \|basis\|>10bp in 0.5% of windows. ~12% of a typical 15-min move — it biases every near-strike call the bot makes on Coinbase data. `python3 scripts/calibration.py` |
+| Volume is no longer the constraint | Aug 18 | Cumulative counter ran 7 → 138 across Aug 18: **~140 trades/day live vs 121/day modelled**. The 27% capture rate in Invariant 6 is pre-v5.16 and stale; live now trades *more* than the backtest universe, at lower WR — suspect the marginal extra trades. |
+| Config sweeps: nothing established | Aug 18 | `min_ask`=89 +$481 P=0.79 · `max_conc`=4 +$437 P=0.65 · `max_ask`=94 +$427 P=0.67 (at 0.105¢ slip) · `min_secs` flat. Four independent levers, none significant — consistent with Invariant 2 that the config is near-optimal. |
+| 15M vs hourly parity — untested | Aug 18 | Both settle on the identical BRTI print at the top of the hour, so the KXBTCD ladder interpolated at the 15M strike is a second price for the same event. They only coexist in the final ~10 min, so it needs a sampler firing at :50. Nothing measured yet. |
 | Crash fills are **+EV so far**, not the leak | Aug 18 | 12 fills landed below the band on Aug 18 and settled **11W/1L, +$90.63** (avg +$7.55/trade vs the ~$6.50 target). The two deep ones netted -$6.48 (-$47.48 DOGE @57.6¢, +$41.00 BTC @47¢). Cheaper entry pays more when it wins. Do **not** auto-exit them on instinct; n=12. |
 | The actual leak is the core, not the fills | Aug 18 | v5.16 sits at **120/135 = 88.9% WR, -$236.20** against a ~92% break-even. Aug 18 alone: about **-$164 from in-band fills** while crash fills added +$90.63. Unexplained — needs its own investigation before any parameter is touched. |
 | C1 quarantine (SOL + prior2 75-79¢) | Aug 17 | Worth **~$260 over 68 days** — noise, not the "-$7.25/tr" originally recorded. Quarantined on 60+80 trades, violating the 500-trade bar. Left in place as harmless; do not cite as precedent. `--compare c1=0` |
