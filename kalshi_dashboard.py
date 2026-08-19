@@ -921,15 +921,25 @@ function render(d){
   const deps=(d.deposits||[]).map(x=>({t:new Date(x.ts).getTime(),dep:x.amount,pnl:0}));
   const trs=settAll.map(x=>({t:new Date(x.ts).getTime(),dep:0,pnl:x.pnl}));
   const comb=deps.concat(trs).sort((a,b)=>a.t-b.t);
-  let rb=0; const balAll=comb.map(e=>{rb+=e.dep+e.pnl;return{t:e.t,v:+rb.toFixed(2),dep:e.dep,pnl:e.pnl};});
-  // Anchor on EQUITY, not cash. /portfolio/balance excludes money tied up in open
-  // positions, so anchoring on it back-dated that hole across the whole curve: the
-  // implied starting capital came out low by exactly the open cost, and every
-  // chained return was inflated by the same error (101.6% vs 74.8% on a test case).
+  // Anchor on EQUITY, not cash: /portfolio/balance excludes money tied up in open
+  // positions, and the curve is built from the live figure, so anchoring on cash
+  // back-dated that hole across the whole range.
   const openCost=(d.positions||[]).reduce((a,p)=>a+(+p.cost||0),0);
   const liveBal=(d.balance||0)+openCost;
-  const drift=balAll.length?+(liveBal-balAll[balAll.length-1].v).toFixed(2):0;
-  balAll.forEach(x=>x.v=+(x.v+drift).toFixed(2));
+  // Then walk BACKWARDS from today: the balance at any past instant is today's
+  // equity minus everything that has happened since. The old forward sum needed a
+  // `drift` term to reconcile with the live balance, which silently assumed the
+  // event feed was complete back to the account's first day. It is not — settlements
+  // stop at SETTLEMENT_FLOOR while deposits go back months, so drift absorbed every
+  // missing trade and smeared it across the whole curve. Walking backwards needs the
+  // feed complete only from the range start forward, which is exactly what it is.
+  const balAll=new Array(comb.length);
+  let after=0;
+  for(let i=comb.length-1;i>=0;i--){
+    const e=comb[i];
+    balAll[i]={t:e.t,v:+(liveBal-after).toFixed(2),dep:e.dep,pnl:e.pnl};
+    after+=e.dep+e.pnl;
+  }
 
   let series,color,baseVal;
   if(mode==='pnl'){
@@ -958,20 +968,18 @@ function render(d){
   // actually earned on, so a deposit resets the base for later trades but is never
   // itself counted as a gain. Dividing range P&L by a single balance would break the
   // other way: an account funded mid-range shows a huge percent off a tiny base.
-  let walk=0, twr=1, chained=false, skipped=false;
-  for(const e of comb){
-    const before=walk+drift;
-    walk+=e.dep+e.pnl;
-    if(e.t<cut||!e.pnl) continue;
+  let twr=1, chained=false, skipped=false;
+  for(let i=0;i<balAll.length;i++){
+    const b=balAll[i];
+    if(b.t<cut||!b.pnl) continue;
+    const before=+(b.v-b.dep-b.pnl).toFixed(2);   // balance the trade was made on
     if(before<=0){ skipped=true; continue; }
-    twr*=1+e.pnl/before; chained=true;
+    twr*=1+b.pnl/before; chained=true;
   }
-  // A non-positive implied balance means the reconstruction is missing something
-  // (a withdrawal, or history older than the settlement floor). Chaining the rest
-  // would quietly report a return computed off a subset, so report nothing.
-  // drift is the capital that existed before the reconstruction starts; exactly 0
-  // is legitimate (account funded inside the window), negative is not.
-  const ret=(chained&&!skipped&&drift>=-0.01)?(twr-1)*100:null;
+  // A non-positive balance before a trade means the feed is missing something a
+  // withdrawal, most likely. Chaining the rest would quietly report a return
+  // computed off a subset, so report nothing instead.
+  const ret=(chained&&!skipped)?(twr-1)*100:null;
   const openFee=(d.positions||[]).reduce((a,p)=>a+(+p.fee||0),0);
   showRecon(reconcile(liveBal,settAll,deps,openFee), liveBal, ret===null);
   const retTx=ret==null?'':(ret>=0?'+':'-')+Math.abs(ret).toFixed(2)+'%';
