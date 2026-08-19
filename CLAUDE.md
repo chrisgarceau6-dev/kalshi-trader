@@ -280,6 +280,17 @@ capital before it, or a negative implied start (a withdrawal, or history older t
 `SETTLEMENT_FLOOR`). The ALL range floors at Aug 1, so it is labelled "Since Aug 1"; it
 is not all-time and must not be called that.
 
+**Reconciliation banner.** Nothing in the API proves that deposits + settlements
+explain every dollar the account moved: withdrawals have no feed, and history older
+than `SETTLEMENT_FLOOR` is simply absent. Both vanish into `drift`, the term the whole
+curve is anchored on. So the page samples equity into `localStorage` each refresh and
+compares the change against what the event feed says should have changed; a gap beyond
+`max($2, 0.25%)` raises an amber banner naming the amount and the time. Entry fees are
+tracked explicitly (charged at fill, booked at settlement) rather than absorbed into the
+tolerance. The banner also fires whenever the percent is suppressed. It is per-device —
+localStorage — so a first visit on a new device establishes a baseline and reports
+nothing.
+
 **Position-card semantics — do not regress these.** "If win" is *profit*
 (`contracts x (1 - entry) - fee`, ~$6.50), **not** gross settlement (`contracts x $1`,
 ~$81) — that bug overstated upside >10x. "At risk" is cost basis from fills. The card
