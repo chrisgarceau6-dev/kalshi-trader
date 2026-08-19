@@ -23,3 +23,7 @@ venv/
 __pycache__/
 *.pyc
 data/.btc_spot_cache.json
+
+# regenerated API dumps — 69MB of them, rebuild with fetch_programs.py
+research/kalshi_incentives/*.json
+research/kalshi_incentives/.claude-flow/
