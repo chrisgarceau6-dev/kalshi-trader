@@ -266,6 +266,20 @@ chromeless from the home screen. Responsive: 620px phone column, 1280px desktop 
 6-across stats and positions/trades side by side. Any chart work happens in the
 `HTML` string in `kalshi_dashboard.py`; keep the phone breakpoint untouched.
 
+**Balance and percent semantics — do not regress these.** The hero and the balance
+line are anchored on **equity (cash + open position cost)**, not `/portfolio/balance`.
+Cash excludes money tied up in open positions, and since the curve is reconstructed
+backwards from the live figure, anchoring on cash back-dated that hole across the whole
+range: implied starting capital came out low by exactly the open cost and every chained
+return was inflated (61.02% vs a true 48.16% on the regression scenario). The balance
+line also counts **every** settlement, not just 15M ones — non-strategy rows still moved
+cash, and dropping them shifted the curve by their total. Strategy stats (WR, trades,
+P&L tiles) filter on the `strat` flag instead. The percent is a time-weighted return and
+is **hidden entirely** when the reconstruction cannot be trusted — a settlement with no
+capital before it, or a negative implied start (a withdrawal, or history older than
+`SETTLEMENT_FLOOR`). The ALL range floors at Aug 1, so it is labelled "Since Aug 1"; it
+is not all-time and must not be called that.
+
 **Position-card semantics — do not regress these.** "If win" is *profit*
 (`contracts x (1 - entry) - fee`, ~$6.50), **not** gross settlement (`contracts x $1`,
 ~$81) — that bug overstated upside >10x. "At risk" is cost basis from fills. The card

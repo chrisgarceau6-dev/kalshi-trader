@@ -91,8 +91,11 @@ def get_settlements():
             if not batch: break
             pages += 1
             for s in batch:
-                if not s.get("ticker", "").split("-")[0].endswith("15M"):
-                    continue
+                # Non-15M rows are NOT skipped: they moved the account balance, so
+                # dropping them made the reconstructed balance curve wrong by their
+                # total. They are flagged instead, and the UI keeps them out of the
+                # strategy stats while still counting them in the balance line.
+                is_strat = s.get("ticker", "").split("-")[0].endswith("15M")
                 rev  = int(s.get("revenue", 0)) / 100.0
                 yc   = float(s.get("yes_total_cost_dollars", 0) or 0)
                 nc   = float(s.get("no_total_cost_dollars",  0) or 0)
@@ -101,6 +104,7 @@ def get_settlements():
                 out.append({
                     "ticker": s.get("ticker", ""),
                     "series": s.get("ticker", "").split("-")[0],
+                    "strat":  is_strat,
                     "side":   side,
                     "pnl":    round(rev - yc - nc - fee, 2),
                     "won":    rev > 0.01,
@@ -681,7 +685,9 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
 const $=id=>document.getElementById(id);
 const UP='#00D181', DOWN='#FF453A', BLUE='#4C8DFF';
 const AUG1=new Date('2026-08-01T04:00:00Z').getTime();
-const RLBL={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'All time'};
+// The ALL range floors at Aug 1 (Kalshi keeps settled markets ~67 days), so it is
+// not all time and must not be labelled as if it were.
+const RLBL={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'Since Aug 1'};
 let range='1D', mode='pnl', last=null, expanded=new Set(), pts=[], firstDraw=true, scrubbing=false;
 
 /* ── formatting ─────────────────────────────────────────────────── */
@@ -840,20 +846,28 @@ window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'
 /* ── render ─────────────────────────────────────────────────────── */
 function render(d){
   renderHealth(d.health);
-  const sett=d.settlements||[], cut=cutoff(range);
+  const settAll=d.settlements||[];
+  const sett=settAll.filter(s=>s.strat!==false);   // flag absent on older payloads
+  const cut=cutoff(range);
   const inR=sett.filter(s=>new Date(s.ts).getTime()>=cut);
 
   // blackout — server reads BLACKOUT_HOURS from the trader; null means unverified
   const hr=parseInt(et(new Date(),{hour:'numeric',hour12:false}))||0;
   $('blackout').style.display=(d.blackout||[]).includes(hr)?'block':'none';
 
-  // series
+  // series — strategy stats use 15M settlements only; the balance line uses every
+  // settlement, because anything that moved cash has to be in the reconstruction.
   let run=0; const pnlAll=sett.map(s=>{run+=s.pnl;return{t:new Date(s.ts).getTime(),v:run};});
   const deps=(d.deposits||[]).map(x=>({t:new Date(x.ts).getTime(),dep:x.amount,pnl:0}));
-  const trs=sett.map(x=>({t:new Date(x.ts).getTime(),dep:0,pnl:x.pnl}));
+  const trs=settAll.map(x=>({t:new Date(x.ts).getTime(),dep:0,pnl:x.pnl}));
   const comb=deps.concat(trs).sort((a,b)=>a.t-b.t);
   let rb=0; const balAll=comb.map(e=>{rb+=e.dep+e.pnl;return{t:e.t,v:+rb.toFixed(2),dep:e.dep,pnl:e.pnl};});
-  const liveBal=d.balance||0;
+  // Anchor on EQUITY, not cash. /portfolio/balance excludes money tied up in open
+  // positions, so anchoring on it back-dated that hole across the whole curve: the
+  // implied starting capital came out low by exactly the open cost, and every
+  // chained return was inflated by the same error (101.6% vs 74.8% on a test case).
+  const openCost=(d.positions||[]).reduce((a,p)=>a+(+p.cost||0),0);
+  const liveBal=(d.balance||0)+openCost;
   const drift=balAll.length?+(liveBal-balAll[balAll.length-1].v).toFixed(2):0;
   balAll.forEach(x=>x.v=+(x.v+drift).toFixed(2));
 
@@ -884,14 +898,20 @@ function render(d){
   // actually earned on, so a deposit resets the base for later trades but is never
   // itself counted as a gain. Dividing range P&L by a single balance would break the
   // other way: an account funded mid-range shows a huge percent off a tiny base.
-  let walk=0, twr=1, chained=false;
+  let walk=0, twr=1, chained=false, skipped=false;
   for(const e of comb){
     const before=walk+drift;
     walk+=e.dep+e.pnl;
-    if(e.t<cut||!e.pnl||before<=0) continue;
+    if(e.t<cut||!e.pnl) continue;
+    if(before<=0){ skipped=true; continue; }
     twr*=1+e.pnl/before; chained=true;
   }
-  const ret=chained?(twr-1)*100:null;
+  // A non-positive implied balance means the reconstruction is missing something
+  // (a withdrawal, or history older than the settlement floor). Chaining the rest
+  // would quietly report a return computed off a subset, so report nothing.
+  // drift is the capital that existed before the reconstruction starts; exactly 0
+  // is legitimate (account funded inside the window), negative is not.
+  const ret=(chained&&!skipped&&drift>=-0.01)?(twr-1)*100:null;
   const retTx=ret==null?'':(ret>=0?'+':'-')+Math.abs(ret).toFixed(2)+'%';
 
   if(mode==='bal'){
@@ -900,8 +920,11 @@ function render(d){
     tween(bal,liveBal,v=>money(v));
     const delta=series.length?series[series.length-1].v-series[0].v:0;
     chg.className='hero-chg num '+cls(delta);
+    const notes=[RLBL[range]];
+    if(deps.some(x=>x.t>=cut)) notes.push('incl. deposits');
+    if(openCost>0) notes.push(money(openCost)+' in open positions');
     chg.innerHTML='<span class="arrow">'+(delta>=0?'▲':'▼')+'</span>'+signed(delta)+
-      ' <span class="chg-sub">'+RLBL[range]+(deps.some(x=>x.t>=cut)?' · incl. deposits':'')+'</span>';
+      ' <span class="chg-sub">'+notes.join(' · ')+'</span>';
   }else{
     $('heroLbl').textContent=RLBL[range]+' P&L';
     bal.className='hero-bal num '+cls(rangePnl);
@@ -946,7 +969,10 @@ function render(d){
       const frac=Math.max(0,Math.min(1,s/600))*100;   // markets open ~600s before close
       const col=ms<=0?'#7C828C':s<120?DOWN:s<300?'#FFA318':UP;
       const spread=(p.ask!=null&&p.bid!=null)?(p.ask-p.bid)+'¢':'—';
-      const mv=p.bid!=null?'$'+(c*p.bid/100).toFixed(2):(locked?'$'+c.toFixed(2):'—');
+      // No bid means no mark. The old fallback showed contracts x $1 in the last two
+      // minutes, which asserts the position wins — it is exactly when that is not
+      // guaranteed. Unknown is shown as unknown.
+      const mv=p.bid!=null?'$'+(c*p.bid/100).toFixed(2):'—';
       // Profit if this settles in your favour, NOT gross settlement value: you paid
       // ~92c for a $1 contract, so the upside is the ~8c spread, not the whole dollar.
       const win=p.entry!=null?(c*(100-p.entry)/100-(p.fee||0)):null;
