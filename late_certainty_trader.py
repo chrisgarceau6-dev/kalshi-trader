@@ -131,7 +131,12 @@ SERIES_LIST     = [
 # Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
 # KXBTCD/KXETHD: hourly crypto price markets, 188 strikes/close — multi-strike candidate.
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
-SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH", "KXWTI15M"]
+# GOLD/SILVER added 2026-08-19 alongside WTI: all three are judged together at ~1,000
+# trades, so all three need the same evidence. The archive alone is not the same
+# thing — it sees every candle, while this records only what the live poller could
+# actually have caught (Invariant 6).
+SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH",
+                   "KXWTI15M", "KXGOLD15M", "KXSILVER15M"]
 
 STRATEGY_VERSION = "v5.16"  # NO side re-enabled (YES_ONLY=False), side-aware book depth
 
