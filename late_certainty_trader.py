@@ -160,6 +160,18 @@ LIMIT_BUFFER    = 2      # bid = ask + 2c (accepts tiny slippage, rejects worse)
 # — and only those are worth waking someone up for.
 CRASH_FILL_TOLERANCE = 3
 
+# SHADOW ONLY — survivor re-entry (2026-08-18). A contract seen at 92-93c with 480-600s
+# left and still alive at 94-96c with 150-240s left settled +3.95pp in-sample and
+# +4.88pp on a time holdout. Not tradeable yet: the holdout is 41 observations with
+# ~zero losses, so the rule-of-three floor is WR >= 92.7% against a 95.2c break-even —
+# the pretty CI is an artifact of a near-100% win rate, not evidence. Revisit at n~500.
+# Note this is the mirror image of the live gates, which buy EARLY (6-10 min out, where
+# the edge is +1.27pp) and treat sub-240s entries as negative (-0.57pp).
+SURVIVOR_NOW    = (94, 96)
+SURVIVOR_EARLY  = (92, 93)
+SURVIVOR_SECS   = (150, 240)
+SURVIVOR_LOOKBACK = (480, 600)
+
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
@@ -720,6 +732,74 @@ def _prior_k_candle_asks(ticker, series, side, k):
         except (KeyError, ValueError, TypeError, InvalidOperation):
             return None
     return out
+
+
+_SURVIVOR_SEEN = set()
+
+
+def _candle_ask_at(ticker, series, side, close_ts, lo_secs, hi_secs):
+    """The side's ask from the 1-min candle sitting lo..hi seconds before close.
+
+    Same mirroring as the prior-candle gate: a NO ask is 100 minus the YES bid.
+    Returns None on any error — this feeds shadow logging only, never an order.
+    """
+    code, r = kalshi_get(
+        f"/series/{series}/markets/{ticker}/candlesticks",
+        {"start_ts": close_ts - hi_secs - 120, "end_ts": close_ts - lo_secs,
+         "period_interval": 1},
+    )
+    if code != 200:
+        return None
+    best, best_gap = None, None
+    mid = (lo_secs + hi_secs) / 2
+    for c in r.get("candlesticks", []):
+        secs = close_ts - c.get("end_period_ts", 0)
+        if not (lo_secs <= secs <= hi_secs):
+            continue
+        try:
+            if side == "yes":
+                ask = price_cents(c["yes_ask"]["close_dollars"])
+            else:
+                yes_bid = price_cents(c["yes_bid"]["close_dollars"])
+                ask = (Decimal("100") - yes_bid) if yes_bid and yes_bid > 0 else None
+        except (KeyError, TypeError, ValueError, InvalidOperation):
+            continue
+        if ask is None:
+            continue
+        gap = abs(secs - mid)
+        if best_gap is None or gap < best_gap:
+            best, best_gap = ask, gap
+    return best
+
+
+def shadow_survivor(market, series):
+    """Log 94-96c contracts that were 92-93c six minutes earlier. Trades nothing.
+
+    Deliberately runs after every order attempt in the cycle: it costs a candlestick
+    call, and nothing in the shadow path may sit between a price check and an order.
+    """
+    ticker = market.get("ticker", "")
+    secs_left = market.get("_secs_left", 0)
+    if not (SURVIVOR_SECS[0] <= secs_left <= SURVIVOR_SECS[1]):
+        return
+    try:
+        close_ts = int(datetime.fromisoformat(
+            market.get("close_time", "").replace("Z", "+00:00")).timestamp())
+    except (AttributeError, TypeError, ValueError):
+        return
+    for side in ("yes", "no"):
+        key = (ticker, side)
+        if key in _SURVIVOR_SEEN:
+            continue
+        ask = price_cents(market.get(f"{side}_ask_dollars"))
+        if ask is None or not (SURVIVOR_NOW[0] <= ask <= SURVIVOR_NOW[1]):
+            continue
+        early = _candle_ask_at(ticker, series, side, close_ts, *SURVIVOR_LOOKBACK)
+        if early is None or not (SURVIVOR_EARLY[0] <= early <= SURVIVOR_EARLY[1]):
+            continue
+        _SURVIVOR_SEEN.add(key)
+        log(f"  [SHADOW:SURVIVOR94] {ticker}  {side.upper()}  now={ask}c  "
+            f"early={early}c  {secs_left:.0f}s left")
 
 
 def try_trade(
@@ -1323,10 +1403,12 @@ def run_once(dry_run=False):
         log("  WARNING: cannot prove live positions/resting orders — skipping this cycle")
         return
     n_scanned, n_tradeable = 0, 0
+    scanned = []
     for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
+            scanned.append((series, m))
             before = len(state.get("positions", {}))
             try_trade(
                 m,
@@ -1338,6 +1420,14 @@ def run_once(dry_run=False):
             )
             if len(state.get("positions", {})) > before:
                 n_tradeable += 1
+
+    # Survivor re-entry candidate — logged, never traded. Reuses the markets already
+    # fetched above, and runs only after every order attempt is done.
+    for series, m in scanned:
+        try:
+            shadow_survivor(m, series)
+        except Exception as exc:       # a shadow log must never break a trading cycle
+            log(f"  [SHADOW:SURVIVOR94] skipped {m.get('ticker','')}: {exc}")
 
     # Shadow scan — no orders placed, just logging for future re-entry analysis
     for series in SHADOW_SERIES:
