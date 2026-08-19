@@ -18,6 +18,11 @@ on:
         description: "Archive the last N complete days instead (skips existing)."
         required: false
         default: ""
+      force:
+        description: "Re-archive days that already exist. Needed after adding a series — otherwise backfill skips every day that has a file and captures nothing."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -40,10 +45,12 @@ jobs:
           KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
         run: |
+          FORCE=""
+          if [ "${{ inputs.force }}" = "true" ]; then FORCE="--force"; fi
           if [ -n "${{ inputs.backfill }}" ]; then
-            python3 scripts/archive_candles.py --backfill ${{ inputs.backfill }}
+            python3 scripts/archive_candles.py --backfill ${{ inputs.backfill }} $FORCE
           elif [ -n "${{ inputs.date }}" ]; then
-            python3 scripts/archive_candles.py ${{ inputs.date }}
+            python3 scripts/archive_candles.py ${{ inputs.date }} $FORCE
           else
             python3 scripts/archive_candles.py
           fi
