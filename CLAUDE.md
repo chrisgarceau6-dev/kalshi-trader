@@ -112,6 +112,9 @@ to settlement.
 
 **Series:** KXBTC15M, KXETH15M, KXSOL15M, KXDOGE15M, KXBNB15M, KXXRP15M.
 **KXWTI15M paused 2026-08-19** — shadow-logged, still archived, see §7.
+GOLD/SILVER are shadow-logged and archived too, so all three carry the same evidence
+when they are judged together. The archive is not a substitute: it sees every candle,
+the shadow log only what the live poller could have caught (Invariant 6).
 
 **Order flow:** live-position refetch → fresh-ask refetch → prior-candle gates →
 **book last look** (best offer + depth, one read, side-aware) → GTC limit at
