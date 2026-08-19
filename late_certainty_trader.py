@@ -212,8 +212,16 @@ def compute_bet_dollars(balance):
 
 
 def compute_daily_loss_limit(bet_dollars):
-    """Trailing-24h realized-loss floor scaled to the configured bet size."""
-    return max(30, bet_dollars * 4)
+    """Trailing-24h realized-loss floor, never tighter than the validated $300.
+
+    The floor matters: the control was validated at $300 with $75 bets (fires ~7 days
+    in 68; the trades it blocks run 90.51% WR / -$1.62 per trade, worth +$802 over 68
+    days). Scaling purely off bet size meant cutting the bet to $50 on 2026-08-19
+    silently retightened the threshold to $200 — a level nothing has ever tested, and
+    which halted the trader for most of a day. Restoring $300 returns the validated
+    dollar level; the bet_dollars term still scales it upward for larger sizing.
+    """
+    return max(300, bet_dollars * 4)
 
 ROLLING_PNL_SECONDS = 86400  # trailing 24h window avoids double-limit at midnight UTC
 

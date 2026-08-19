@@ -173,7 +173,12 @@ stop; $100 → 24.6%. $100 buys +$372 of profit for -$386 of extra drawdown. Rej
 The old "200 settlements ≥93% WR" gate was met at exactly 93.0% but tested the wrong
 quantity — break-even is ~92%, so it authorised leverage on a 1pp margin.
 
-**Daily loss limit ($300, rolling 24h) — validated, do NOT loosen.** Fires ~7 days in
+**Daily loss limit ($300, rolling 24h) — validated, do NOT loosen.** The formula is
+`max(300, bet x 4)` as of 2026-08-19: a bare `bet x 4` meant cutting the bet to $50
+silently retightened the threshold to **$200**, a level nothing has tested, and it
+held the trader halted for most of 2026-08-19. The $300 floor is the level the
+evidence below actually refers to. Note halting does not pause data collection —
+`archive_candles.py` runs regardless; only live fill evidence stops. Fires ~7 days in
 68 at full capture. The trades it blocks are genuinely bad: **90.51% WR, -$1.62/trade
 over 495 trades**, against ~92% break-even — blocking them is worth **+$802** over 68
 days. Mechanism: the 7 series settle together, so a -$300 day is a whipsaw regime and
