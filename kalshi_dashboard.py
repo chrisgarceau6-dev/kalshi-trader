@@ -924,7 +924,15 @@ function render(d){
   // Anchor on EQUITY, not cash: /portfolio/balance excludes money tied up in open
   // positions, and the curve is built from the live figure, so anchoring on cash
   // back-dated that hole across the whole range.
-  const openCost=(d.positions||[]).reduce((a,p)=>a+(+p.cost||0),0);
+  // Cost basis comes from the fills API and can come back empty; entry x contracts
+  // is the same number from the position record. Falling through to 0 would
+  // understate equity by the whole open position and re-inflate every percentage.
+  const openCost=(d.positions||[]).reduce((a,p)=>{
+    const c=+p.cost||0;
+    if(c>0) return a+c;
+    const e=+p.entry||0, n=+p.contracts||0;
+    return a+(e>0&&n>0?e/100*n:0);
+  },0);
   const liveBal=(d.balance||0)+openCost;
   // Then walk BACKWARDS from today: the balance at any past instant is today's
   // equity minus everything that has happened since. The old forward sum needed a
@@ -968,18 +976,24 @@ function render(d){
   // actually earned on, so a deposit resets the base for later trades but is never
   // itself counted as a gain. Dividing range P&L by a single balance would break the
   // other way: an account funded mid-range shows a huge percent off a tiny base.
-  let twr=1, chained=false, skipped=false;
-  for(let i=0;i<balAll.length;i++){
-    const b=balAll[i];
-    if(b.t<cut||!b.pnl) continue;
-    const before=+(b.v-b.dep-b.pnl).toFixed(2);   // balance the trade was made on
-    if(before<=0){ skipped=true; continue; }
-    twr*=1+b.pnl/before; chained=true;
+  // Return on the capital actually at work (modified Dietz): range P&L over the
+  // opening balance plus each in-range deposit weighted by how long it was invested.
+  //
+  // NOT a chained per-trade TWR. Chaining ~1,400 trades makes the answer depend
+  // almost entirely on what balance the reconstruction believes existed at the
+  // start, and on 2026-08-18 that produced "+169.42%" next to $221.98 of P&L: the
+  // real opening balance was $367.06 (confirmed against the trader's own logged
+  // balance at 2026-07-31T23:59Z), and the correct figure is +31.05%.
+  const firstIn=balAll.find(b=>b.t>=cut);
+  const startBal=firstIn?+(firstIn.v-firstIn.dep-firstIn.pnl).toFixed(2):liveBal;
+  const nowT=Date.now(), rspan=Math.max(1,nowT-cut);
+  let capital=startBal;
+  for(const x of deps){
+    if(x.t>=cut) capital+=x.dep*Math.max(0,Math.min(1,(nowT-x.t)/rspan));
   }
-  // A non-positive balance before a trade means the feed is missing something a
-  // withdrawal, most likely. Chaining the rest would quietly report a return
-  // computed off a subset, so report nothing instead.
-  const ret=(chained&&!skipped)?(twr-1)*100:null;
+  // A non-positive opening balance means the feed is missing something (a
+  // withdrawal, most likely). Report nothing rather than a number off a bad base.
+  const ret=(startBal>0&&capital>0)?rangePnl/capital*100:null;
   const openFee=(d.positions||[]).reduce((a,p)=>a+(+p.fee||0),0);
   showRecon(reconcile(liveBal,settAll,deps,openFee), liveBal, ret===null);
   const retTx=ret==null?'':(ret>=0?'+':'-')+Math.abs(ret).toFixed(2)+'%';
@@ -1001,7 +1015,8 @@ function render(d){
     tween(bal,rangePnl,v=>signed(v));
     chg.className='hero-chg num '+cls(rangePnl);
     chg.innerHTML=(ret==null?'':'<span class="arrow">'+(ret>=0?'▲':'▼')+'</span>'+retTx+' ')+
-      '<span class="chg-sub">'+money(liveBal)+' portfolio · '+inR.length+' trades</span>';
+      '<span class="chg-sub">'+(ret==null?'':'on '+money(capital)+' avg capital · ')+
+      money(liveBal)+' portfolio · '+inR.length+' trades</span>';
   }
 
   // stats

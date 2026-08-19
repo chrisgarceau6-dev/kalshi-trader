@@ -274,8 +274,10 @@ range: implied starting capital came out low by exactly the open cost and every 
 return was inflated (61.02% vs a true 48.16% on the regression scenario). The balance
 line also counts **every** settlement, not just 15M ones — non-strategy rows still moved
 cash, and dropping them shifted the curve by their total. Strategy stats (WR, trades,
-P&L tiles) filter on the `strat` flag instead. The percent is a time-weighted return and
-is **hidden entirely** when the reconstruction cannot be trusted — a settlement with no
+P&L tiles) filter on the `strat` flag instead. The percent is **return on the capital actually
+at work** — range P&L over the opening balance plus each in-range deposit weighted by
+how long it was invested (modified Dietz) — and is **hidden entirely** when the
+reconstruction cannot be trusted — a settlement with no
 capital before it, or a negative implied start (a withdrawal, or history older than
 `SETTLEMENT_FLOOR`). The ALL range floors at Aug 1, so it is labelled "Since Aug 1"; it
 is not all-time and must not be called that.
@@ -289,6 +291,19 @@ account), so drift absorbed every missing trade and smeared it across the curve;
 real data it went negative and suppressed the percent entirely. Walking backwards needs
 the feed complete only from the range start forward, which it is. Verified: truncating
 months of early settlements does not move the reported return by 1e-9.
+
+**Never chain per-trade returns here.** A time-weighted return chained across ~1,400
+trades depends almost entirely on the balance the reconstruction believes existed at
+the range start, so a bad anchor is amplified rather than damped: on 2026-08-18 the
+page read **+169.42% next to $221.98 of P&L**. Ground truth for that window, from three
+independent sources: the trader logged **$367.06** at 2026-07-31T23:59Z (Actions run
+30674337025) one minute before the Aug 1 floor; `/api/data` showed $1,380.54 cash with
+an empty positions list; the two in-range deposits were $300.86 and $490.00. Those give
+P&L = 1380.54 − 367.06 − 790.86 = **$222.62**, against **$221.98** summed independently
+from the settlement feed nine minutes later — so the feed is complete and there were no
+withdrawals. Correct answer: **+31.05%** on $715.01 of capital at work. The reconstruction
+reproduces the $367.06 anchor to the cent; `scratchpad/real_check.js` pattern is worth
+rebuilding if this is ever touched again.
 
 **Reconciliation banner.** Nothing in the API proves that deposits + settlements
 explain every dollar the account moved: withdrawals have no feed, and history older
