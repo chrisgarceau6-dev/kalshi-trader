@@ -5,7 +5,7 @@ STRATEGY:
   Buy YES at a 90-93 cent ask with 150-600 seconds remaining when each of
   the two preceding 1-minute YES asks was at least 75 cents. Hold through
   settlement. ET hour 13 (1pm ET) is excluded. Live series are the six 15-minute
-  crypto markets plus KXWTI15M; excluded candidates are shadow-logged only.
+  crypto markets; excluded candidates are shadow-logged only.
 
 BET SIZING:
   Flat $75 principal-risk budget per order. Contract count is sized from
@@ -108,11 +108,14 @@ LOG_FILE   = BASE / "certainty.log"
 SERIES_LIST     = [
     # 15m crypto series — v5.7 OOS-validated config:
     "KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
-    # WTI crude oil — added v5.8 (2026-08-13):
-    # 13d backtest: 94.5% WR full, 95.5% OOS, +$1.75/trade OOS, ~13/day → +$14/day expected.
-    # Gold and silver backtested same day — both negative OOS. Not added.
-    "KXWTI15M",
     # Explicitly EXCLUDED:
+    # - KXWTI15M — PAUSED 2026-08-19, was added v5.8 on a 13-day backtest (+$1.75/trade
+    #   OOS). Over its whole life it now measures -$0.33/trade on 290 trades, so the
+    #   evidence that justified adding it inverted. It launched 2026-07-31, the same day
+    #   as GOLD and SILVER, which are excluded on the same thin sample — trading one and
+    #   not the others was an accident of timing, not a decision. Paused, not condemned:
+    #   -$0.33 is ~1.1 SE from break-even and proves nothing either way. The archiver
+    #   still collects it; revisit all three together at ~1,000 trades each.
     # - KXHYPE15M — live break-even WR 96.6% (avg loss $37), actual 95% → shadow-testing
     # - KXNEAR15M — live break-even WR 95.5% (avg loss $30), actual 92% → EV-negative (2026-08-09)
     # - KXZEC15M  — OOS test still -$3.88 (WR 93.9%)
@@ -128,7 +131,7 @@ SERIES_LIST     = [
 # Shadow trades are logged with [SHADOW:reason] prefix — no orders placed.
 # KXBTCD/KXETHD: hourly crypto price markets, 188 strikes/close — multi-strike candidate.
 # KXWTIH: reverted to shadow — n=32 OOS insufficient, regime break, implementation bug.
-SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH"]
+SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH", "KXWTI15M"]
 
 STRATEGY_VERSION = "v5.16"  # NO side re-enabled (YES_ONLY=False), side-aware book depth
 
