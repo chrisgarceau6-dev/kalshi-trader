@@ -95,7 +95,7 @@ to settlement.
 
 | Parameter | Value | Re-check |
 |---|---|---|
-| `FLAT_BET_DOLLARS` | 75 | balance-gated, see §4 |
+| `FLAT_BET_DOLLARS` | 50 | balance-gated, see §4 |
 | `MIN_ASK_CENTS` / `MAX_ASK_CENTS` | 90 / 93 | `--sweep min_ask 88 89 90 91` |
 | `MIN_SECS_LEFT` / `MAX_SECS_LEFT` | 150 / 600 | `--sweep min_secs 100 150 200 250` |
 | `PRIOR_MIN_CENTS` / `PRIOR_LOOKBACK` | 75 / 2 | `--sweep prior_min 70 75 80 85` |
@@ -154,7 +154,16 @@ higher at quoted fills and worse at one tick: at 96¢ you win 4¢, so a 1¢ slip
 25% of gross profit versus 10% at 90¢. Widening spends your best asset for a backtest
 number. **Do not raise it without re-measuring fill quality first.**
 
-**Position sizing — $75 until balance ≥ $2,200.** Bet size is a risk decision, never a
+**Position sizing — $50 as of 2026-08-19 (was $75).** The rule below is symmetric and
+it cut, rather than raised: bet size must be ≤4.6% of balance. After a -$345 stretch the
+balance was $1,088.87, where $75 is **6.9%** — above the design ratio — and $50 is 4.6%
+exactly. Room to the $650 stop went from 6 losses to 9. Cost: the backtest edge scales
+linearly, +$1.00/trade → +$0.67. Side effect worth knowing: `compute_daily_loss_limit`
+is `bet x 4`, so the daily halt tightened from $300 to **$200** automatically. Raise back
+to $75 when balance ≥ $1,630 (the ratio that held at $1,631), not before, and never on a
+win-rate argument.
+
+**Original sizing note — $75 until balance ≥ $2,200.** Bet size is a risk decision, never a
 win-rate decision. Rule: raise only when the new size is ≤4.6% of balance (the ratio
 $75 held at $1,631). Block bootstrap over 60d: $75 → 13.3% chance of touching the $650
 stop; $100 → 24.6%. $100 buys +$372 of profit for -$386 of extra drawdown. Rejected.

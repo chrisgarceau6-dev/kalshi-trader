@@ -196,7 +196,7 @@ SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
 # Flat $75 principal-risk budget per order; fees are additional.
-FLAT_BET_DOLLARS = 75
+FLAT_BET_DOLLARS = 50
 
 
 def compute_bet_dollars(balance):
