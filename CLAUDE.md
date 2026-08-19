@@ -280,6 +280,16 @@ capital before it, or a negative implied start (a withdrawal, or history older t
 `SETTLEMENT_FLOOR`). The ALL range floors at Aug 1, so it is labelled "Since Aug 1"; it
 is not all-time and must not be called that.
 
+**The balance curve is anchored at the present and walked backwards.** The balance at
+any past instant is today's equity minus everything that has happened since. The
+earlier forward-sum needed a `drift` term to reconcile with the live balance, which
+silently assumed the event feed reached back to the account's first day — it does not.
+Settlements stop at `SETTLEMENT_FLOOR` while deposits go back months (Feb 2026 on this
+account), so drift absorbed every missing trade and smeared it across the curve; with
+real data it went negative and suppressed the percent entirely. Walking backwards needs
+the feed complete only from the range start forward, which it is. Verified: truncating
+months of early settlements does not move the reported return by 1e-9.
+
 **Reconciliation banner.** Nothing in the API proves that deposits + settlements
 explain every dollar the account moved: withdrawals have no feed, and history older
 than `SETTLEMENT_FLOOR` is simply absent. Both vanish into `drift`, the term the whole
