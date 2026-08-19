@@ -110,8 +110,8 @@ to settlement.
 | `EDGE_DEGRADE_THRESHOLD` | 0.84 | catastrophic breaker only |
 | `BLACKOUT_HOURS` | `set()` | — |
 
-**Series:** KXBTC15M, KXETH15M, KXSOL15M, KXDOGE15M, KXBNB15M, KXXRP15M, KXWTI15M
-(WTI only exists from 2026-08-01 — it is new, not missing.)
+**Series:** KXBTC15M, KXETH15M, KXSOL15M, KXDOGE15M, KXBNB15M, KXXRP15M.
+**KXWTI15M paused 2026-08-19** — shadow-logged, still archived, see §7.
 
 **Order flow:** live-position refetch → fresh-ask refetch → prior-candle gates →
 **book last look** (best offer + depth, one read, side-aware) → GTC limit at
@@ -379,6 +379,9 @@ Each needs re-checking; none is settled.
 
 | Observation | Date | Status |
 |---|---|---|
+| WTI paused; Gold/Silver still out | Aug 19 | All three launched **2026-07-31** (verified: 0 markets pre-July, 24 on Jul 31). WTI was added v5.8 on a 13-day backtest (+$1.75/tr OOS); over its whole life it measures **-$0.33/tr on 290 trades** — the justifying evidence inverted. Silver (+$0.31/tr) was *better* than WTI while excluded, so trading one and not the others was an accident of timing. Paused, not condemned: -$0.33 is ~1.1 SE from break-even. Revisit all three at ~1,000 trades each, together, one standard. |
+| SOL is fine — August was noise | Aug 19 | Full archive: **1,810 trades, 93.15% WR, +$0.41/tr**. August alone reads -$0.12/tr. Picking any 18-day window makes some series look broken; this is exactly what Invariant 8 warns about. Do not act on single-window series stats. |
+| Gold/Silver first real read | Aug 19 | 15 trading days, live gates, no slippage, no concurrency cap: **GOLD 357 trades 89.92% WR -$1.28/tr** (worst in the book), **SILVER 369 trades 92.95% WR +$0.31/tr**. Neither is established (~1.1-1.6 SE). Metals trade weekdays only — ~5/7 the days of crypto, so per-day comparisons mislead. Archived from 2026-08-01 onward. |
 | Edge by price: dies at 95¢ | Aug 18 | 88¢ **+1.42pp**, 91¢ +0.98, 92¢ +0.70, 93¢ +0.66, 94¢ +0.95 (all significant); 95-96¢ **+0.07pp — gone**. n=83,337 obs / 6,402 clusters. Independent support for the `MIN_ASK=89` lead. `python3 scripts/calibration.py` |
 | Entry timing: earlier is better | Aug 18 | Edge by time left: 100-150s **-1.26pp**, 150-240s -0.57, 360-480s **+1.27**, 480-600s +0.87. The 60s-average settlement is priced, possibly over-priced — late entries are not safer. `python3 scripts/calibration.py` |
 | Waiting for a better price loses | Aug 18 | A 90-91¢ contract at 8-10 min is **gone from the 88-96¢ band 85.8% of the time** by 3-4 min. Buying what is *still* 90-93¢ late: -3.31pp, **-$2.71/trade** — adversely selected. Buying early: +$0.58/trade. `python3 scripts/entry_timing.py` |
