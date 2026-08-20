@@ -22,7 +22,7 @@ KILL SWITCHES:
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, os, random, smtplib, time, urllib.request, urllib.error, uuid
+import argparse, base64, json, math, os, random, smtplib, time, urllib.request, urllib.error, uuid
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -178,6 +178,17 @@ CRASH_FILL_TOLERANCE = 3
 SURVIVOR_NOW    = (94, 96)
 SURVIVOR_EARLY  = (92, 93)
 SURVIVOR_SECS   = (150, 240)
+
+# SHADOW ONLY — adverse spot momentum (2026-08-20). Spot drifting TOWARD the strike in
+# the 3 minutes before entry predicts losses the Kalshi ask does not price. Blocked
+# bucket (m3 > +0.50) ran -$1.56/trade on n=569 over 70 days; difference vs kept trades
+# CI [-3.95, -0.75], P(worse)=1.000. Pre-registered, monotone in both windows, holds
+# across 5 of 6 series, both sides, all three months, and helps MORE at one tick of
+# slippage — so it is not a fill-quality artifact. Logged only: no gate, no order
+# effect. Confirm live before proposing a veto. research/perp_overlay/PREREG.md (H2);
+# reproduce with research/perp_overlay/s1_robustness.py.
+MOMENTUM_LOOKBACK   = 3    # minutes of spot move
+MOMENTUM_VOL_WINDOW = 60   # trailing 1-min returns for the vol normaliser
 SURVIVOR_LOOKBACK = (480, 600)
 
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
@@ -751,6 +762,8 @@ def _prior_k_candle_asks(ticker, series, side, k):
 
 
 _SURVIVOR_SEEN = set()
+_MOMENTUM_SEEN = set()
+_MOMENTUM_CACHE = {}
 
 
 def _candle_ask_at(ticker, series, side, close_ts, lo_secs, hi_secs):
@@ -816,6 +829,80 @@ def shadow_survivor(market, series):
         _SURVIVOR_SEEN.add(key)
         log(f"  [SHADOW:SURVIVOR94] {ticker}  {side.upper()}  now={ask}c  "
             f"early={early}c  {secs_left:.0f}s left")
+
+
+def _spot_momentum(series):
+    """(vol-normalised 3-min spot move, sigma) for a series, or None on any error.
+
+    One Coinbase call covers both the 3-minute move and the 60-minute vol. Cached per
+    wall-clock minute: a 240s job polls ~16 times but crosses only ~4 minute boundaries.
+    """
+    pair = COINBASE_PAIR.get(series)
+    if not pair:
+        return None
+    minute = int(time.time()) // 60
+    key = (series, minute)
+    if key in _MOMENTUM_CACHE:
+        return _MOMENTUM_CACHE[key]
+    end   = minute * 60
+    start = end - (MOMENTUM_VOL_WINDOW + 2) * 60
+    url = (f"https://api.exchange.coinbase.com/products/{pair}/candles"
+           f"?granularity=60&start={start}&end={end}")
+    req = urllib.request.Request(url, headers={"User-Agent": "kalshi-v5-filter/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return None
+    try:
+        px = {int(r[0]): float(r[4]) for r in data}   # bucket start -> close
+    except (IndexError, TypeError, ValueError):
+        return None
+    mins = sorted(px)
+    rets = [math.log(px[b] / px[a]) for a, b in zip(mins, mins[1:])
+            if b - a == 60 and px[a] > 0 and px[b] > 0]
+    if len(rets) < 20:
+        return None
+    mu    = sum(rets) / len(rets)
+    sigma = (sum((r - mu) ** 2 for r in rets) / (len(rets) - 1)) ** 0.5
+    back  = mins[-1] - MOMENTUM_LOOKBACK * 60
+    if sigma <= 0 or back not in px or px[back] <= 0:
+        return None
+    out = (math.log(px[mins[-1]] / px[back]) / (sigma * math.sqrt(MOMENTUM_LOOKBACK)),
+           sigma)
+    if len(_MOMENTUM_CACHE) < 64:      # short-lived process; keep the dict bounded
+        _MOMENTUM_CACHE[key] = out
+    return out
+
+
+def shadow_momentum(market, series):
+    """Log adverse spot momentum for markets sitting in the live entry band.
+
+    Trades nothing and gates nothing. Runs after every order attempt for the same
+    reason shadow_survivor does: it costs a Coinbase call, and nothing in the shadow
+    path may sit between a price check and an order.
+    """
+    ticker    = market.get("ticker", "")
+    secs_left = market.get("_secs_left", 0)
+    if not (MIN_SECS_LEFT <= secs_left <= MAX_SECS_LEFT):
+        return
+    pending = []
+    for side in ("yes", "no"):
+        ask = price_cents(market.get(f"{side}_ask_dollars"))
+        if (ask is not None and MIN_ASK_CENTS <= ask <= MAX_ASK_CENTS
+                and (ticker, side) not in _MOMENTUM_SEEN):
+            pending.append((side, ask))
+    if not pending:
+        return
+    got = _spot_momentum(series)
+    if got is None:
+        return                          # retried next poll; nothing marked seen
+    mom, sigma = got
+    for side, ask in pending:
+        _MOMENTUM_SEEN.add((ticker, side))
+        adverse = -mom if side == "yes" else mom
+        log(f"  [SHADOW:MOM3] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  "
+            f"m3={adverse:+.2f}  sigma={sigma * 1e4:.2f}bp")
 
 
 def try_trade(
@@ -1444,6 +1531,10 @@ def run_once(dry_run=False):
             shadow_survivor(m, series)
         except Exception as exc:       # a shadow log must never break a trading cycle
             log(f"  [SHADOW:SURVIVOR94] skipped {m.get('ticker','')}: {exc}")
+        try:
+            shadow_momentum(m, series)
+        except Exception as exc:
+            log(f"  [SHADOW:MOM3] skipped {m.get('ticker','')}: {exc}")
 
     # Shadow scan — no orders placed, just logging for future re-entry analysis
     for series in SHADOW_SERIES:
