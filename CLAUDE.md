@@ -406,9 +406,11 @@ Each needs re-checking; none is settled.
 | BRTI runs rich vs Coinbase | Aug 18 | Strike (a BRTI print) is **+0.96bp above** Coinbase at the same minute, sd 2.41bp, \|basis\|>10bp in 0.5% of windows. ~12% of a typical 15-min move — it biases every near-strike call the bot makes on Coinbase data. `python3 scripts/calibration.py` |
 | Volume is no longer the constraint | Aug 18 | Cumulative counter ran 7 → 138 across Aug 18: **~140 trades/day live vs 121/day modelled**. The 27% capture rate in Invariant 6 is pre-v5.16 and stale; live now trades *more* than the backtest universe, at lower WR — suspect the marginal extra trades. |
 | Config sweeps: nothing established | Aug 18 | `min_ask`=89 +$481 P=0.79 · `max_conc`=4 +$437 P=0.65 · `max_ask`=94 +$427 P=0.67 (at 0.105¢ slip) · `min_secs` flat. Four independent levers, none significant — consistent with Invariant 2 that the config is near-optimal. |
-| 15M vs hourly parity — untested | Aug 18 | Both settle on the identical BRTI print at the top of the hour, so the KXBTCD ladder interpolated at the 15M strike is a second price for the same event. They only coexist in the final ~10 min, so it needs a sampler firing at :50. Nothing measured yet. |
+| 15M vs hourly parity — still untested | Aug 20 | Both settle on the identical BRTI print at the top of the hour, so the KXBTCD ladder interpolated at the 15M strike is a second price for the same event. They only coexist in the final ~10 min, so it needs a sampler firing at :50. **Trading the hourly ladder on its own merits is now refuted (row above); the parity/relative-value question is separate and still unmeasured.** |
 | Crash fills are **+EV so far**, not the leak | Aug 18 | 12 fills landed below the band on Aug 18 and settled **11W/1L, +$90.63** (avg +$7.55/trade vs the ~$6.50 target). The two deep ones netted -$6.48 (-$47.48 DOGE @57.6¢, +$41.00 BTC @47¢). Cheaper entry pays more when it wins. Do **not** auto-exit them on instinct; n=12. |
-| The actual leak is the core, not the fills | Aug 18 | v5.16 sits at **120/135 = 88.9% WR, -$236.20** against a ~92% break-even. Aug 18 alone: about **-$164 from in-band fills** while crash fills added +$90.63. Unexplained — needs its own investigation before any parameter is touched. |
+| ~~The actual leak is the core~~ — Aug 18 was just a bad day | Aug 20 | **Downgraded from "unexplained leak".** v5.16's 120/135 = 88.9% WR / -$236.20 read as edge decay. It was not: the archive says **Aug 18 was the single worst day in 68 days** — the modelled universe at live gates lost **-$338 (-$2.01/tr, 88.69% WR)** that day, and live actually *beat* it (-$7 on 139 trades). Nothing to investigate. `python3 scripts/backtest.py --since 2026-08-18 --until 2026-08-18` |
+| Adverse spot momentum predicts losses | Aug 20 | **Best-supported edge lead in the file; shadow-logged as `[SHADOW:MOM3]` on 2026-08-20, not gated.** Spot drifting toward the strike in the 3 min before entry: `m3 = -sign*ln(S/S₋₃ₘ)/(σ√3)`, σ = sd of trailing 60 one-min returns. Blocked bucket (m3 > +0.50) ran **-$1.56/tr on n=569**, difference vs kept **CI [-3.95, -0.75], P(worse)=1.000**. Pre-registered, monotone in both windows, 5 of 6 series, both sides, all 3 months. Worth **+$10-14/day** at $50 flat (~+12%), blocking ~8% of volume. Critically it helps **more** at one tick of slippage, so it is not a fill artifact. m3 > +0.25 **fails OOS** — do not over-tighten. `python3 research/perp_overlay/s1_robustness.py` |
+| Hourly crypto ladders (KXBTCD/KXETHD) — no edge | Aug 20 | **Refuted.** 45-day archive, live gates, $50 flat: **1,641 trades, -$0.03/tr, -$41** (-$129 at the measured 0.105¢ gap, -$868 at one tick), vs the 15M book at **+$85.90/day** over the same window. Win rate straddles the ~92.3% break-even and **flips sign between halves for both series** (BTCD -0.57→+0.35, ETHD -1.34→+1.15). The multi-strike "leverage" worry that kept it in shadow was **backwards**: 310 of 392 stacked closes are a YES below spot + a NO above spot, which cannot both lose — 0 all-lose events in 45 days. Real finding: **100% of hourly entries settle on the same BRTI print as the :00 15M close on the same underlying**, and `MAX_CONCURRENT` does not see them as related. `python3 research/hourly_crypto/analyze_hourly.py` |
 | C1 quarantine (SOL + prior2 75-79¢) | Aug 17 | Worth **~$260 over 68 days** — noise, not the "-$7.25/tr" originally recorded. Quarantined on 60+80 trades, violating the 500-trade bar. Left in place as harmless; do not cite as precedent. `--compare c1=0` |
 | `MIN_ASK = 89` may beat 90 | Aug 17 | Better at *both* slippage levels — the only parameter that didn't flip. Worth real work. `--sweep min_ask 88 89 90 91` |
 | ET08 hour | — | -$2.39/tr, unconfirmed across periods. Needs 500+ trades. |
@@ -456,6 +458,21 @@ resolves (Invariant 6) — the strategy working, not a danger signal. Note the p
 gate (`PRIOR_MIN=75`) is already a volatility filter; this tested for residual signal after
 it. Third attempt at this idea (`backtest_vol_filter.py` Aug 9, dispersion filter Aug 17
 which inverted OOS). `python3 scripts/vol_bucket_test.py`
+
+*Perp hedging (pre-registered, 2026-08-20):* **dead, and it fails at ZERO fees.** Hedging
+each position with an opposing perp was tested at fixed notional, at the digital's true
+per-trade delta (`C·φ(z)/(σ√τ)`, median **$7,842** per $50 bet), netted to one BTC leg per
+settlement cluster, and dynamically on an adverse strike crossing. Best case — correct
+delta sizing, **0bp** — earns **+$0.32/tr against a +$0.52 baseline** and cuts return/sd
+from 2.70% to 1.82%: worse on both axes. A perp's expected return is zero, so the overlay
+can only reshape variance and pay fees. The Kelly escape (cut variance, size up) fails by
+~100x: the 8.3% sd cut buys a 1.19x size increase worth **+$0.098/trade**, needing a
+round-trip cost under **~0.1bp** against a real 4-12bp. Cluster-netting does not rescue it
+— only **4%** of notional cancels, because concurrent positions nearly always point the
+same way. **The position is already collateralised and loss-capped at the premium; there
+is no tail to hedge.** Signal tests on the same spot data: H1 distance-to-strike, H3
+vol regime, H4 cross-asset BTC, H9 slot ranking, H10 replacing the prior gate — all
+refuted OOS. Only H2 (adverse momentum) survived; see §7. `research/perp_overlay/`
 
 *Directional / entry variants:* longshot crash-reversal · cross-asset lag · candle
 acceleration · stuck-market breakout · per-series WR kill switch · early-window entry
