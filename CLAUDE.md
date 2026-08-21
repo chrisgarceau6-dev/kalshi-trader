@@ -9,8 +9,15 @@ file* — treat it as leads, not verdicts.
 
 ## Who / What
 
-- Chris Garceau — UMass freshman. Real money on Kalshi. Wants concise responses, no
-  encouragement without evidence, no emojis. Lead with numbers, then takeaways.
+- Chris Garceau — UMass freshman. Real money on Kalshi. No encouragement without
+  evidence, no emojis.
+- **RESPONSE FORMAT — critical.** Report only what he needs to stay informed and in
+  control. Numbers and tables, not prose. Cut ~90% of what you would naturally write:
+  no method narration, no restating his question, no describing work in progress, no
+  listing what you considered and discarded unless a discarded thing changes a
+  decision. Structure: **what changed → what it means → what's next / what needs his
+  call.** Findings go in tables. State caveats in one line, not a paragraph. If a
+  detail does not change a decision he would make, leave it out.
 - Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/kalshi-trader` (PUBLIC)
   Renamed from `polymarket-monitor2` on 2026-08-18. **The Render service kept the old
   name**, so the dashboard URL is still `polymarket-monitor2.onrender.com` — that
