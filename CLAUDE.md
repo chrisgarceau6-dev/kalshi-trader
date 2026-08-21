@@ -56,9 +56,27 @@ figure with the harness, treat it as unverified no matter who wrote it down.
 
 # 2. Invariants — these do not rot
 
-1. **You risk $75 to win ~$6.50.** Break-even is ~92% WR (90.6% at 90¢ → 93.5% at
-   93¢). You run ~94%. **The entire edge is that ~2pp gap**, harvested over thousands
-   of bets. No single trade is good.
+1. **You risk $50 to win ~$4.35.** Break-even is ~92% WR (90.6% at 90¢ → 93.5% at
+   93¢). **The entire edge is the gap above break-even**, harvested over thousands of
+   bets. No single trade is good.
+
+   **The realised gap is far smaller than this file used to claim.** It said "you run
+   ~94%", and the win rate is indeed 94.10% since Aug 1 (1,482W/93L on 1,575 trades) —
+   but that has delivered **+$82.14 total, or +$0.05/trade**, against the +$1.11/trade
+   that 94.10% implies at flat $50. Do not quote the win rate as if it were the edge.
+   Two separate reasons, and they must not be conflated:
+   - **Aug 1-11 is a sizing artifact** (§7): bet ran $2.79 → $74 inside the window, so
+     most wins were banked at $0.20 while losses landed at $45-74.
+   - **Aug 12-21 is not.** Sizing was $50-75 throughout and the win rate was
+     **92.12%** (538W/584) — only **0.62pp** above break-even, worth **+$0.056/trade**
+     realised. The split from Aug 1-11's 95.26% is -3.13pp, z=2.55, p≈0.011
+     unclustered (clustering widens it; treat as suggestive, and note it is confounded
+     by the NO side returning Aug 17 and WTI pausing Aug 19).
+
+   Practical consequence: at 92% the strategy is roughly break-even, and ordinary
+   variance is the entire experience. Any projection built on +$0.54-0.80/trade — the
+   harness figure — is an upper bound the live account has not delivered since Aug 11.
+   Check `daily_summary.py` before trusting a per-trade number in this file.
 2. **One cent ≈ half your edge.** A 1¢ move in entry price shifts break-even by ~1pp.
    One tick removes ~69% of all profit (`--slip 1`). Execution quality dominates
    every strategy parameter. Guard it; it is already near-optimal so there is little
