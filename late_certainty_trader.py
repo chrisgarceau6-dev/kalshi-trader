@@ -191,6 +191,21 @@ MOMENTUM_LOOKBACK   = 3    # minutes of spot move
 MOMENTUM_VOL_WINDOW = 60   # trailing 1-min returns for the vol normaliser
 SURVIVOR_LOOKBACK = (480, 600)
 
+# SHADOW ONLY — poll-level gate inputs (2026-08-21). data/candles/*.csv.gz lets any
+# past or future version be replayed against every archived day, but the archive is a
+# 1-min sample: it sees candles, while the bot sees the ask at poll instants. 70% of
+# qualifying signals last exactly one candle (invariant 6), so archive replay cannot
+# tell you what a version would actually have CAPTURED live. This logs the raw gate
+# inputs at each poll instead of any one version's verdict, so a config invented later
+# can still be scored against it. Trades nothing, gates nothing.
+GATELOG_ASK   = (88, 99)   # union of every ask band the trader has ever run
+GATELOG_SECS  = (150, 900) # union of every secs band
+# Hard ceiling on candle fetches per process. The job runs ~14-16 scans in 240s and
+# capture rate is set by that cadence, so a shadow that slows the loop would cost real
+# entries to measure hypothetical ones. Each job is a fresh process, so this bounds the
+# added calls per job outright. Markets seen earliest in the job win the budget.
+GATELOG_MAX_FETCHES = 24
+
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
@@ -764,6 +779,7 @@ def _prior_k_candle_asks(ticker, series, side, k):
 _SURVIVOR_SEEN = set()
 _MOMENTUM_SEEN = set()
 _MOMENTUM_CACHE = {}
+_GATELOG_SEEN = set()
 
 
 def _candle_ask_at(ticker, series, side, close_ts, lo_secs, hi_secs):
@@ -908,6 +924,39 @@ def shadow_momentum(market, series):
         adverse = -mom if side == "yes" else mom
         log(f"  [SHADOW:MOM3] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  "
             f"m3={adverse:+.2f}  sigma={sigma * 1e4:.2f}bp")
+
+
+def shadow_gate_inputs(market, series):
+    """Log the gate inputs for every market in the union band, once per (ticker, side).
+
+    Deliberately records facts, not verdicts. A per-version verdict would freeze
+    today's list of versions into the live trader and need an edit to score anything
+    new; ask/secs/priors are sufficient for any gate set, including ones not yet
+    invented. Slot allocation (MAX_CONCURRENT_POSITIONS) is a cluster-level constraint
+    and is applied by the analyser, not here.
+
+    Runs after every order attempt for the same reason shadow_momentum does: nothing
+    in the shadow path may sit between a price check and an order.
+    """
+    ticker    = market.get("ticker", "")
+    secs_left = market.get("_secs_left", 0)
+    if not (GATELOG_SECS[0] <= secs_left <= GATELOG_SECS[1]):
+        return
+    for side in ("yes", "no"):
+        ask = price_cents(market.get(f"{side}_ask_dollars"))
+        if ask is None or not (GATELOG_ASK[0] <= ask <= GATELOG_ASK[1]):
+            continue
+        if (ticker, side) in _GATELOG_SEEN:
+            continue
+        if len(_GATELOG_SEEN) >= GATELOG_MAX_FETCHES:
+            return
+        priors = _prior_k_candle_asks(ticker, series, side, 3)
+        if priors is None:
+            continue                    # retried next poll; nothing marked seen
+        _GATELOG_SEEN.add((ticker, side))
+        log(f"  [SHADOW:GATE] {ticker} {side.upper()} ask={ask}c "
+            f"secs={secs_left:.0f} p1={int(priors[0])} p2={int(priors[1])} "
+            f"p3={int(priors[2])} series={series}")
 
 
 def try_trade(
@@ -1561,6 +1610,10 @@ def run_once(dry_run=False):
             shadow_momentum(m, series)
         except Exception as exc:
             log(f"  [SHADOW:MOM3] skipped {m.get('ticker','')}: {exc}")
+        try:
+            shadow_gate_inputs(m, series)
+        except Exception as exc:
+            log(f"  [SHADOW:GATE] skipped {m.get('ticker','')}: {exc}")
 
     # Shadow scan — no orders placed, just logging for future re-entry analysis
     for series in SHADOW_SERIES:
