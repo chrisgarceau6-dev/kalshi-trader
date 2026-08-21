@@ -46,8 +46,26 @@ _load_dotenv()
 import backtest as B          # noqa: E402  canonical harness — never edited, only read
 import kalshi_auth as K       # noqa: E402
 
-SERIES = {"KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M",
-          "KXWTI15M", "KXGOLD15M", "KXSILVER15M"}
+def live_series():
+    """SERIES_LIST from the trader, by AST, so it cannot drift from what is running.
+
+    This must not be hardcoded. The archive also holds KXGOLD15M / KXSILVER15M /
+    KXWTI15M, which are SHADOW_SERIES the bot deliberately does not trade. Counting
+    them as model entries inflates the miss count and understates capture — the exact
+    bug research/capture/audit2.py was written to fix, and repeating it here would
+    make this tool agree with the wrong answer.
+    """
+    import ast
+    tree = ast.parse(open(BASE / "late_certainty_trader.py").read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == "SERIES_LIST":
+                    return set(ast.literal_eval(node.value))
+    sys.exit("could not read SERIES_LIST from the trader")
+
+
+SERIES = live_series()
 
 
 # ── live side ─────────────────────────────────────────────────────────────────
@@ -103,7 +121,10 @@ def live_trades(since, until):
     out = {}
     for s in settle:
         tk = s.get("ticker", "")
-        if tk.split("-")[0] not in SERIES:
+        # Deliberately NOT filtered to SERIES here: main() splits live trades into
+        # live-series and retired/shadow-series so the retired ones are reported
+        # rather than silently dropped. Filtering here made that line unreachable.
+        if not tk.split("-")[0].startswith("KX"):
             continue
         yc = float(s.get("yes_count_fp", 0) or 0)
         nc = float(s.get("no_count_fp", 0) or 0)
@@ -199,9 +220,14 @@ def main():
     a = ap.parse_args()
 
     cfg = B.live_config()
-    rows = B.load(a.since, a.until)
+    rows = [r for r in B.load(a.since, a.until) if r[0] in SERIES]
     model = model_trades(rows, cfg, a.slip)
-    live = live_trades(a.since, a.until)
+    live_all = live_trades(a.since, a.until)
+    # Series the bot no longer trades (WTI was paused mid-Aug-19) still have live
+    # settlements in the window. They are neither model entries nor selection errors,
+    # so they are reported on their own line rather than dumped into EXTRA.
+    live = {k: v for k, v in live_all.items() if k[0].split("-")[0] in SERIES}
+    retired = {k: v for k, v in live_all.items() if k not in live}
 
     # The archive only covers complete days. Restrict both sides to days the archive
     # actually has, or every live trade from an unarchived day is a false "EXTRA".
@@ -213,6 +239,11 @@ def main():
     missed = sorted(mk - lk)
     extra = sorted(lk - mk)
 
+    if retired:
+        rt = _stat(list(retired.values()), "pnl")
+        print(f"note: {rt['n']} live trades in retired/shadow series "
+              f"({', '.join(sorted({k[0].split('-')[0] for k in retired}))}) "
+              f"excluded from the comparison: {rt['wr']:.2f}% WR, ${rt['total']:+.2f}")
     print(f"config {cfg['version']}  bet=${cfg['bet']:.0f}  slip={a.slip}c  "
           f"window {min(archived)} -> {max(archived)}  ({len(archived)} archived days)")
     print(f"model took {len(model)}   live took {len(live)}   "
