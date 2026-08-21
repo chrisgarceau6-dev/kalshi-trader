@@ -35,7 +35,9 @@ def candles(pair, start, end):
            f"?granularity=60&start={start}&end={end}")
     req = urllib.request.Request(url, headers={"User-Agent": "parity-audit/1.0"})
     d = json.loads(urllib.request.urlopen(req, timeout=25).read())
-    out = {int(r[0]): float(r[4]) for r in d}
+    # completed buckets only — must mirror _spot_momentum, or the audit compares
+    # a price one minute later than the trader used and reports a phantom mismatch
+    out = {int(r[0]): float(r[4]) for r in d if int(r[0]) + 60 <= end}
     _cache[key] = out
     return out
 
