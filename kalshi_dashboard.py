@@ -550,6 +550,28 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
 .pos-q{font-size:11.5px;color:var(--dim);margin-top:9px;line-height:1.5}
 .bar{height:3px;background:var(--s3);border-radius:2px;margin-top:11px;overflow:hidden}
 .bar i{display:block;height:100%;border-radius:2px;transition:width .9s linear}
+.nextclose{margin-top:7px;font-size:11.5px;color:var(--dimmer);letter-spacing:.03em;
+  font-variant-numeric:tabular-nums}
+.nextclose b{color:var(--dim);font-weight:600}
+.nextclose.imminent b{color:var(--warn)}
+.duo{display:block;margin-top:14px}
+.duo>.card+.card{margin-top:12px}
+.pad{padding:15px 16px 16px}
+.pad h4{margin:0 0 12px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--dimmer);font-weight:600}
+.prow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}
+.prow .l{font-size:12.5px;color:var(--dim)}
+.prow .v{font-size:15px;font-weight:600}
+.pnote{margin-top:10px;font-size:11px;color:var(--dimmer);line-height:1.45}
+.srow{display:grid;grid-template-columns:44px 1fr 62px 44px;gap:9px;align-items:center;
+  padding:6px 0;border-top:1px solid var(--line)}
+.srow:first-of-type{border-top:0}
+.srow .sname{font-size:12.5px;color:var(--tx);font-weight:600}
+.srow .spk{height:16px}
+.srow .sv{font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+.srow .sn{font-size:11px;color:var(--dimmer);text-align:right}
+@keyframes pulseGlow{0%,100%{opacity:.35}50%{opacity:1}}
+.pulsing{animation:pulseGlow 1.1s ease-in-out infinite}
 .pos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:13px;
   padding-top:12px;border-top:1px solid var(--line)}
 .pg .l{font-size:9px;color:var(--dimmer);text-transform:uppercase;letter-spacing:.7px;
@@ -609,6 +631,8 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   .stat{padding:16px 15px}
   .stat-val{font-size:22px}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start}
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+  .duo>.card+.card{margin-top:0}
   /* positions stay in view while the trade log scrolls past them */
   .col-left{position:sticky;top:22px}
   .col-left h3,.col-right h3{margin-top:26px}
@@ -629,6 +653,7 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   <div class="hero-bal num sk" id="bal">$0000.00</div>
   <div class="hero-chg num" id="chg"><span class="sk">+$00.00 today</span></div>
   <div class="health health-unk" id="health"><span class="hdot"></span><span id="healthTx">checking</span></div>
+  <div class="nextclose" id="nextClose"></div>
 </div>
 
 <div class="chart-wrap">
@@ -671,6 +696,11 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   <div class="stat"><div class="stat-lbl" id="l5">Open</div><div class="stat-val num sk" id="v5">0</div><div class="stat-sub" id="s5"></div></div>
 </div>
 
+<div class="duo">
+  <div class="card pad" id="paceCard"></div>
+  <div class="card pad" id="seriesCard"></div>
+</div>
+
 <div class="cols">
   <div class="col-left">
     <h3>Open positions <span class="count" id="posN">0</span></h3>
@@ -693,6 +723,16 @@ const AUG1=new Date('2026-08-01T04:00:00Z').getTime();
 // not all time and must not be labelled as if it were.
 const RLBL={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'Since Aug 1'};
 let range='1D', mode='pnl', last=null, expanded=new Set(), pts=[], firstDraw=true, scrubbing=false;
+
+/* Modelled baseline, from the canonical harness at $50 flat with the measured
+   0.105c execution gap. Reproduce with:
+     python3 scripts/backtest.py            (then apply --slip 0.105)
+   These are the ONLY hardcoded strategy numbers on the page. Everything else is
+   derived from live data. Re-measure them if the config changes; a stale baseline
+   here silently mis-scores every day. */
+const MODEL_PER_TRADE = 0.54;    // $/trade at $50 flat, 0.105c slip
+const MODEL_TRADES_DAY = 126;    // distinct entries per day the harness takes
+const MODEL_BET = 50;            // the bet size those two figures were measured at
 
 /* ── formatting ─────────────────────────────────────────────────── */
 const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -862,6 +902,91 @@ window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'
    only booked into P&L at settlement, so an open position sits fee-low until it
    resolves. That is tracked explicitly rather than absorbed. */
 const RECON_KEY='dash-recon-v1';
+
+/* ── pace vs the modelled baseline ──────────────────────────────────
+   Compared per TRADE, not per hour. Settlements do not arrive uniformly through the
+   day, so prorating a daily figure by clock time would score a quiet morning as a
+   shortfall. Trade count is shown against the full-day model with the elapsed
+   fraction beside it, so a partial day reads as partial rather than as a miss. */
+function renderPace(sett, d){
+  const el=$('paceCard'); if(!el) return;
+  const dayStart=cutoff('1D');
+  const today=sett.filter(s=>new Date(s.ts).getTime()>=dayStart);
+  const n=today.length, pnl=today.reduce((a,s)=>a+s.pnl,0);
+  const per=n?pnl/n:null;
+  // scale the baseline to whatever the account is actually betting
+  const openCost=(d.positions||[]).reduce((a,p)=>a+(p.cost||0),0);
+  const bet=(d.positions||[]).length?openCost/(d.positions||[]).length:MODEL_BET;
+  const scale=Math.max(0.2,Math.min(6,bet/MODEL_BET));
+  const expPer=MODEL_PER_TRADE*scale, expDay=MODEL_PER_TRADE*MODEL_TRADES_DAY*scale;
+  const et0=new Date(dayStart), frac=Math.min(1,(Date.now()-dayStart)/86400000);
+  const ratio=per!=null&&expPer>0?per/expPer:null;
+  const capture=Math.min(100,n/MODEL_TRADES_DAY*100);
+  const barCol=ratio==null?'var(--dimmer)':ratio>=1?UP:ratio>=0?'var(--warn)':DOWN;
+  el.innerHTML='<h4>Pace vs model</h4>'+
+    '<div class="prow"><span class="l">Today</span><span class="v num '+cls(pnl)+'">'+
+      signed(pnl)+'</span></div>'+
+    '<div class="prow"><span class="l">Model pace</span><span class="v num mut">'+
+      signed(expDay*frac)+'</span></div>'+
+    '<div class="prow"><span class="l">Per trade</span><span class="v num '+
+      (per==null?'mut':cls(per-expPer))+'">'+
+      (per==null?'—':signed(per)+'  vs  '+signed(expPer))+'</span></div>'+
+    '<div class="prow"><span class="l">Trades</span><span class="v num mut">'+n+
+      ' / '+MODEL_TRADES_DAY+'</span></div>'+
+    '<div class="bar"><i style="width:'+capture+'%;background:'+barCol+'"></i></div>'+
+    '<div class="pnote">'+(frac*100).toFixed(0)+'% of the day elapsed · baseline '+
+      signed(MODEL_PER_TRADE)+'/trade at $'+MODEL_BET+
+      (scale!==1?' scaled x'+scale.toFixed(2):'')+'</div>';
+}
+
+/* ── per-series breakdown with sparklines ───────────────────────── */
+function spark(vals,col){
+  if(vals.length<2) return '';
+  let run=0; const cum=vals.map(v=>run+=v);
+  const lo=Math.min(0,...cum), hi=Math.max(0,...cum), sp=(hi-lo)||1;
+  const w=60,h=16;
+  const pts=cum.map((v,i)=>(i/(cum.length-1)*w).toFixed(1)+','+
+    (h-((v-lo)/sp)*h).toFixed(1)).join(' ');
+  const zero=(h-((0-lo)/sp)*h).toFixed(1);
+  return '<svg class="spk" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+
+    '<line x1="0" y1="'+zero+'" x2="'+w+'" y2="'+zero+'" stroke="var(--line-2)" stroke-width="1"/>'+
+    '<polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.6" '+
+    'stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+function renderSeries(sett){
+  const el=$('seriesCard'); if(!el) return;
+  const cut=cutoff(range);
+  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cut);
+  const by={};
+  for(const s of inR){
+    const k=(s.series||'').replace('KX','').replace('15M','')||'?';
+    (by[k]=by[k]||[]).push(s);
+  }
+  const keys=Object.keys(by).sort((a,b)=>
+    by[b].reduce((x,s)=>x+s.pnl,0)-by[a].reduce((x,s)=>x+s.pnl,0));
+  if(!keys.length){ el.innerHTML='<h4>By series</h4><div class="empty">No trades in range</div>'; return; }
+  el.innerHTML='<h4>By series · '+RLBL[range]+'</h4>'+keys.map(k=>{
+    const g=by[k], p=g.reduce((a,s)=>a+s.pnl,0), w=g.filter(s=>s.won).length;
+    const col=p>0?UP:p<0?DOWN:'#7C828C';
+    return '<div class="srow"><div class="sname">'+k+'</div>'+
+      spark(g.map(s=>s.pnl),col)+
+      '<div class="sv '+cls(p)+'">'+signed(p)+'</div>'+
+      '<div class="sn">'+pct(w,g.length)+'</div></div>';
+  }).join('');
+}
+
+/* ── next settlement countdown ──────────────────────────────────── */
+function tickClose(){
+  const el=$('nextClose'); if(!el) return;
+  const now=Date.now(), q=15*60*1000;
+  const next=Math.ceil(now/q)*q;              // 15M markets close on :00/:15/:30/:45
+  const s=Math.max(0,Math.round((next-now)/1000));
+  const mm=Math.floor(s/60), ss=String(s%60).padStart(2,'0');
+  el.innerHTML='next close in <b>'+mm+':'+ss+'</b>';
+  el.classList.toggle('imminent', s<=60);
+  const live=$('liveDot');
+  if(live) live.classList.toggle('pulsing', s<=60);
+}
 
 function reconcile(equity, settAll, deps, openFee){
   const now=Date.now();
@@ -1041,6 +1166,9 @@ function render(d){
     el.className='stat-val num '+vc; setNum(el,vt); $(si).textContent=st;
   }
 
+  renderPace(sett, d);
+  renderSeries(sett);
+
   // positions
   const pos=d.positions||[]; $('posN').textContent=pos.length;
   const pe=$('positions');
@@ -1149,6 +1277,7 @@ addEventListener('touchend',()=>{
 /* live countdown ticks without refetching */
 setInterval(()=>{ if(last&&!scrubbing&&(last.positions||[]).length) render(last); },1000);
 refresh();
+tickClose(); setInterval(tickClose,1000);
 setInterval(refresh,30000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 </script>

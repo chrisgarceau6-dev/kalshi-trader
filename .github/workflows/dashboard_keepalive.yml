@@ -1,0 +1,33 @@
+name: Dashboard Keepalive
+
+# Render's free tier sleeps a service after ~15 min idle, so opening the dashboard
+# cold costs ~30s of staring at nothing. A cheap ping every 10 min keeps it warm.
+# The request is unauthenticated on purpose — an anonymous GET renders the login
+# screen, which is enough to wake the dyno and needs no secret.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: dashboard-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the dashboard
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 60 \
+              https://polymarket-monitor2.onrender.com/ || echo 000)
+            echo "attempt $i -> HTTP $code"
+            case "$code" in
+              200|302|401|503) exit 0 ;;
+            esac
+            sleep 10
+          done
+          echo "dashboard did not respond after 3 attempts" >&2
+          exit 1
