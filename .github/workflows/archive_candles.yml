@@ -55,6 +55,17 @@ jobs:
             python3 scripts/archive_candles.py
           fi
 
+      - name: Verify the day actually landed
+        if: inputs.backfill == '' && inputs.date == ''
+        run: |
+          DAY=$(date -u -d yesterday +%Y-%m-%d)
+          F="data/candles/$DAY.csv.gz"
+          if [ ! -s "$F" ]; then
+            echo "MISSING $F — the job reported success but wrote nothing" >&2
+            exit 1
+          fi
+          echo "ok: $F ($(stat -c%s "$F") bytes)"
+
       - name: Commit archive
         run: |
           git config user.name  "github-actions[bot]"
@@ -74,3 +85,44 @@ jobs:
           done
           echo "push failed after 3 attempts" >&2
           exit 1
+
+      # A silent archive failure is the expensive kind: Kalshi drops settled markets
+      # at ~67 days, so a day missed here cannot be recovered later at any price.
+      # daily_summary.py carries the complementary check for the case this cannot
+      # see — the workflow never running at all.
+      - name: Alert on failure
+        if: failure()
+        env:
+          COPY_EMAIL_FROM:     ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_TO:       ${{ secrets.COPY_EMAIL_TO }}
+          COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          # stdlib only, deliberately. Importing daily_summary would pull in
+          # kalshi_auth -> requests/cryptography, so a failure in the Install deps
+          # step would take the alert down with the job it is meant to report.
+          import os, smtplib
+          from email.mime.text import MIMEText
+          to   = os.environ.get("COPY_EMAIL_TO", "")
+          frm  = os.environ.get("COPY_EMAIL_FROM", "")
+          pw   = os.environ.get("COPY_EMAIL_PASSWORD", "")
+          body = (
+              "scripts/archive_candles.py did not complete.\n\n"
+              f"Run: {os.environ.get('RUN_URL','')}\n\n"
+              "Kalshi retains settled markets ~67 days, so re-run this promptly:\n"
+              "  gh workflow run archive_candles.yml -f backfill=3\n"
+              "Backfill skips days that already exist, so it is safe to re-run.\n"
+          )
+          if not all([to, frm, pw]):
+              print("email secrets missing — alert not sent\n" + body)
+              raise SystemExit(0)
+          m = MIMEText(body)
+          m["From"], m["To"] = frm, to
+          m["Subject"] = "[Kalshi] ARCHIVE FAILED — a day of data is at risk"
+          with smtplib.SMTP("smtp.gmail.com", 587) as s:
+              s.starttls()
+              s.login(frm, pw)
+              s.send_message(m)
+          print("alert sent")
+          PY
