@@ -1249,6 +1249,27 @@ def try_trade(
     log(f"    FILL TOTAL: {final_contracts} contracts, principal=${final_cost:.2f}, "
         f"fees=${final_fee:.4f}, unused_budget=${float(target_budget-total_cost):.2f}, "
         f"attempts={len(order_ids)}")
+    # Machine-readable execution record. Every field below is already computed for the
+    # position dict; this only puts them where they can be harvested. State lives in the
+    # Actions cache, so without this line the only way to measure fill quality is to
+    # replay hundreds of run logs and parse prose.
+    #
+    # The open question it exists to answer: NO-side fill quality is entirely
+    # unmeasured (CLAUDE.md §4), NO is ~half of volume since v5.16, and one cent moves
+    # ~69% of profit. Compare avg_fill against book by side, over DISTRIBUTIONS — never
+    # per-fill against a candle, which yields a +0.85c artifact from regression to the
+    # mean because the 1-min reference is stale 47% of the time.
+    try:
+        _avg = (final_cost / final_contracts * 100.0) if final_contracts else 0.0
+        log(f"    [EXEC] ticker={ticker} side={side} secs={secs_left:.0f} "
+            f"scan={float(ask_cents):.2f} fresh={float(attempt_asks[0]):.2f} "
+            f"book={float(entry_ask):.2f} depth={float(depth) if depth is not None else -1:.0f} "
+            f"book_age_ms={last_look_ms:.0f} limit={float(max(attempt_limits)):.2f} "
+            f"contracts={final_contracts:.0f} cost={final_cost:.2f} fee={final_fee:.4f} "
+            f"avg_fill={_avg:.4f} attempts={len(order_ids)} "
+            f"outside_band={int(bool(outside_safe_zone))}")
+    except Exception as exc:            # a log line must never break a trading cycle
+        log(f"    [EXEC] skipped: {exc}")
     state["positions"][ticker] = {
             "side":        side,
             "limit_cents": float(max(attempt_limits)),
