@@ -27,6 +27,14 @@ on:
 permissions:
   contents: write
 
+# A manual dispatch landing next to the cron produced two runs 43s apart on
+# 2026-08-21. Both archived the same day, both committed it, and the loser of the
+# push race died in an unresolvable binary rebase and paged. Queue instead of
+# racing; the second run then finds nothing to commit and exits clean.
+concurrency:
+  group: archive-candles
+  cancel-in-progress: false
+
 jobs:
   archive:
     runs-on: ubuntu-latest
@@ -77,10 +85,26 @@ jobs:
           git add data/candles
           git commit -m "data: archive candles $(date -u +%Y-%m-%d)"
           # late_certainty.yml persists state via actions/cache and never pushes, so
-          # this job is normally the only writer to main. Retry with rebase anyway to
-          # survive a concurrent human merge.
+          # this job is normally the only writer to main. Push first and only rebase
+          # if that loses — a rebase we did not need is what broke 2026-08-21.
           for i in 1 2 3; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git push origin HEAD:main && exit 0
+            # Lost the race. A failed rebase leaves unmerged files behind, which
+            # makes every later attempt fail on "Pulling is not possible" rather
+            # than on the real problem — so always clear it before retrying.
+            git fetch origin main
+            git rebase --abort 2>/dev/null || true
+            # If the winner archived the same days we did, our commit is
+            # redundant. Take theirs rather than fighting a binary conflict.
+            redundant=1
+            for f in $(git show --name-only --format= HEAD); do
+              git cat-file -e "origin/main:$f" 2>/dev/null || redundant=0
+            done
+            if [ "$redundant" = "1" ]; then
+              echo "every archived day is already on origin/main — nothing to push"
+              exit 0
+            fi
+            git pull --rebase origin main || git rebase --abort 2>/dev/null || true
             sleep 5
           done
           echo "push failed after 3 attempts" >&2
