@@ -9,7 +9,7 @@ GitHub Actions: triggered by daily_summary.yml at 02:00 UTC (10pm ET)
 """
 
 import base64, os, smtplib, time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 from kalshi_auth import get as kalshi_get
@@ -116,6 +116,26 @@ def series_from_ticker(ticker):
     return ticker.split("-")[0]
 
 
+def archive_status():
+    """Is the candle archive still landing?
+
+    A day that does not get archived is validation capacity destroyed permanently
+    (CLAUDE.md §6), and an `if: failure()` hook on the archive job cannot catch the
+    case that matters most — the job never running at all. This check can, because it
+    looks at the data rather than at the workflow.
+
+    Timing: archive_candles.yml runs 03:30 UTC and writes the PRIOR UTC day, while
+    this job runs 02:00 UTC. So at runtime the newest file should be day-before-
+    yesterday; yesterday's is not written for another 90 minutes.
+    """
+    days = sorted(p.name[:10] for p in Path("data/candles").glob("*.csv.gz"))
+    if not days:
+        return "ARCHIVE:   *** NO FILES FOUND ***"
+    expect = (datetime.now(timezone.utc) - timedelta(days=2)).date().isoformat()
+    stale = "" if days[-1] >= expect else f"   *** STALE — expected >= {expect} ***"
+    return f"ARCHIVE:   newest {days[-1]}, {len(days)} days on disk{stale}"
+
+
 def main(hours=24, trades=None):
     _ensure_key()
     now    = datetime.now(timezone.utc)
@@ -206,6 +226,7 @@ def main(hours=24, trades=None):
         f"$/trade:   ${avg_per:+.2f}",
         f"Wagered:   ${wagered:.2f}",
         f"Avg fill:  {avg_fill:.1f} contracts",
+        archive_status(),
     ]
 
     if partial_fills:
