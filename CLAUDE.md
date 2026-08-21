@@ -233,8 +233,9 @@ and halves poll cadence. Note a successful dispatch alone does not prove *which*
 is in the secret — only a dispatch that survives the revocation does. GitHub exposes no
 API listing personal access tokens, so this check cannot be automated.
 
-Possibly still pending: `gh auth refresh -s workflow` — the keychain token lacked
-`workflow` scope, so pushes touching `.github/workflows/` get rejected. Unverified.
+~~Possibly still pending: `gh auth refresh -s workflow`.~~ **Resolved 2026-08-20** —
+a push touching `.github/workflows/archive_candles.yml` went through (PR #139), so the
+keychain token does carry `workflow` scope. No action needed.
 
 **Push flow.** Never push to main.
 1. `git fetch origin && git checkout -b <branch> origin/main`
