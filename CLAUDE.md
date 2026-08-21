@@ -234,6 +234,8 @@ per-cluster exposure. Nothing here is too conservative — verify with
 | `kalshi_dashboard.py` | Render dashboard entrypoint |
 | `test_order_safety.py` | Order-safety + NO-path regression tests |
 | `scripts/missed_pnl.py` | Prices what a halt cost — replays live gates on public candles |
+| `scripts/reconcile.py` | Splits the live-vs-model gap into capture / selection / execution |
+| `scripts/gate_replay.py` | Scores any version on what the bot ACTUALLY SAW (not an upper bound) |
 | `scripts/calibration.py` · `scripts/entry_timing.py` | Edge by price / by time left |
 | `research/kalshi_incentives/` | Incentive-program investigation (see §8) |
 
@@ -422,8 +424,9 @@ Each needs re-checking; none is settled.
 |---|---|---|
 | **The edge is fragile, not broken** | Aug 21 | The most important frame in this file. Break-even 91.5%; a **1.4pp** win-rate wobble — routine, and undetectable at n=584 (z=1.34, p=0.18) — is the difference between **+$0.62/tr and +$0.07/tr**. Live dollars exactly match live WR, so there is no hidden P&L leak; the whole question is always "is this WR real or noise", and you need **~1,300 trades (~2 weeks)** before a 1.4pp gap is even 2σ. Nobody can tell unlucky from degraded faster than that. Do not act on shorter windows. |
 | Strategy is NOT decaying | Aug 21 | Model edge by fortnight: Jun 11-24 **+$0.84**, Jun 25-Jul 8 **+$0.14**, Jul 9-22 +$0.54, Jul 23-Aug 5 +$0.54, **Aug 6-20 +$0.91** — the most recent fortnight is the best in the archive. Jun 25-Jul 8 shows the model itself running near break-even for two weeks and recovering. `python3 scripts/backtest.py --since X --until Y` |
-| Capture rate is fine — WebSocket refuted | Aug 21 | Two-day audit. **Aug 20 (clean): 75.2% volume capture**; polling gap 5 entries worth +$22. Aug 19 (45% halted): 41.4%. The concurrency cap *earns* money by blocking (−$37.89 of forgone P&L on Aug 20). No WebSocket build is justified. `research/capture/audit2.py` |
-| Aug 19 "selection leak" was a halt artifact | Aug 21 | Aug 19 showed bot-only extras at 76.2% WR / −$8.65/tr and looked like a slot-allocation defect. Aug 20 (clean): same population ran **93.8% WR / +$0.91/tr**. Random series order is not costing anything; do not "fix" slot allocation. |
+| Capture rate — **disputed, do not quote a number** | Aug 21 | `audit2.py` reports 75.2% for Aug 20 and 41.4% for Aug 19. `scripts/reconcile.py`, built later the same day and also restricted to `SERIES_LIST`, reports **38.0%** and **17.9%** — a consistent ~2x on both days, which points at a denominator difference (log-derived entry *attempts* vs settled *fills*) rather than a data disagreement. Until one is reconciled against the other, capture is an open question and the "capture is fine, no WebSocket needed" conclusion does not stand on it. `python3 scripts/reconcile.py --since 2026-08-20 --until 2026-08-20` |
+| Selection IS costing money — **reverses the entry below** | Aug 21 | Full reconciliation over Aug 12-20 (n=533 live, 1170 model): live-only trades run **205 at 90.24% WR, −$250.56**, below the ~92% break-even. Execution is an *asset* (+$77.72; fills land 0.239c BETTER than the modelled ask, and matched-trade WR equals model WR to the decimal). Capture costs the most in absolute terms (−$506.37) but missed trades win at 93.47% vs 93.90% taken — same quality, so it is a volume leak, not a selection leak. `python3 scripts/reconcile.py --since 2026-08-12 --until 2026-08-20` |
+| ~~Aug 19 "selection leak" was a halt artifact~~ — **superseded, see above** | Aug 21 | Aug 19 showed bot-only extras at 76.2% WR / −$8.65/tr and looked like a slot-allocation defect. Aug 20 (clean): same population ran **93.8% WR / +$0.91/tr**. Random series order is not costing anything; do not "fix" slot allocation. |
 | Live per-side, first real read | Aug 21 | Aug 20 settlements by side: **NO 37tr 97.30% +$2.68/tr**, YES 54tr 92.59% +$0.30/tr, all 91tr 94.51% **+$1.27/tr** — which *beat* the model's +$0.62 for that window. NO-side execution was the prime suspect for the live-vs-model gap; this points the other way. n=37, one day. |
 | Thin-book gate may be too strict | Aug 21 | `MIN_BOOK_DEPTH=60` blocked 13 entries worth **+$50.24** (Aug 19) and 12 worth **+$46.79** (Aug 20) — consistent ~$48/day. **Upper bound only**: the model assumes a fill at the candle ask and knows nothing about what a thin book does to the fill. `[EXEC]` now logs `depth` beside `avg_fill`, so this becomes measurable rather than speculative in ~2 weeks. Best open lead. |
 | `[EXEC]` fill records now logged | Aug 21 | Every fill emits `side / scan / fresh / book / depth / book_age_ms / limit / contracts / cost / fee / avg_fill / attempts`. Compare `avg_fill` to `book` **by side, over distributions** — never per-fill against a candle (+0.85¢ artifact, §4). ~500 NO fills ≈ **12-16 days**. Harvest: `grep '\[EXEC\]'` over run logs. |
@@ -573,21 +576,59 @@ Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-stud
 
 # 10. Running state — read this first, refresh it last
 
-**Last updated: 2026-08-21 ~00:45 ET.** If this is more than a few days stale, verify
+**Last updated: 2026-08-21 ~12:25 ET.** If this is more than a few days stale, verify
 everything in it before relying on it.
 
 ## Where the account is
 
-Balance ~$1,285 cash (~$1,382 equity). Since Aug 1: **+$82.14 on 1,575 trades**,
-94.10% WR — but only **+$0.05/trade**. See Invariant 1 for why those two numbers are
-not in conflict. Raise the bet to $75 only at balance ≥ $1,630. **Do not scale on the
-current realised edge.**
+Balance **$1,177.13** at 11:01 ET Aug 21, down from ~$1,285 overnight — Aug 21 ran
+51W/8L on 59 settled trades, **−$185.91**. Since Aug 1 the account is roughly flat.
+Raise the bet to $75 only at balance ≥ $1,630. **Do not scale on the current realised
+edge.** Headroom to the $650 stop is ~10 losses at $50 flat.
+
+**The power numbers that govern every "is it working" question** (measured, sd =
+$18.13/trade, cluster design effect 1.066, 95% conf / 80% power):
+
+| test | detects | trades | days @90/d |
+|---|---|---|---|
+| win rate 94.0% vs 92.0% | 2.0pp | 1,360 | 15 |
+| win rate 93.5% vs 92.0% | 1.5pp | 2,418 | **27** |
+| P&L +$0.61/tr vs $0 | dollars | 7,383 | 82 |
+| P&L at perfectly flat $50 | +$0.349/tr | 13,568 | 151 |
+
+**Never judge this strategy on P&L over a short window** — it needs 3-5 months. Win
+rate is the same question with ~3x the power, but only if fill quality is pinned
+separately, which makes the `[EXEC]` monitor a prerequisite rather than a nicety. The
+"~1,300 trades" figure in the kill-list is significance-only with no power term; the
+honest number for 1.5pp is 2,418.
+
+## Overfitting — settled, do not re-litigate
+
+All **14** gate configurations recoverable from git history were replayed against the
+archive at flat $50. **Every one is positive**, full archive and holdout, +$7 to
++$78/day. The edge does not depend on the parameter choices. v5.16 ties for best gross
+(+$78/day), is best on holdout (+$138/day), and is one of the few that survives one
+tick of slippage (+$13/day) where half the field goes negative — `max_conc=2` is what
+buys that. The two highest-WR configs (96.6%, 96.4%) make the *least* money, +$17 and
++$7/day: win rate is not edge.
+
+Replay versions as a **plateau check, never a leaderboard.** The apparent per-trade
+leader (s240/yo1/mc6, +$0.79/tr) makes *less* money than v5.16 because it takes 36%
+fewer trades, and the bootstrap cannot separate them: delta −$986, CI [−3700, +1828],
+P(better)=0.212. Picking the max of 14 correlated estimates inflates the winner by
+~1.7 SE, which here is most of the entire edge.
 
 ## What is live and healthy
 
 v5.16, config unchanged for two weeks: ask 90-93¢, 150-600s, prior≥75×2, both sides,
 max 2 concurrent, $50 flat, stop $650, daily limit $300. Runs land every ~4 min.
-Nothing tonight changed a trading decision — all three trader PRs were logging only.
+Nothing on Aug 21 changed a trading decision — every trader PR was logging only.
+
+**Archive alerts can cry wolf.** A manual dispatch racing the cron on Aug 21 produced
+two runs 43s apart; both archived Aug 20, the loser died in a binary rebase its retry
+loop could not clear, and it sent `ARCHIVE FAILED`. No data was lost. Fixed with a
+concurrency group and a push-first retry (#145, verified by firing two dispatches back
+to back). **Before acting on that email, check whether the day is actually on main.**
 
 ## Collecting right now — do not disturb
 
@@ -595,6 +636,7 @@ Nothing tonight changed a trading decision — all three trader PRs were logging
 |---|---|---|---|
 | `[SHADOW:MOM3]` adverse momentum | Aug 21 00:04 ET (data before that is invalid — partial-candle bug) | ~500 blocked trades | Live rate is 2/day vs 8-10 forecast. Re-check after a week; if it holds, dead on timeline |
 | `[EXEC]` fill quality by side | Aug 21 ~00:15 ET | ~500 NO fills, 12-16 days | `avg_fill` vs `book` by side; also prices the thin-book gate via `depth` |
+| `[SHADOW:GATE]` poll-level gate inputs | Aug 21 12:09 ET | ~2 weeks | Scores ANY version on what the bot actually saw, unlike archive replay which is an upper bound. Ask is logged as a **float** — Kalshi quotes sub-cent (96.6000c seen live); any parser must accept decimals. `scripts/gate_replay.py` |
 
 ## Next actions, in order
 
