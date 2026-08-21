@@ -855,7 +855,12 @@ def _spot_momentum(series):
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
         return None
     try:
-        px = {int(r[0]): float(r[4]) for r in data}   # bucket start -> close
+        # Coinbase returns the STILL-FORMING bucket (start == end), whose close is
+        # just the latest trade so far. Including it made m3 unreproducible after the
+        # fact and measured a different quantity from the archive, which only ever
+        # sees completed candles. Keep completed buckets only.
+        px = {int(r[0]): float(r[4]) for r in data
+              if int(r[0]) + 60 <= end}                # bucket start -> close
     except (IndexError, TypeError, ValueError):
         return None
     mins = sorted(px)
