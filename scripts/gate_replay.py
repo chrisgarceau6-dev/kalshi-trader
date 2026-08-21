@@ -30,7 +30,10 @@ sys.path.insert(0, str(BASE))
 sys.path.insert(0, str(BASE / "scripts"))
 
 LINE = re.compile(
-    r"\[SHADOW:GATE\]\s+(?P<ticker>\S+)\s+(?P<side>YES|NO)\s+ask=(?P<ask>\d+)c\s+"
+    # ask is logged as a float: Kalshi quotes sub-cent on some books (96.6000c seen
+    # live on KXBNB15M), and the trader's own gates compare the float, not a rounding
+    # of it. Parsing this as \d+ silently matched nothing at all.
+    r"\[SHADOW:GATE\]\s+(?P<ticker>\S+)\s+(?P<side>YES|NO)\s+ask=(?P<ask>[\d.]+)c\s+"
     r"secs=(?P<secs>\d+)\s+p1=(?P<p1>-?\d+)\s+p2=(?P<p2>-?\d+)\s+p3=(?P<p3>-?\d+)\s+"
     r"series=(?P<series>\S+)")
 
@@ -154,7 +157,7 @@ def main():
     print(f"{'version':<11}{'signals':>9}{'taken':>7}{'WR':>9}{'$/tr':>9}{'total $':>10}")
     for name, g in VERSIONS.items():
         fired = [r for r in seen
-                 if qualifies(g, r["side"], int(r["ask"]), int(r["secs"]),
+                 if qualifies(g, r["side"], float(r["ask"]), int(r["secs"]),
                               int(r["p1"]), int(r["p2"]), int(r["p3"]))]
         # slot allocation: within a close cluster, earliest signals win, capped
         by_cluster = defaultdict(list)
@@ -167,7 +170,7 @@ def main():
             print(f"{name:<11}{len(fired):>9}{0:>7}{'—':>9}{'—':>9}{'—':>10}")
             continue
         wins = [r for r in taken if res[r["ticker"]] == r["side"]]
-        tot = sum(pnl(res[r["ticker"]] == r["side"], int(r["ask"]), a.bet) for r in taken)
+        tot = sum(pnl(res[r["ticker"]] == r["side"], float(r["ask"]), a.bet) for r in taken)
         print(f"{name:<11}{len(fired):>9}{len(taken):>7}{len(wins)/len(taken)*100:>8.2f}%"
               f"{tot/len(taken):>+9.3f}{tot:>+10.2f}")
 
