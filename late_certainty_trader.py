@@ -22,7 +22,7 @@ KILL SWITCHES:
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, math, os, random, smtplib, time, urllib.request, urllib.error, uuid
+import argparse, base64, json, math, os, smtplib, time, urllib.request, urllib.error, uuid
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -1618,22 +1618,47 @@ def run_once(dry_run=False):
         return
     n_scanned, n_tradeable = 0, 0
     scanned = []
-    for series in random.sample(SERIES_LIST, len(SERIES_LIST)):
+    # Discover every candidate BEFORE trading any of them, then allocate the
+    # MAX_CONCURRENT_POSITIONS slots to the signals with the most time left.
+    #
+    # This used to iterate random.sample(SERIES_LIST) and trade each market on sight,
+    # so when several markets qualified in one close cluster the two slots went to
+    # whichever series the shuffle happened to visit first. scripts/backtest.py
+    # allocates the same two slots by `sorted(..., key=lambda r: -r[5])[:max_conc]`,
+    # so the bot and the model systematically picked DIFFERENT pairs — every mismatch
+    # showing up as one missed model entry plus one entry the model never wanted.
+    # Reconciliation over Aug 12-21 put the model-rejected entries at 90.32% WR
+    # against 93.98% for the ones both took.
+    #
+    # Ordering by secs_left descending makes the live allocation identical to the
+    # harness by construction, so the two can finally be compared like for like.
+    # Earliest-first is also the safer order on its own terms: it leaves the most room
+    # for the order to land before MIN_SECS_LEFT.
+    #
+    # Discovery is now a separate pass, so a market is fetched slightly before it is
+    # traded. try_trade re-reads the ask immediately before ordering (_fresh_ask_cents)
+    # and fails closed if it has left the band, so the extra latency cannot widen the
+    # entry price.
+    candidates = []
+    for series in SERIES_LIST:
         markets = open_markets_near_close(series)
         n_scanned += len(markets)
         for m in markets:
-            scanned.append((series, m))
-            before = len(state.get("positions", {}))
-            try_trade(
-                m,
-                state,
-                dry_run,
-                balance=balance,
-                live_position_tickers=live_positions,
-                resting_order_tickers=resting_order_tickers,
-            )
-            if len(state.get("positions", {})) > before:
-                n_tradeable += 1
+            candidates.append((series, m))
+    candidates.sort(key=lambda sm: -sm[1].get("_secs_left", 0))
+    for series, m in candidates:
+        scanned.append((series, m))
+        before = len(state.get("positions", {}))
+        try_trade(
+            m,
+            state,
+            dry_run,
+            balance=balance,
+            live_position_tickers=live_positions,
+            resting_order_tickers=resting_order_tickers,
+        )
+        if len(state.get("positions", {})) > before:
+            n_tradeable += 1
 
     # Survivor re-entry candidate — logged, never traded. Reuses the markets already
     # fetched above, and runs only after every order attempt is done.
