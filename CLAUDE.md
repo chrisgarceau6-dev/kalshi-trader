@@ -576,7 +576,7 @@ Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-stud
 
 # 10. Running state — read this first, refresh it last
 
-**Last updated: 2026-08-21 ~12:25 ET.** If this is more than a few days stale, verify
+**Last updated: 2026-08-22 ~14:20 ET.** If this is more than a few days stale, verify
 everything in it before relying on it.
 
 ## Where the account is
@@ -629,6 +629,33 @@ two runs 43s apart; both archived Aug 20, the loser died in a binary rebase its 
 loop could not clear, and it sent `ARCHIVE FAILED`. No data was lost. Fixed with a
 concurrency group and a push-first retry (#145, verified by firing two dispatches back
 to back). **Before acting on that email, check whether the day is actually on main.**
+
+## Execution work, 2026-08-22 — capture, not strategy
+
+Nothing below changed a gate, threshold or bet-selection rule. All of it changes WHEN
+and WHICH-OF the bot looks, plus what is measured.
+
+| # | change | why |
+|---|---|---|
+| #152 | scan phase-locked to `:01,:16,:31,:46` | criteria are defined at 1-min candle CLOSES (every archived `secs_left` is a multiple of 60). Free-running at 15s put only ~1 look in 4 where the signal exists. Model-wanted fills sat within 10s of a boundary 43.8% of the time vs 20.9% for model-rejected ones — capture AND junk were one phase error |
+| #153/#154 | slot allocation deterministic, tie-broken by `md5(cluster,series)` | was `random.sample(SERIES_LIST)` traded on sight, so the 2 slots went to whichever series the shuffle hit first while the harness takes the 2 with most time left. #153 alone was a BUG: all series close simultaneously, so `_secs_left` ties and a stable sort handed every slot to BTC+ETH — the two worst performers since Aug 5. Hash tie-break measures 16.2-17.1% of slots per series against a 16.67% fair share |
+| #155/#158 | book depth logged; reason-coded funnel | `backtest.py` cannot model the depth check (its own docstring says so), so every capture % measured against the harness counted entries that were never executable. **Capture was an upper bound, not a miss rate.** Funnel now splits observation / gates / depth / concurrency / order stages, which have opposite fixes |
+| #156 | concurrent series discovery | sequential discovery took **3.85s** across 6 series, so the 2 slots were allocated from 6 different moments. Only matters because #153 started ranking candidates against each other |
+| #157 | jobs 240s -> 900s, `timeout-minutes: 20` | duty cycle is scan-time/cycle-time and the ~15s overhead is paid once per job: **94.1% -> 98.4%**, and cheaper in Actions minutes |
+| #151 | bet $50 -> $25 | survival: $329 above the $650 stop was 6.6 losses; now 13.2 |
+
+**Measured, and worth not re-deriving:**
+- Duty cycle 94.4% (pre-#157), median blind gap 13s. Gaps land **uniformly** across the
+  minute — boundary capture 94.2% vs 94.4% wall-clock, so downtime is not
+  boundary-biased. A plausible worry, checked and false.
+- Only **50% of wall-clock has any tradeable market**: eligible window is
+  close-600s..close-150s = 450s, and closes are 900s apart. Idle scans are structural.
+- Slot-cap exclusions are worth only **$1.29/day**. `max_conc=2` is not the constraint.
+- True misses (nothing in the way) were worth **+$19.59/day** over Aug 12-21.
+
+**Do not chase 100% capture as a headline number.** Three of the funnel's exclusion
+categories — concurrency cap, book depth, already-holding — are the risk policy working
+and must never go to zero. Only observation misses and fetch failures are defects.
 
 ## Collecting right now — do not disturb
 
