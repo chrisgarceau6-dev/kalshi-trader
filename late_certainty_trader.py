@@ -335,6 +335,12 @@ ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few doll
 # Note this LOOSENS the gate at $25 (39 vs 60) and TIGHTENS it at $50+ (80 vs 60).
 # Both are intended: the purpose is filling the order without partials, and that scales
 # with the order. Zero partial fills observed in the six orders since the $25 cut.
+# How far outside the entry band a LISTING quote may sit and still earn a real quote
+# refetch. Median listing-vs-market disagreement measured at 1.8c, so 3c covers the
+# tail without pulling in markets that are nowhere near the band. Pre-filter only —
+# the true band is enforced against the refetched ask.
+LISTING_QUOTE_TOLERANCE = Decimal("3")
+
 MIN_BOOK_DEPTH_MULTIPLE = 1.5
 MIN_BOOK_DEPTH_FLOOR    = 25
 
@@ -1078,10 +1084,24 @@ def try_trade(
     # blocked by the `ticker in state["positions"]` guard at the top of this
     # function — markets that flip across the strike mid-window lost -$40/trade
     # in backtest, and that guard is what prevents taking them.
+    # The quote used here comes from the /markets LISTING, which is not the same
+    # number as the individual-market ask. An audit on 2026-08-22 compared the two 96
+    # times: median disagreement 1.8c, band membership disagreed 7 times, and listing
+    # vs book disagreed 14 times. Gating on the listing at the exact band therefore
+    # made real opportunities invisible — the bot never refetched, so it never learned
+    # the listing was wrong.
+    #
+    # The band below is a PRE-FILTER ONLY, widened by LISTING_QUOTE_TOLERANCE. Nothing
+    # is loosened: `fresh_ask` is refetched immediately after and checked against the
+    # true [MIN_ASK_CENTS, MAX_ASK_CENTS] band, so a market that is genuinely outside
+    # still skips. The only effect is that near-band markets get a real quote instead
+    # of being dismissed on a stale one.
+    lo = MIN_ASK_CENTS - LISTING_QUOTE_TOLERANCE
+    hi = MAX_ASK_CENTS + LISTING_QUOTE_TOLERANCE
     side, ask_cents = None, None
-    if MIN_ASK_CENTS <= yes_ask <= MAX_ASK_CENTS:
+    if lo <= yes_ask <= hi:
         side, ask_cents = "yes", yes_ask
-    elif not YES_ONLY and MIN_ASK_CENTS <= no_ask <= MAX_ASK_CENTS:
+    elif not YES_ONLY and lo <= no_ask <= hi:
         side, ask_cents = "no",  no_ask
     # v5.16: the NO 90-91c shadow apparatus that used to live here is gone —
     # the NO side trades for real now. state["shadow_no_*"] keys are retained
@@ -1098,6 +1118,15 @@ def try_trade(
     if fresh_ask is None:
         log(f"  SKIP {ticker} — could not refetch {side} ask")
         return
+    # Measure the listing-vs-fresh disagreement that motivated the tolerance, so the
+    # width can be tuned on data instead of the audit's one-off sample. RECOVERED means
+    # the listing alone would have discarded a genuinely in-band entry.
+    _in_listing = MIN_ASK_CENTS <= ask_cents <= MAX_ASK_CENTS
+    _in_fresh = MIN_ASK_CENTS <= fresh_ask <= MAX_ASK_CENTS
+    if _in_listing != _in_fresh:
+        log(f"  [QUOTE-DRIFT] {ticker} {side.upper()} listing={ask_cents}c "
+            f"fresh={fresh_ask}c delta={float(fresh_ask - ask_cents):+.2f}c "
+            f"{'RECOVERED' if _in_fresh else 'correctly-skipped'}")
     if fresh_ask < MIN_ASK_CENTS:
         log(f"  SKIP {ticker} — {side} ask crashed to {fresh_ask}c "
             f"(< {MIN_ASK_CENTS}c) between scan ({ask_cents}c) and order — "
@@ -1173,6 +1202,31 @@ def try_trade(
     # Taking it from the constant rather than a local keeps this correct wherever
     # try_trade is called from, including the tests.
     need_depth = min_book_depth(limit_cents=MAX_ASK_CENTS)
+    # FAIL CLOSED when the book is entirely unreadable. This used to fail open, on the
+    # reasoning that API errors should never block a valid entry. That reasoning was
+    # overtaken by the last-look guard added below it, whose own comment explains why:
+    # "a marketable order sweeps the book upward from the best offer, so a crashed book
+    # is bought at crash prices no matter what limit we send". Failing open meant
+    # ordering with neither depth nor last-look verified — precisely the deep sub-zone
+    # fills on 2026-08-18 (47c, 57c, 83c) that motivated adding last-look at all.
+    #
+    # Scoped to the case production actually produces: _book_last_look returns
+    # (None, None) together when the book read fails. A present best_offer means the
+    # price guard DID work and only depth is unknown, where the residual risk is a
+    # partial fill rather than a bad price — that case still trades, which is what the
+    # existing partial-fill and cancellation tests depend on.
+    #
+    # Costs measurably ~zero: across the 6 orders since the $25 cut, 0 had depth=-1.
+    #
+    # The daemon now runs 61 scans per job, so a market skipped on one transient book
+    # error is re-evaluated ~15s later. Missing one look is cheap; buying into an
+    # unverified book is not.
+    if depth is None and best_offer is None:
+        log(f"  SKIP {ticker} — book unreadable; neither depth nor last-look could be "
+            f"verified, failing closed")
+        return
+    # depth may still be None here when best_offer read but depth did not; that case
+    # trades on, per the scoping note above.
     if depth is not None and depth < need_depth:
         log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
             f"(need {need_depth})")
