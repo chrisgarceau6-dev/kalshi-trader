@@ -914,26 +914,63 @@ With the flag on, `max(yes_dollars_fp)`=70.0c and `min(no_dollars_fp)`=71.0c aga
 REST `yes_bid`/`yes_ask` of 69/70 — a one-tick move between the two calls, in a market
 seconds from close. §5.2 and §5.4 are sound.
 
-### DELTA APPLICATION — NOT VALIDATED. This is where an implementation will break.
+### DELTA APPLICATION — VALIDATED. My earlier conclusion here was WRONG.
 
-A six-market probe that applied deltas on top of snapshots produced best-ask values
-disagreeing with REST by **13c to 34c** — far too large to be timing. Snapshot-only
-reconstruction on the same feed was correct to 1c, so the fault is in the delta path,
-not the subscription or the price convention.
+This section previously said the delta path was broken and must not be built on. That
+was a broken TEST, not a broken implementation, and the error was mine.
 
-Candidate causes, none yet eliminated:
+The 13c-34c divergence came from comparing the WS book against `/markets/{ticker}` — a
+summary quote that is neither atomic with the book nor current. The correct oracle is
+`/markets/{ticker}/orderbook`. Measured skew: WS runs 1-31 sequence messages and
+280-1350ms ahead of the REST summary, which is the entire discrepancy.
 
-- deltas arriving for a ticker before its snapshot were dropped, leaving a
-  permanently incomplete book (the probe had no `GAP` state and no resubscribe)
-- zero-removal (§5.3) may not be the correct rule
-- sequence continuity was never checked, so a gap would pass unnoticed
+A 140s single-market run against the correct oracle produced **14 consecutive exact
+full-book matches** — every level, every quantity:
 
-**Do not build the client until a single-market probe reproduces REST continuously
-across several minutes of deltas.** The state machine in §6 exists precisely to catch
-this class of failure, and skipping it is how a book silently diverges while the
-process reports LIVE.
+```
+RACE_EXACT t=10.3s  seq=475->482   matched WS seq=475  seq_lag=7   recv_lag_ms=348.3
+OK_EXACT   t=50.3s  seq=1984       full_book_exact=1
+RACE_EXACT t=140.3s seq=3087->3110 matched WS seq=3087 seq_lag=23  recv_lag_ms=635.5
+```
 
-**Still unverified:**
+So the following are confirmed correct, not merely plausible: signed incremental
+`delta_fp`, zero-removal, and mapping `side: "no"` to `yesAsks` under
+`use_yes_price: true`.
+
+**The tell I misread:** two of six markets matched in the bad run. I read that as a
+race in snapshot ordering. The real reason is that quiet markets do not move in 300ms,
+so their tops agreed by luck while active markets diverged. A correct-looking subset
+is not evidence of a correct implementation.
+
+### Two corrections to §4 and §5.3 that the validation forced
+
+- **`seq` is contiguous per `sid`, not per ticker.** One missing message invalidates
+  every market on that subscription. Track `last_seq_by_sid[sid]`, never per-ticker
+  counters. Not documented; established from production traffic.
+- **`new < 0` must enter GAP, not remove the level.** Collapsing `new <= 0` into a
+  pop silently masks corruption — the failure mode where the book stays plausible while
+  being wrong. Exact zero removes; negative is an impossible state.
+
+### NEW open question: spontaneous re-snapshot
+
+The same run ended with:
+
+```
+STATE LIVE -> GAP: unexpected second snapshot without an explicit resync
+FAIL CLOSED
+```
+
+Kalshi sent a second `orderbook_snapshot` on a live subscription without being asked.
+The harness treats that as a gap and fails closed, which is the safe default but would
+force a reconnect every time it happens.
+
+Likely benign: the subscribed market was `KXETH15M-26AUG221545-45`, closing 15:45 ET,
+and the run spanned that close. Market rollover is the obvious candidate. **Not
+confirmed** — before running a WS client in production, watch a market that is NOT near
+close for several minutes and see whether the second snapshot still arrives. If it does,
+re-snapshot is routine and §6 needs a RESYNC transition rather than a GAP.
+
+**Still unverified:****Still unverified:**
 
 - Zero-removal on delta (§5.3) — not documented; needs the create/cancel probe.
 - The delta path as a whole; see above.
