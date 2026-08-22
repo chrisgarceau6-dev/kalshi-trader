@@ -321,7 +321,33 @@ ORDER_RECONCILE_SECONDS = 8    # maximum time to prove the order terminal and re
 ORDER_FILL_WAIT_SECONDS = 3    # resting window before cancel; preserves queue priority for thin books
 ORDER_MAX_ATTEMPTS      = 3    # bounded top-ups, each with a fresh price/prior validation
 ORDER_MIN_TOPUP_DOLLARS = 5    # do not create dust orders for the last few dollars
-MIN_BOOK_DEPTH          = 60   # skip entry if fewer than 60 YES contracts at <=MAX_ASK_CENTS
+# Depth required is now a MULTIPLE OF THE ORDER, not a constant. The constant 60 was
+# calibrated when the bet was $75 (~81 contracts), where it meant "about three quarters
+# of my order". At $25 the order is 26 contracts, so 60 silently became 2.3x — a gate
+# that tightened every time the bet was cut, which is backwards: a smaller order needs
+# LESS depth to fill, not more. An audit on 2026-08-22 found it rejecting a 30-contract
+# BNB NO entry at 161s left that a 26-contract order would have filled outright.
+#
+# 1.5x covers the order with a 50% buffer for the book moving between the last-look
+# read and the order landing. The floor stops it trading into a genuinely illiquid book
+# however small the order gets.
+#
+# Note this LOOSENS the gate at $25 (39 vs 60) and TIGHTENS it at $50+ (80 vs 60).
+# Both are intended: the purpose is filling the order without partials, and that scales
+# with the order. Zero partial fills observed in the six orders since the $25 cut.
+MIN_BOOK_DEPTH_MULTIPLE = 1.5
+MIN_BOOK_DEPTH_FLOOR    = 25
+
+
+def min_book_depth(bet_dollars=None, limit_cents=None):
+    """Contracts of depth required at or below the limit, for THIS order's size."""
+    bet = FLAT_BET_DOLLARS if bet_dollars is None else bet_dollars
+    limit = Decimal(str(MAX_ASK_CENTS if limit_cents is None else limit_cents))
+    contracts = contracts_for_risk(bet_dollars=bet, limit_cents=limit)
+    return max(int(math.ceil(contracts * MIN_BOOK_DEPTH_MULTIPLE)), MIN_BOOK_DEPTH_FLOOR)
+
+
+MIN_BOOK_DEPTH          = 60   # legacy constant; retained only for log/back-compat
 
 
 def price_cents(raw):
@@ -1143,9 +1169,13 @@ def try_trade(
     # — this check is the main guard against thin NO books.
     # Fails open (None) so API errors never block valid entries.
     best_offer, depth = _book_last_look(ticker, side)
-    if depth is not None and depth < MIN_BOOK_DEPTH:
+    # compute_bet_dollars is flat, so the default (FLAT_BET_DOLLARS) is the live size.
+    # Taking it from the constant rather than a local keeps this correct wherever
+    # try_trade is called from, including the tests.
+    need_depth = min_book_depth(limit_cents=MAX_ASK_CENTS)
+    if depth is not None and depth < need_depth:
         log(f"  SKIP {ticker} — thin book: {depth:.0f} contracts at <={MAX_ASK_CENTS}c "
-            f"(need {MIN_BOOK_DEPTH})")
+            f"(need {need_depth})")
         return
 
     # LAST LOOK — a buy limit is a ceiling, never a floor: a marketable order sweeps

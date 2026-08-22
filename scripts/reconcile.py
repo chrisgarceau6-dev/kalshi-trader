@@ -108,9 +108,23 @@ def live_trades(since, until):
     ent = {}
     for f in fills:
         tk, side = f.get("ticker", ""), f.get("side", "")
-        if f.get("action") != "buy":
+        # Kalshi books an opening NO position as action="sell", side="no",
+        # outcome_side="no" — it is a short of YES, not a purchase of NO. Filtering on
+        # action == "buy" therefore silently dropped EVERY NO entry. In a recent sample
+        # of 200 fills, 117 were ('sell','no','no') and only 83 were ('buy','yes','yes'),
+        # so this discarded ~59% of volume and made every fill-quality figure a
+        # YES-only statistic reported as if it covered both sides.
+        #
+        # Keep any fill that OPENS a position on the side we hold, and drop true
+        # closes. The trader holds to settlement and never sells to close, so an
+        # opening fill is: buy on the yes side, or sell on the no side.
+        opening = (f.get("action") == "buy" and side == "yes") or \
+                  (f.get("action") == "sell" and side == "no")
+        if not opening:
             continue
         yp = float(f.get("yes_price_dollars", 0) or 0)
+        # yes_price_dollars is the YES leg either way. For a NO position the price paid
+        # per contract is 1 - yes_price.
         price = yp if side == "yes" else 1.0 - yp
         e = ent.setdefault((tk, side), {"t": f["created_time"], "ct": 0.0, "notional": 0.0})
         e["t"] = min(e["t"], f["created_time"])
