@@ -990,9 +990,20 @@ def shadow_gate_inputs(market, series):
         if priors is None:
             continue                    # retried next poll; nothing marked seen
         _GATELOG_SEEN.add((ticker, side))
+        # Depth is the one live gate scripts/backtest.py cannot model — its docstring
+        # says so outright ("Not modelled: ... book-depth check"). Without it here,
+        # every capture figure measured against the harness counts entries that were
+        # never executable and is therefore an upper bound, not a miss rate. Logging it
+        # is what turns "capture" into a number that can be acted on.
+        # Fails open exactly like the live gate: None means the book read failed, which
+        # is not the same as a thin book and must not be scored as one.
+        best_offer, depth = _book_last_look(ticker, side)
+        d = "None" if depth is None else f"{depth:.0f}"
+        bo = "None" if best_offer is None else f"{best_offer}"
         log(f"  [SHADOW:GATE] {ticker} {side.upper()} ask={ask}c "
             f"secs={secs_left:.0f} p1={int(priors[0])} p2={int(priors[1])} "
-            f"p3={int(priors[2])} series={series}")
+            f"p3={int(priors[2])} depth={d} best={bo} min_depth={MIN_BOOK_DEPTH} "
+            f"series={series}")
 
 
 def try_trade(
