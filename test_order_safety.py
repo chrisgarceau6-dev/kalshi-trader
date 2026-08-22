@@ -366,7 +366,7 @@ class OrderSafetyTests(unittest.TestCase):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
         place.assert_not_called()
 
-    def test_book_depth_api_error_does_not_block_trade(self):
+    def test_totally_unreadable_book_blocks_the_trade(self):
         state = {
             "positions": {},
             "stats": {"trades": 0, "wins": 0, "pnl": 0.0},
@@ -391,7 +391,13 @@ class OrderSafetyTests(unittest.TestCase):
              patch.object(trader.time, "sleep"), \
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
-        self.assertIn("KXETH15M-TEST", state["positions"])
+        # Changed 2026-08-22 (was: an API error must not block a valid entry).
+        # A 503 on the book read leaves BOTH depth and last-look unverified, and the
+        # last-look guard exists precisely because a marketable order sweeps a crashed
+        # book upward regardless of the limit sent. Ordering blind into that is the
+        # failure mode that produced the 47c/57c/83c fills on 2026-08-18. Measured cost
+        # of closing it: 0 of the 6 orders since the $25 cut had an unreadable book.
+        self.assertNotIn("KXETH15M-TEST", state["positions"])
 
     # ── v5.16: NO side live ────────────────────────────────────────────────
     # A NO entry must be liquidity-checked against the YES bid side. The YES-path
