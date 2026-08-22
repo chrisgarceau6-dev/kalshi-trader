@@ -30,6 +30,11 @@ concurrency:
 jobs:
   trade:
     runs-on: ubuntu-latest
+    # A hung job holds the concurrency group and blocks every queued dispatch, so the
+    # blast radius of a hang scales with --duration. At 240s that was self-limiting; at
+    # 900s it is not, and GitHub's default job timeout is 360 minutes. Cap it just above
+    # the scan window so a wedged run is reaped in minutes rather than hours.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -64,10 +69,19 @@ jobs:
           COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
         # Signal-capture fix (Aug 17): poll many times per job instead of once.
         # 70% of qualifying signals are in-band for a single 1-min candle, so a
-        # single scan per job caught only ~27% of them. 240s at 15s intervals =
-        # ~16 scans, and amortises the ~20s checkout/pip/cache overhead across all
-        # of them. Effective cadence ~16s/scan vs ~48s before.
-        run: python late_certainty_trader.py --daemon --duration 240 --interval 15
+        # single scan per job caught only ~27% of them. 15s intervals amortise the
+        # ~20s checkout/pip/cache overhead across every scan in the job.
+        #
+        # 240s -> 900s on 2026-08-22. Duty cycle is set by scan-time over cycle-time,
+        # and the ~15s of per-job overhead is paid once however long the job runs:
+        # 240/(240+15) = 94.1%, 900/(900+15) = 98.4%. Measured duty cycle over 85 runs
+        # was 94.4% with a median blind gap of 13s, matching the arithmetic. The gaps
+        # land uniformly across the minute (checked: no clustering on candle
+        # boundaries), so they cost boundary observations at the same 5.6% rate.
+        #
+        # This is also slightly CHEAPER in Actions minutes, since the checkout/pip
+        # overhead is paid once per 900s instead of once per 240s.
+        run: python late_certainty_trader.py --daemon --duration 900 --interval 15
 
       - name: Save state
         if: always()

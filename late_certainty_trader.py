@@ -201,11 +201,15 @@ SURVIVOR_LOOKBACK = (480, 600)
 # can still be scored against it. Trades nothing, gates nothing.
 GATELOG_ASK   = (88, 99)   # union of every ask band the trader has ever run
 GATELOG_SECS  = (150, 900) # union of every secs band
-# Hard ceiling on candle fetches per process. The job runs ~14-16 scans in 240s and
-# capture rate is set by that cadence, so a shadow that slows the loop would cost real
-# entries to measure hypothetical ones. Each job is a fresh process, so this bounds the
-# added calls per job outright. Markets seen earliest in the job win the budget.
-GATELOG_MAX_FETCHES = 24
+# Hard ceiling on candle fetches per process. Capture rate is set by scan cadence, so a
+# shadow that slows the loop would cost real entries to measure hypothetical ones. Each
+# job is a fresh process, so this bounds the added calls per job outright. Markets seen
+# earliest in the job win the budget.
+#
+# Raised 24 -> 96 alongside --duration 240 -> 900. The budget is per PROCESS, so a
+# 3.75x longer job would otherwise exhaust it in the first quarter and log nothing for
+# the rest — silently starving the very denominator the gate log exists to measure.
+GATELOG_MAX_FETCHES = 96
 
 # ── CANDLE-ALIGNED SCAN PHASE (2026-08-22) ──────────────────────────────────
 # The entry criteria are defined on 1-min candle CLOSES — every secs_left in
