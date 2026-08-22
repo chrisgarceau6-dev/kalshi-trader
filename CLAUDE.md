@@ -653,6 +653,28 @@ and WHICH-OF the bot looks, plus what is measured.
 - Slot-cap exclusions are worth only **$1.29/day**. `max_conc=2` is not the constraint.
 - True misses (nothing in the way) were worth **+$19.59/day** over Aug 12-21.
 
+## External audit, 2026-08-22 — every checkable claim reproduced
+
+An independent audit found defects that invalidate numbers recorded earlier in this
+file. Fixed in #161-#166. **Treat any capture or fill-quality figure written before
+2026-08-22 as unreliable.**
+
+| # | defect | why it mattered |
+|---|---|---|
+| #161 | `reconcile.py` filtered fills on `action == "buy"` | Kalshi books an opening NO as `action="sell", side="no"`. 117 of 200 recent fills are NO, so **every fill-quality figure was YES-only**. "0.239c better than modelled" -> **-0.193c on n=231** |
+| #161 | `MIN_BOOK_DEPTH=60` was a constant | calibrated at $75 (~81 contracts). At $25 (26 contracts) it had become 2.3x — a gate that *tightened* every time the bet was cut. Now 1.5x the order |
+| #162 | entry gate ran on the `/markets` listing quote | refetched only once the listing was already in band. Median listing-vs-real gap 1.8c, band membership disagreed 7 times in 96. Markets whose listing read 94c but whose real ask was 92c were **structurally invisible**. Now a pre-filter widened 3c; true band still enforced on the refetch |
+| #162 | unreadable book failed **open** | ordered with neither depth nor last-look verified — the exact failure behind the 47c/57c/83c fills on Aug 18. Now fails closed when both are None |
+| #163 | archive rounded sub-cent to integer cents | a real 93.30c ask became a false 93c candidate **inside** [90,93]. 18.4% of identities changed. **This corrupted the denominator of every capture figure ever quoted here.** Now exact `Decimal`; old integer files still parse through `float()` |
+| #164 | heat check ran before price eligibility | every market in the window logged a heat skip. The claim "heat check is the dominant blocker, 16 vs 1 trade" was an artifact of ordering |
+| #164 | gate log deduped per market lifetime | markets entering the band later produced no row. Now one row per `(ticker, side, candle)` |
+| #165 | daemon swallowed every cycle error | a fully broken daemon exited 0 and Actions reported green. Now fails on 10 consecutive or >34% failed cycles |
+| #166 | ambiguous order POST assumed failure | a timed-out POST may have been ACCEPTED, leaving a live untracked order. Now reconciled by `client_order_id`, three-valued: found / absent / **lookup failed -> halt** |
+
+**Method note worth keeping:** the depth gate was dismissed earlier that day on
+*frequency* (2 skips in 14 runs) without pricing what it blocked. Frequency was the
+wrong measure.
+
 **Do not chase 100% capture as a headline number.** Three of the funnel's exclusion
 categories — concurrency cap, book depth, already-holding — are the risk policy working
 and must never go to zero. Only observation misses and fetch failures are defects.
