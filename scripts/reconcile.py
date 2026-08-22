@@ -150,12 +150,20 @@ def live_trades(since, until):
 
 
 def _close_day(ticker):
-    """KXBTC15M-26AUG211115-T1 -> 2026-08-21. The archive is keyed by close, not
-    settlement; settlement lags close by ~4h and would bucket into the wrong day."""
+    """KXBTC15M-26AUG211115-T1 -> 2026-08-21.
+
+    The time embedded in a Kalshi ticker is **ET, not UTC**. Verified against
+    close_ts in the archive: 26AUG201930 carries close_ts 2026-08-20 23:30 UTC,
+    exactly +4h. Parsing it as UTC shifts every trade closing after 20:00 ET into
+    the previous day, which silently mis-buckets a quarter of the book.
+
+    The archive is keyed by close, not settlement; settlement lags close by ~4h in
+    the other direction and would bucket into the wrong day too.
+    """
     try:
         import datetime
-        return datetime.datetime.strptime(ticker.split("-")[1].upper(),
-                                          "%y%b%d%H%M").strftime("%Y-%m-%d")
+        naive = datetime.datetime.strptime(ticker.split("-")[1].upper(), "%y%b%d%H%M")
+        return (naive + datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
     except (IndexError, ValueError):
         return None
 
