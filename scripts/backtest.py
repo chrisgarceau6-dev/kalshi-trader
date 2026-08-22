@@ -98,7 +98,10 @@ def load(since=None, until=None):
     files = sorted(glob.glob(os.path.join(DATA, "*.csv.gz")))
     if not files:
         sys.exit(f"no data in {DATA} — run scripts/archive_candles.py --backfill N")
-    ip = lambda v: int(v) if v not in ("", "None") else -1
+    # Prices are EXACT cents and may carry decimals (Kalshi quotes sub-cent; a real
+    # ask of 93.30c is not 93c). Days archived before 2026-08-22 hold integer cents,
+    # which parse identically through float(), so old and new files mix safely.
+    ip = lambda v: float(v) if v not in ("", "None") else -1.0
     rows, seen = [], set()
     for path in files:
         day = os.path.basename(path)[:10]
@@ -111,7 +114,7 @@ def load(since=None, until=None):
                     continue
                 seen.add(k)
                 rows.append((r["series"], r["ticker"], int(r["close_ts"]), r["side"],
-                             int(r["ask"]), float(r["secs_left"]), r["won"] == "True",
+                             float(r["ask"]), float(r["secs_left"]), r["won"] == "True",
                              ip(r["prior_1"]), ip(r["prior_2"]), ip(r["prior_3"])))
     if not rows:
         sys.exit("no rows in the requested window")
