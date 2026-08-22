@@ -1073,6 +1073,36 @@ def shadow_gate_inputs(market, series):
             f"series={series}")
 
 
+def find_order_by_client_id(client_order_id, pages=3):
+    """Did an order actually land, despite an ambiguous POST?
+
+    A POST that times out or returns 5xx may still have been ACCEPTED. Treating it as
+    a failure leaves a live order the bot does not know about — real exposure with no
+    tracking, no cancel and no reconciliation. Kalshi echoes client_order_id on
+    /portfolio/orders, so the ambiguity is resolvable rather than permanent.
+
+    Three-valued on purpose, because "not found" and "could not look" must not collapse:
+      dict  -> the order exists; adopt its order_id and carry on
+      False -> searched successfully and it is absent; the POST really did fail
+      None  -> the lookup itself failed; state is UNKNOWN and must fail closed
+    """
+    cursor = None
+    for _ in range(pages):
+        params = {"limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        code, data = kalshi_get("/portfolio/orders", params)
+        if code != 200:
+            return None
+        for o in data.get("orders", []):
+            if o.get("client_order_id") == client_order_id:
+                return o
+        cursor = data.get("cursor")
+        if not cursor:
+            break
+    return False
+
+
 def try_trade(
     market,
     state,
@@ -1368,20 +1398,54 @@ def try_trade(
         attempt_limits.append(limit_cents)
         client_order_id = str(uuid.uuid4())
         expiration_time = int(time.time()) + ORDER_TTL_SECONDS
-        code, resp = place_order(
-            ticker, side, contracts,
-            yes_price_cents=limit_cents if side == "yes" else None,
-            no_price_cents=limit_cents  if side == "no"  else None,
-            time_in_force="good_till_canceled",
-            expiration_time=expiration_time,
-            client_order_id=client_order_id,
-        )
+        # A timeout raises out of place_order rather than returning a code, and either
+        # way the order may still have landed. Both routes converge on the same
+        # client_order_id lookup below.
+        try:
+            code, resp = place_order(
+                ticker, side, contracts,
+                yes_price_cents=limit_cents if side == "yes" else None,
+                no_price_cents=limit_cents  if side == "no"  else None,
+                time_in_force="good_till_canceled",
+                expiration_time=expiration_time,
+                client_order_id=client_order_id,
+            )
+        except Exception as exc:
+            log(f"    order attempt {attempt} AMBIGUOUS — {type(exc).__name__}: {exc}")
+            code, resp = None, {}
         order_id = None
         if isinstance(resp, dict):
             order_id = resp.get("order_id") or resp.get("order", {}).get("order_id")
         if code not in (200, 201):
-            log(f"    order attempt {attempt} FAILED — HTTP {code}: {str(resp)[:200]}")
-            break
+            # Do NOT assume failure. Ask Kalshi whether the order exists before
+            # deciding, because a live untracked order is far worse than a missed
+            # entry: it carries real exposure with no cancel and no reconciliation.
+            log(f"    order attempt {attempt} did not confirm (HTTP {code}) — "
+                f"reconciling by client_order_id {client_order_id}")
+            landed = find_order_by_client_id(client_order_id)
+            if isinstance(landed, dict):
+                order_id = landed.get("order_id")
+                log(f"    RECOVERED — order DID land as {order_id} "
+                    f"(status={landed.get('status')}); adopting it")
+                code = 201
+            elif landed is False:
+                log(f"    confirmed absent — the order genuinely did not land")
+                break
+            else:
+                reason = (f"{ticker}: order POST ambiguous (HTTP {code}) and the "
+                          f"client_order_id lookup also failed — cannot prove whether "
+                          f"an order is live; manual account reconciliation required")
+                state["execution_halt_reason"] = reason
+                state["execution_halt_context"] = {
+                    "ticker": ticker,
+                    "known_contracts": float(total_contracts),
+                    "known_cost": float(total_cost),
+                    "client_order_id": client_order_id,
+                }
+                save_state(state)
+                log(f"    DANGER — {reason}")
+                send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
+                raise RuntimeError(reason)
         if not order_id:
             reason = f"accepted {ticker} order had no order_id; manual account reconciliation required"
             state["execution_halt_reason"] = reason

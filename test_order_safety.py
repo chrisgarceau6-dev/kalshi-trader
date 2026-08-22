@@ -366,6 +366,39 @@ class OrderSafetyTests(unittest.TestCase):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
         place.assert_not_called()
 
+    # ── ambiguous order POST (2026-08-22) ─────────────────────────────────
+    # A POST that times out or 5xxs may still have been ACCEPTED. Assuming failure
+    # leaves a live order the bot cannot see, cancel or reconcile. All three outcomes
+    # of the client_order_id lookup must be distinguishable.
+
+    def test_ambiguous_post_adopts_an_order_that_actually_landed(self):
+        found = {"client_order_id": "cid-1", "order_id": "srv-9", "status": "resting"}
+        with patch.object(trader, "kalshi_get",
+                          return_value=(200, {"orders": [found], "cursor": None})):
+            self.assertEqual(trader.find_order_by_client_id("cid-1"), found)
+
+    def test_ambiguous_post_confirms_absence_when_lookup_succeeds(self):
+        with patch.object(trader, "kalshi_get",
+                          return_value=(200, {"orders": [], "cursor": None})):
+            # False, not None: searched successfully and it is genuinely not there.
+            self.assertIs(trader.find_order_by_client_id("cid-1"), False)
+
+    def test_ambiguous_post_returns_unknown_when_lookup_itself_fails(self):
+        with patch.object(trader, "kalshi_get", return_value=(503, {})):
+            # None, not False — "could not look" must never be read as "not there",
+            # because that is what would leave a live order untracked.
+            self.assertIsNone(trader.find_order_by_client_id("cid-1"))
+
+    def test_client_order_id_lookup_pages_until_found(self):
+        pages = [
+            (200, {"orders": [{"client_order_id": "other"}], "cursor": "c2"}),
+            (200, {"orders": [{"client_order_id": "cid-1", "order_id": "srv-9"}],
+                   "cursor": None}),
+        ]
+        with patch.object(trader, "kalshi_get", side_effect=pages):
+            got = trader.find_order_by_client_id("cid-1")
+        self.assertEqual(got.get("order_id"), "srv-9")
+
     def test_totally_unreadable_book_blocks_the_trade(self):
         state = {
             "positions": {},
