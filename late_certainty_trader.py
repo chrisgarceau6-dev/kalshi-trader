@@ -206,6 +206,27 @@ GATELOG_SECS  = (150, 900) # union of every secs band
 # added calls per job outright. Markets seen earliest in the job win the budget.
 GATELOG_MAX_FETCHES = 24
 
+# ── CANDLE-ALIGNED SCAN PHASE (2026-08-22) ──────────────────────────────────
+# The entry criteria are defined on 1-min candle CLOSES — every secs_left in
+# data/candles is a multiple of 60. The daemon used to free-run at --interval, so
+# only ~1 look in 4 landed where the signal is actually defined, and the other three
+# sampled the live book mid-candle where a fleeting quote can sit in [90,93]c without
+# being a sustained signal.
+#
+# Measured over Aug 18-21: trades the model also wanted filled within 10s of a candle
+# boundary 43.8% of the time; trades the model rejected did so only 20.9% of the time.
+# Same defect on both sides — a phase error, not a coverage error (duty cycle is
+# already 94.4%, median blind gap 13s).
+#
+# This changes only the PHASE of the scan grid, never its frequency: the same number
+# of scans per job, repositioned so one lands just after each minute boundary.
+#
+# +1s, not -1s or 0: at T+1 the live ask still reflects candle T's close, and
+# _prior_k_candle_asks (end_ts = now-20 = T-19) then returns candles T-1, T-2, T-3 —
+# exactly the priors the model evaluates for an entry on candle T. Reading before the
+# boundary would match the ask but shift the priors by one.
+SCAN_PHASE_OFFSET = 1
+
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
@@ -1671,6 +1692,25 @@ def run_once(dry_run=False):
     log(f"=== done ===")
 
 
+def next_scan_time(interval, now=None):
+    """Next instant on the candle-aligned scan grid.
+
+    Grid is anchored to the minute so that SCAN_PHASE_OFFSET seconds after every
+    candle close is always a scan slot. Requires interval to divide 60; anything else
+    would drift off the boundary within a few minutes, so it falls back to a plain
+    fixed delay rather than silently sampling the wrong phase.
+    """
+    now = time.time() if now is None else now
+    if interval <= 0 or 60 % interval:
+        return now + interval
+    minute = math.floor(now / 60) * 60
+    for k in range(0, 60, interval):
+        t = minute + k + SCAN_PHASE_OFFSET
+        if t > now:
+            return t
+    return minute + 60 + SCAN_PHASE_OFFSET
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--once",    action="store_true")
@@ -1697,7 +1737,7 @@ def main():
         deadline = time.time() + a.duration if a.duration else None
         log(f"=== DAEMON — every {a.interval}s"
             + (f", stopping after {a.duration}s ===" if deadline else ", indefinitely ==="))
-        cycles = 0
+        cycles = aligned = 0
         while True:
             try:
                 run_once(dry_run=a.dry_run)
@@ -1709,10 +1749,14 @@ def main():
                 log(f"cycle error: {e}")
             # Stop before sleeping past the deadline so the job ends predictably
             # and the next dispatch is not delayed.
-            if deadline and time.time() + a.interval >= deadline:
-                log(f"=== DAEMON done — {cycles} scans in {a.duration}s ===")
+            nxt = next_scan_time(a.interval)
+            if deadline and nxt >= deadline:
+                log(f"=== DAEMON done — {cycles} scans in {a.duration}s "
+                    f"({aligned} candle-aligned) ===")
                 break
-            time.sleep(a.interval)
+            if int(nxt) % 60 == SCAN_PHASE_OFFSET:
+                aligned += 1
+            time.sleep(max(0.0, nxt - time.time()))
         return
     try:
         run_once(dry_run=a.dry_run)
