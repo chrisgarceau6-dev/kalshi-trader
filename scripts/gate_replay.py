@@ -34,8 +34,12 @@ LINE = re.compile(
     # live on KXBNB15M), and the trader's own gates compare the float, not a rounding
     # of it. Parsing this as \d+ silently matched nothing at all.
     r"\[SHADOW:GATE\]\s+(?P<ticker>\S+)\s+(?P<side>YES|NO)\s+ask=(?P<ask>[\d.]+)c\s+"
-    r"secs=(?P<secs>\d+)\s+p1=(?P<p1>-?\d+)\s+p2=(?P<p2>-?\d+)\s+p3=(?P<p3>-?\d+)\s+"
-    r"series=(?P<series>\S+)")
+    r"secs=(?P<secs>\d+)\s+p1=(?P<p1>-?\d+)\s+p2=(?P<p2>-?\d+)\s+p3=(?P<p3>-?\d+)"
+    # depth/best/min_depth added 2026-08-22; optional so lines logged before that still
+    # parse rather than silently dropping out of the denominator.
+    r"(?:\s+depth=(?P<depth>None|[\d.]+)\s+best=(?P<best>None|[\d.]+)"
+    r"\s+min_depth=(?P<min_depth>\d+))?"
+    r"\s+series=(?P<series>\S+)")
 
 # Per-market gate sets recovered from git history of the trader. max_conc is a
 # cluster-level constraint and is applied below, not stored here.
@@ -106,7 +110,8 @@ def harvest(since, refresh):
             rows[day].setdefault((d["ticker"], d["side"].lower()), dict(
                 ticker=d["ticker"], side=d["side"].lower(), ask=d["ask"],
                 secs=d["secs"], p1=d["p1"], p2=d["p2"], p3=d["p3"],
-                series=d["series"]))
+                series=d["series"], depth=d.get("depth") or "",
+                best=d.get("best") or "", min_depth=d.get("min_depth") or ""))
         done.add(str(r["databaseId"]))
         if i % 25 == 0:
             print(f"  {i}/{len(runs)} runs", flush=True)
@@ -114,7 +119,8 @@ def harvest(since, refresh):
 
     for day, d in rows.items():
         with open(CACHE / f"{day}.csv", "w", newline="") as f:
-            w = csv.DictWriter(f, ["ticker", "side", "ask", "secs", "p1", "p2", "p3", "series"])
+            w = csv.DictWriter(f, ["ticker", "side", "ask", "secs", "p1", "p2", "p3",
+                                   "series", "depth", "best", "min_depth"])
             w.writeheader()
             for v in d.values():
                 w.writerow(v)
@@ -174,9 +180,28 @@ def main():
         print(f"{name:<11}{len(fired):>9}{len(taken):>7}{len(wins)/len(taken)*100:>8.2f}%"
               f"{tot/len(taken):>+9.3f}{tot:>+10.2f}")
 
-    print("\nThese are poll-observed signals, so unlike scripts/backtest.py they are "
-          "NOT an\nupper bound — every row is something the bot actually had the "
-          "chance to take.")
+    g = VERSIONS["v5.16"]
+    passed = [r for r in seen
+              if qualifies(g, r["side"], float(r["ask"]), int(r["secs"]),
+                           int(r["p1"]), int(r["p2"]), int(r["p3"]))]
+    def _d(r):
+        v = r.get("depth", "")
+        return None if v in ("", "None", None) else float(v)
+    known = [r for r in passed if _d(r) is not None]
+    thin = [r for r in known if _d(r) < float(r.get("min_depth") or 60)]
+    print("\nFUNNEL — a single capture % hides which stage lost the trade, and the")
+    print("stages have opposite fixes. Only an observation miss is a defect.")
+    print(f"  observed at a poll, all candle gates passed : {len(passed):>5}")
+    if known:
+        print(f"    book depth readable                      : {len(known):>5}")
+        print(f"    EXCLUDED by depth (risk policy working)  : {len(thin):>5}"
+              f"  ({len(thin)/len(known)*100:.1f}%)")
+        print(f"    EXECUTABLE — the honest denominator      : {len(known)-len(thin):>5}")
+    else:
+        print("    depth not present on these rows. Capture measured against the")
+        print("    harness is an UPPER BOUND until depth-logged days accumulate.")
+    print("\nPoll-observed, so unlike scripts/backtest.py this is not an upper bound "
+          "on\nobservation — every row is something the bot actually saw.")
 
 
 if __name__ == "__main__":
