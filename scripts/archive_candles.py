@@ -24,6 +24,7 @@ Usage:
     python3 scripts/archive_candles.py --backfill 7  # last 7 days, skip existing
 """
 import argparse
+from decimal import Decimal, InvalidOperation
 import base64
 import csv
 import gzip
@@ -85,13 +86,25 @@ def parse_close_ts(m):
 
 
 def candle_price(c, side):
-    """Ask in cents for the given side. NO ask = 100 - YES bid."""
+    """Ask in EXACT cents for the given side. NO ask = 100 - YES bid.
+
+    Kalshi quotes sub-cent: `close_dollars` carries four decimal places, so 0.9330 is
+    a real ask of 93.30c. This used to round to integer cents, which silently
+    manufactured false candidates — a 93.3000c ask became 93c, which is inside the
+    live [90,93] band when the true price is not. An audit on 2026-08-22 probed 180
+    markets and found rounding changed 18.4% of selected identities. Every capture
+    figure computed against this archive inherited that error in its denominator.
+
+    Returns a Decimal so the value is exact, never a float that prints as 93.30000001.
+    Rows written before 2026-08-22 hold integer cents and cannot be recovered by
+    parsing; re-archive a day with --force to upgrade it in place.
+    """
     try:
         if side == "yes":
-            return int(round(float(c["yes_ask"]["close_dollars"]) * 100))
-        yes_bid = int(round(float(c["yes_bid"]["close_dollars"]) * 100))
-        return 100 - yes_bid if yes_bid > 0 else None
-    except (KeyError, ValueError, TypeError):
+            return Decimal(str(c["yes_ask"]["close_dollars"])) * 100
+        yes_bid = Decimal(str(c["yes_bid"]["close_dollars"])) * 100
+        return Decimal(100) - yes_bid if yes_bid > 0 else None
+    except (KeyError, ValueError, TypeError, InvalidOperation):
         return None
 
 
@@ -212,6 +225,22 @@ def archive_day(date_str, force=False):
     if not all_rows:
         print(f"{date_str}: no qualifying rows ({markets_seen} markets scanned)")
         return False
+
+    # Kalshi drops settled markets at ~67 days, so a --force re-archive of an old day
+    # can legitimately return far less than the file already holds. Overwriting then
+    # destroys data that cannot be re-fetched at any price. Refuse to shrink a healthy
+    # archive; --force is for upgrading precision, not for truncating history.
+    if os.path.exists(path):
+        try:
+            with gzip.open(path, "rt") as f:
+                existing = sum(1 for _ in csv.DictReader(f))
+        except OSError:
+            existing = 0
+        if existing and len(all_rows) < existing * 0.95:
+            print(f"{date_str}: ABORT — refetch has {len(all_rows):,} rows but the "
+                  f"existing archive has {existing:,}. Kalshi has likely aged this day "
+                  f"out; refusing to overwrite good data with a thinner copy.")
+            return False
 
     tmp = path + ".tmp"
     with gzip.open(tmp, "wt", newline="") as f:
