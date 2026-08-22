@@ -29,6 +29,36 @@ CACHE = BASE / "data" / "gatelog"
 sys.path.insert(0, str(BASE))
 sys.path.insert(0, str(BASE / "scripts"))
 
+# Every stage the funnel needs, parsed from the same workflow logs. A SKIP is a
+# reason-coded exclusion; an EXEC is an order that actually went out. Together with
+# [SHADOW:GATE] they cover observation -> gates -> risk policy -> submission -> fill,
+# which is the split that matters, because the stages have opposite fixes.
+SKIP = re.compile(r"SKIP\s+(?P<ticker>\S+)\s+—\s+(?P<reason>.+?)\s*$")
+EXEC = re.compile(
+    r"\[EXEC\]\s+ticker=(?P<ticker>\S+)\s+side=(?P<side>\w+).*?"
+    r"contracts=(?P<contracts>[\d.]+)\s+cost=(?P<cost>[\d.]+)")
+
+# Collapse the variable parts of a SKIP so reasons aggregate. Without this every
+# distinct price or depth becomes its own category and the funnel is unreadable.
+def skip_reason(text):
+    t = re.sub(r"[\d.]+", "N", text)
+    for key, label in (
+        ("heat check", "concurrency cap (by design)"),
+        ("thin book", "book depth (risk policy)"),
+        ("last look", "book moved before order"),
+        ("ask jumped", "ask left band before order"),
+        ("ask crashed", "ask left band before order"),
+        ("could not refetch", "quote fetch failed"),
+        ("could not fetch prior", "candle fetch failed (fails closed)"),
+        ("needs Nrd prior", "p3 gate"),
+        ("asks were", "prior-candle gate"),
+        ("live Kalshi position", "already holding"),
+    ):
+        if key in t:
+            return label
+    return t[:48]
+
+
 LINE = re.compile(
     # ask is logged as a float: Kalshi quotes sub-cent on some books (96.6000c seen
     # live on KXBNB15M), and the trader's own gates compare the float, not a rounding
@@ -98,6 +128,10 @@ def harvest(since, refresh):
 
     runs = [r for r in _runs(since) if str(r["databaseId"]) not in done]
     print(f"{len(runs)} new runs to scan", flush=True)
+    # SKIP/EXEC are events, not per-(ticker,side) facts, so they are not cached the way
+    # gate rows are. They therefore reflect only the runs scanned in THIS invocation —
+    # reported as such rather than silently mixed with cached history.
+    stages = {"skips": defaultdict(int), "orders": 0, "contracts": 0.0}
     for i, r in enumerate(runs, 1):
         log = subprocess.run(["gh", "run", "view", str(r["databaseId"]), "--log"],
                              capture_output=True, text=True, cwd=BASE).stdout
@@ -112,6 +146,11 @@ def harvest(since, refresh):
                 secs=d["secs"], p1=d["p1"], p2=d["p2"], p3=d["p3"],
                 series=d["series"], depth=d.get("depth") or "",
                 best=d.get("best") or "", min_depth=d.get("min_depth") or ""))
+        for m in SKIP.finditer(log):
+            stages["skips"][skip_reason(m.group("reason"))] += 1
+        for m in EXEC.finditer(log):
+            stages["orders"] += 1
+            stages["contracts"] += float(m.group("contracts"))
         done.add(str(r["databaseId"]))
         if i % 25 == 0:
             print(f"  {i}/{len(runs)} runs", flush=True)
@@ -125,7 +164,7 @@ def harvest(since, refresh):
             for v in d.values():
                 w.writerow(v)
     json.dump(sorted(done), open(idx, "w"))
-    return rows
+    return rows, stages
 
 
 def close_day(ticker):
@@ -151,7 +190,7 @@ def main():
     ap.add_argument("--bet", type=float, default=50.0)
     a = ap.parse_args()
 
-    rows = harvest(a.since, a.refresh)
+    rows, stages = harvest(a.since, a.refresh)
     seen = [r for day, d in rows.items() if day >= a.since for r in d.values()]
     if not seen:
         sys.exit("no [SHADOW:GATE] lines cached yet — the trader must run first")
@@ -200,6 +239,17 @@ def main():
     else:
         print("    depth not present on these rows. Capture measured against the")
         print("    harness is an UPPER BOUND until depth-logged days accumulate.")
+    if stages["skips"] or stages["orders"]:
+        tot = sum(stages["skips"].values())
+        print(f"\n  after the gates, why entries were still not taken "
+              f"(runs scanned this invocation only):")
+        for reason, n in sorted(stages["skips"].items(), key=lambda kv: -kv[1]):
+            print(f"    {reason:<38} {n:>5}  ({n/tot*100:5.1f}%)")
+        print(f"    {'ORDERS SUBMITTED':<38} {stages['orders']:>5}"
+              f"  ({stages['contracts']:.0f} contracts)")
+        print("\n  Only 'quote/candle fetch failed' and observation misses are defects.")
+        print("  Concurrency-cap and depth exclusions are the risk policy working, and")
+        print("  'ask left band before order' is the market moving, not the bot failing.")
     print("\nPoll-observed, so unlike scripts/backtest.py this is not an upper bound "
           "on\nobservation — every row is something the bot actually saw.")
 
