@@ -29,6 +29,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 from email.mime.text import MIMEText
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 from kalshi_auth import get as _get, place_order, cancel_order
 
@@ -1650,9 +1651,27 @@ def run_once(dry_run=False):
     # traded. try_trade re-reads the ask immediately before ordering (_fresh_ask_cents)
     # and fails closed if it has left the band, so the extra latency cannot widen the
     # entry price.
+    # Discover every series CONCURRENTLY so the decision snapshot is a snapshot.
+    #
+    # Sequentially this took 3.85s across 6 series (measured, run 32587469934), so the
+    # first series was evaluated nearly four seconds before the last and the two slots
+    # were allocated from six different moments in time. The ask can traverse the whole
+    # [90,93] band in that long — invariant 6 has 70% of signals lasting a single
+    # candle. Concurrent discovery collapses the skew to about one round trip.
+    #
+    # Reads only. Order placement below stays strictly sequential, and try_trade still
+    # re-reads the ask immediately before ordering. kalshi_auth.get is stateless — it
+    # signs fresh headers per call and holds no shared mutable state — so this is safe
+    # to fan out. Falls back to sequential on any executor failure rather than skipping
+    # a scan.
     candidates = []
-    for series in SERIES_LIST:
-        markets = open_markets_near_close(series)
+    try:
+        with ThreadPoolExecutor(max_workers=len(SERIES_LIST)) as ex:
+            found = list(ex.map(open_markets_near_close, SERIES_LIST))
+    except Exception as exc:
+        log(f"  concurrent discovery failed ({exc}) — falling back to sequential")
+        found = [open_markets_near_close(sr) for sr in SERIES_LIST]
+    for series, markets in zip(SERIES_LIST, found):
         n_scanned += len(markets)
         for m in markets:
             candidates.append((series, m))
