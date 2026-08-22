@@ -896,12 +896,47 @@ Note `delta_fp` of `8.27` — a fractional contract count, which is exactly why 
 was already bitten once by sub-cent quoting (`96.6000c` broke a `\d+` regex on
 2026-08-21).
 
-**Still unverified — do not build on these without probing:**
+### `use_yes_price` — RESOLVED, honoured
 
-- Zero-removal on delta (§5.3). The spec flags it as the necessary reconstruction rule
-  but not documented. Needs the create/cancel probe.
-- Whether `use_yes_price: true` was actually honoured, versus the observed arrays
-  merely being consistent with it. Needs an A/B subscribe with the flag off.
+A/B subscribe on the same market, same minute, snapshot only:
+
+```
+use_yes_price=True    no_dollars_fp:  71.0 .. 99.9    (YES scale)
+use_yes_price=False   no_dollars_fp:   0.1 .. 29.0    (NO scale)
+```
+
+The flag is honoured. §5.1 stands, and the `no_dollars_fp` name does keep its
+NO-side meaning while carrying YES-scale prices, exactly as §5.1 warns.
+
+### Snapshot reconstruction — CONFIRMED to within one tick
+
+With the flag on, `max(yes_dollars_fp)`=70.0c and `min(no_dollars_fp)`=71.0c against a
+REST `yes_bid`/`yes_ask` of 69/70 — a one-tick move between the two calls, in a market
+seconds from close. §5.2 and §5.4 are sound.
+
+### DELTA APPLICATION — NOT VALIDATED. This is where an implementation will break.
+
+A six-market probe that applied deltas on top of snapshots produced best-ask values
+disagreeing with REST by **13c to 34c** — far too large to be timing. Snapshot-only
+reconstruction on the same feed was correct to 1c, so the fault is in the delta path,
+not the subscription or the price convention.
+
+Candidate causes, none yet eliminated:
+
+- deltas arriving for a ticker before its snapshot were dropped, leaving a
+  permanently incomplete book (the probe had no `GAP` state and no resubscribe)
+- zero-removal (§5.3) may not be the correct rule
+- sequence continuity was never checked, so a gap would pass unnoticed
+
+**Do not build the client until a single-market probe reproduces REST continuously
+across several minutes of deltas.** The state machine in §6 exists precisely to catch
+this class of failure, and skipping it is how a book silently diverges while the
+process reports LIVE.
+
+**Still unverified:**
+
+- Zero-removal on delta (§5.3) — not documented; needs the create/cancel probe.
+- The delta path as a whole; see above.
 - Pong deadline and close code on keepalive violation (§1.3).
 - `fill` and `user_orders` shapes — not exercised, since probing them means placing an
   order.
