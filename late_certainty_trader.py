@@ -238,6 +238,14 @@ GATELOG_MAX_FETCHES = 180
 # boundary would match the ask but shift the priors by one.
 SCAN_PHASE_OFFSET = 1
 
+# A daemon that fails every cycle must not exit 0. Thresholds are deliberately loose:
+# the job runs ~61 scans, so isolated API blips are expected and cheap, and only a
+# pattern indicates the process itself is broken.
+DAEMON_MAX_CONSEC_FAILURES = 10
+DAEMON_MAX_FAILURE_SHARE   = 0.34   # a third. 0.5 let "every other cycle fails" —
+                                    # 30/60, the exact case this is for — slip through
+                                    # on a strict > comparison.
+
 # Increased from 60s -> 150s. Order placement takes 5-30s (network + Kalshi
 # processing). If scan sees 61s remaining, order might land with <30s left,
 # which puts us in the risky "final minute" bucket where NO has 84% WR (not 100).
@@ -1940,22 +1948,49 @@ def main():
         deadline = time.time() + a.duration if a.duration else None
         log(f"=== DAEMON — every {a.interval}s"
             + (f", stopping after {a.duration}s ===" if deadline else ", indefinitely ==="))
-        cycles = aligned = 0
+        # Per-cycle errors are swallowed so one bad scan cannot end the job — a
+        # transient API blip should cost one look, not the remaining 14 minutes.
+        # But swallowing EVERY error means a comprehensively broken daemon exits 0 and
+        # GitHub reports the run green, so the trader can be dead for hours while every
+        # signal says healthy. An audit on 2026-08-22 flagged exactly this.
+        #
+        # So: tolerate isolated failures, fail the job on systemic ones. Both a run of
+        # consecutive failures and a high overall failure share are treated as systemic,
+        # because a daemon that fails every other cycle never trips a consecutive
+        # counter but is just as broken.
+        cycles = aligned = failures = consec_fail = 0
+        worst_consec = 0
         while True:
             try:
                 run_once(dry_run=a.dry_run)
                 cycles += 1
+                consec_fail = 0
             except KeyboardInterrupt:
                 log("Daemon stopped")
                 break
             except Exception as e:
-                log(f"cycle error: {e}")
+                failures += 1
+                consec_fail += 1
+                worst_consec = max(worst_consec, consec_fail)
+                log(f"cycle error ({consec_fail} consecutive, {failures} total): {e}")
+                if consec_fail >= DAEMON_MAX_CONSEC_FAILURES:
+                    log(f"FATAL: {consec_fail} consecutive cycle failures — the daemon "
+                        f"is not functioning; failing the job so it is visible")
+                    raise
             # Stop before sleeping past the deadline so the job ends predictably
             # and the next dispatch is not delayed.
             nxt = next_scan_time(a.interval)
             if deadline and nxt >= deadline:
+                attempts = cycles + failures
                 log(f"=== DAEMON done — {cycles} scans in {a.duration}s "
-                    f"({aligned} candle-aligned) ===")
+                    f"({aligned} candle-aligned, {failures} failed, "
+                    f"worst streak {worst_consec}) ===")
+                if attempts and failures / attempts > DAEMON_MAX_FAILURE_SHARE:
+                    raise RuntimeError(
+                        f"{failures}/{attempts} cycles failed "
+                        f"({failures / attempts:.0%}) — above the "
+                        f"{DAEMON_MAX_FAILURE_SHARE:.0%} threshold; failing the job "
+                        f"rather than reporting a broken run as green")
                 break
             if int(nxt) % 60 == SCAN_PHASE_OFFSET:
                 aligned += 1
