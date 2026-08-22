@@ -206,10 +206,16 @@ GATELOG_SECS  = (150, 900) # union of every secs band
 # job is a fresh process, so this bounds the added calls per job outright. Markets seen
 # earliest in the job win the budget.
 #
-# Raised 24 -> 96 alongside --duration 240 -> 900. The budget is per PROCESS, so a
-# 3.75x longer job would otherwise exhaust it in the first quarter and log nothing for
-# the rest — silently starving the very denominator the gate log exists to measure.
-GATELOG_MAX_FETCHES = 96
+# Raised 24 -> 96 alongside --duration 240 -> 900, then 96 -> 180 when the log moved
+# to one row per candle. The budget is per PROCESS, so a ceiling below what a full job
+# can produce silently starves the back half of every job — the denominator the gate
+# log exists to measure would simply stop being recorded partway through.
+#
+# 180 = 15 candle closes in a 900s job x 6 series x 2 sides, the theoretical maximum.
+# The real rate is well under that, since both sides of a market are rarely inside the
+# 88-99 union band at once. If this ever binds it will show up as the scan count per
+# job falling, which is the signal to look at API pressure rather than raise it again.
+GATELOG_MAX_FETCHES = 180
 
 # ── CANDLE-ALIGNED SCAN PHASE (2026-08-22) ──────────────────────────────────
 # The entry criteria are defined on 1-min candle CLOSES — every secs_left in
@@ -1019,14 +1025,30 @@ def shadow_gate_inputs(market, series):
         ask = price_cents(market.get(f"{side}_ask_dollars"))
         if ask is None or not (GATELOG_ASK[0] <= ask <= GATELOG_ASK[1]):
             continue
-        if (ticker, side) in _GATELOG_SEEN:
+        # One row per (ticker, side) per CANDLE, not one per market lifetime.
+        #
+        # Deduping on (ticker, side) alone logged only the first moment a market
+        # drifted into the union band and nothing after, so a market that entered the
+        # real [90,93] band later in its life produced no row at all — the gate log
+        # was missing exactly the observations the funnel exists to count. A market
+        # lives ~450s, which is 8 candle closes, so keying on the minute captures every
+        # decision point the model evaluates.
+        #
+        # Restricted to candle-aligned scans. The criteria are defined at candle
+        # CLOSES, so a mid-candle row is not a decision point the model would ever
+        # take, and logging all four scans per minute would burn the fetch budget on
+        # rows that cannot be scored.
+        minute = int(time.time()) // 60
+        if (int(time.time()) % 60) > SCAN_PHASE_OFFSET + 2:
+            continue                        # mid-candle scan; not a model decision point
+        if (ticker, side, minute) in _GATELOG_SEEN:
             continue
         if len(_GATELOG_SEEN) >= GATELOG_MAX_FETCHES:
             return
         priors = _prior_k_candle_asks(ticker, series, side, 3)
         if priors is None:
             continue                    # retried next poll; nothing marked seen
-        _GATELOG_SEEN.add((ticker, side))
+        _GATELOG_SEEN.add((ticker, side, minute))
         # Depth is the one live gate scripts/backtest.py cannot model — its docstring
         # says so outright ("Not modelled: ... book-depth check"). Without it here,
         # every capture figure measured against the harness counts entries that were
@@ -1059,15 +1081,6 @@ def try_trade(
         return  # already entered this market
     if ticker in live_position_tickers or ticker in resting_order_tickers:
         log(f"  SKIP {ticker} — live Kalshi position/order exists (state was stale)")
-        return
-    state_open = {
-        t for t, p in state.get("positions", {}).items() if not p.get("settled")
-    }
-    # Kalshi positions are aggregated by ticker, while every resting order is
-    # separate potential exposure and must consume its own concurrency slot.
-    open_cnt = len(state_open | live_position_tickers) + len(resting_order_tickers)
-    if open_cnt >= MAX_CONCURRENT_POSITIONS:
-        log(f"  SKIP {ticker} — heat check: {open_cnt} open positions (limit {MAX_CONCURRENT_POSITIONS})")
         return
     bet_dollars = compute_bet_dollars(balance)
     secs_left = market.get("_secs_left", 0)
@@ -1107,6 +1120,30 @@ def try_trade(
     # the NO side trades for real now. state["shadow_no_*"] keys are retained
     # (unused) so existing cached state stays schema-compatible.
     if side is None:
+        return
+
+    # HEAT CHECK — deliberately AFTER side selection, not before it.
+    #
+    # It used to run first, so every market in the 150-600s window logged a heat skip
+    # whether or not its price was ever near the band. That made the concurrency cap
+    # look like the dominant blocker in the logs — 16 skips against 1 trade in one
+    # sample — when most of those markets were never candidates at all. An audit on
+    # 2026-08-22 found a single run producing 73 heat skips, largely the same four
+    # markets re-counted every 15s.
+    #
+    # Side selection reads only the listing quote already in hand, so moving the check
+    # here costs no extra API call and still short-circuits before the refetch, the
+    # candle fetches and the book read. The skip now means what it says: a real
+    # candidate was blocked by the cap.
+    state_open = {
+        t for t, p in state.get("positions", {}).items() if not p.get("settled")
+    }
+    # Kalshi positions are aggregated by ticker, while every resting order is
+    # separate potential exposure and must consume its own concurrency slot.
+    open_cnt = len(state_open | live_position_tickers) + len(resting_order_tickers)
+    if open_cnt >= MAX_CONCURRENT_POSITIONS:
+        log(f"  SKIP {ticker} — heat check: {open_cnt} open positions "
+            f"(limit {MAX_CONCURRENT_POSITIONS})")
         return
 
     # PREFLIGHT RECHECK — the scan happened seconds ago. Refetch the ask right
