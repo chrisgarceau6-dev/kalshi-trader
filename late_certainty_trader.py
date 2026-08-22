@@ -229,8 +229,23 @@ LONGSHOT_BET       = 5
 SERIES_BET_MULTIPLIER = {}
 
 # ── ADAPTIVE BET SIZING ────────────────────────────────────────────────────
-# Flat $75 principal-risk budget per order; fees are additional.
-FLAT_BET_DOLLARS = 50
+# Flat principal-risk budget per order; fees are additional.
+#
+# $50 -> $25 on 2026-08-22. This is a survival decision, not a win-rate decision.
+# Balance was $979.62, which is $329.62 above the $650 stop — 6.6 losses at $50.
+# Aug 21-22 alone ran 87.23% on 141 trades for -$383.42, so two more days like that
+# reach the stop and end the experiment permanently. At $25 the same headroom is 13.2
+# losses.
+#
+# The point is that this costs almost nothing to learn from. Win rate is
+# size-independent, and MIN_BOOK_DEPTH is an absolute contract count, so the bot takes
+# exactly the same trades and the statistic accrues at full speed — 2,418 trades is
+# still ~27 days. Only the dollar exposure halves. compute_daily_loss_limit stays at
+# $300 because of the max() floor; cutting the bet does NOT retighten it this time.
+#
+# Restore to $50 when EITHER the reconciliation explains the capture gap, OR ~2,418
+# clean trades confirm the win rate above break-even. Not on a good week.
+FLAT_BET_DOLLARS = 25
 
 
 def compute_bet_dollars(balance):
