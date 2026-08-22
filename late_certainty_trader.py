@@ -22,7 +22,7 @@ KILL SWITCHES:
 usage: --once | --dry-run | --status
 """
 
-import argparse, base64, json, math, os, smtplib, time, urllib.request, urllib.error, uuid
+import argparse, base64, hashlib, json, math, os, smtplib, time, urllib.request, urllib.error, uuid
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -1645,7 +1645,30 @@ def run_once(dry_run=False):
         n_scanned += len(markets)
         for m in markets:
             candidates.append((series, m))
-    candidates.sort(key=lambda sm: -sm[1].get("_secs_left", 0))
+    # Tie-break deterministically but WITHOUT favouring any series.
+    #
+    # All ~6 series close simultaneously (invariant 3), so within a cluster every
+    # candidate carries the same _secs_left and the sort key is a total tie. A stable
+    # sort then falls back to SERIES_LIST order, which would hand both slots to BTC and
+    # ETH in every cluster, forever. Measured since Aug 5 that is the wrong pair —
+    # BTC -$1.099/tr and ETH -$0.551/tr against BNB +$1.062 and XRP +$1.222. The
+    # ranking is only ~1.2 sigma and is probably noise, but that is precisely the
+    # argument against a fixed order: concentrating every slot into two series turns a
+    # diversified sample into a bet on whichever two are listed first, for no measured
+    # gain (slot allocation is worth ~$1.29/day).
+    #
+    # Hashing (cluster, series) keeps allocation reproducible for a given cluster while
+    # spreading it uniformly across series over many clusters — measured 16.2-17.1% of
+    # slots per series against a 16.67% fair share. hashlib, not hash(): the builtin is
+    # salted per process and would not reproduce across runs.
+    def _slot_key(sm):
+        series, m = sm
+        tk = m.get("ticker", "")
+        cluster = tk.split("-")[1] if "-" in tk else ""
+        h = hashlib.md5(f"{cluster}|{series}".encode()).hexdigest()[:8]
+        return (-m.get("_secs_left", 0), int(h, 16))
+
+    candidates.sort(key=_slot_key)
     for series, m in candidates:
         scanned.append((series, m))
         before = len(state.get("positions", {}))
