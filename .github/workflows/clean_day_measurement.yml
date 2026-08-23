@@ -63,6 +63,29 @@ jobs:
       - name: Install deps
         run: pip install requests cryptography
 
+      # kalshi_auth.load_private_key reads a FILE; it never looks at
+      # KALSHI_PRIVATE_KEY. late_certainty_trader.py:401 base64-decodes the secret
+      # to a temp path and exports KALSHI_PRIVATE_KEY_PATH — the analysis scripts
+      # do not, so without this every one of them dies on FileNotFoundError.
+      - name: Materialize the API key
+        env:
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, os, pathlib
+          raw = os.environ.get("KALSHI_PRIVATE_KEY", "").strip()
+          if not raw:
+              raise SystemExit("KALSHI_PRIVATE_KEY is empty — cannot authenticate")
+          b64 = raw.replace("\n", "").replace("\r", "").replace(" ", "")
+          b64 += "=" * (-len(b64) % 4)
+          p = pathlib.Path("/tmp/kalshi_measure_key.pem")
+          p.write_bytes(base64.b64decode(b64))
+          p.chmod(0o600)
+          print(f"wrote {p} ({p.stat().st_size} bytes)")
+          PY
+          echo "KALSHI_PRIVATE_KEY_PATH=/tmp/kalshi_measure_key.pem" >> $GITHUB_ENV
+
       - name: Resolve the window
         id: win
         run: |
@@ -91,6 +114,9 @@ jobs:
           KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
         run: |
+          # tee returns 0 even when python dies; without pipefail a job in which
+          # every step threw still reports green. That happened on the first run.
+          set -euo pipefail
           python3 scripts/reconcile.py \
             --since ${{ steps.win.outputs.day }} \
             --until ${{ steps.win.outputs.day }} \
@@ -101,6 +127,7 @@ jobs:
           KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
           python3 scripts/reconcile.py \
             --since ${{ steps.win.outputs.bsince }} \
             --until ${{ steps.win.outputs.buntil }} \
@@ -112,12 +139,14 @@ jobs:
           KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
           python3 scripts/gate_replay.py \
             --since ${{ steps.win.outputs.day }} | tee day_gate.txt
 
       - name: Score the pre-registered prediction
         id: score
         run: |
+          set -euo pipefail
           python3 - <<'PY' | tee verdict.txt
           import json, os
           def load(p):
