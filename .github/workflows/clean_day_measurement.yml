@@ -1,0 +1,257 @@
+name: Clean-Day Measurement
+
+# The pre-registered test from CLAUDE.md §"The measurement that decides whether
+# 2026-08-22's work helped". It runs itself so the answer is waiting in the
+# morning instead of depending on someone staying up for the 11:30pm ET archive.
+#
+# PREDICTION (pre-registered, falsifiable): capture RISES **and** model-rejected
+# (EXTRA) trades FALL, together — one prediction for both, because they were a
+# single phase error. If capture rises while EXTRA stays flat, the
+# mid-candle-noise explanation is wrong and #152 should be REVERTED.
+# This job reports that verdict mechanically. Do not rescue a partial result
+# with a new story.
+#
+# Baseline is recomputed with today's code rather than compared to the stale
+# 44.6%, whose denominator the sub-cent rounding fix (#163) invalidated.
+
+on:
+  workflow_run:
+    workflows: ["Archive Candle Data"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Day to measure (YYYY-MM-DD). Blank = yesterday UTC."
+        required: false
+        default: ""
+      baseline_since:
+        description: "Baseline window start (YYYY-MM-DD)."
+        required: false
+        default: "2026-08-18"
+      baseline_until:
+        description: "Baseline window end, inclusive. Blank = day before the measured day."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: clean-day-measurement
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    # workflow_run fires on failure too; only measure a day that actually landed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run checks out the commit that triggered the *parent*, which
+          # predates the archive commit we need. Always take current main.
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests cryptography
+
+      - name: Resolve the window
+        id: win
+        run: |
+          DAY="${{ inputs.date }}"
+          if [ -z "$DAY" ]; then DAY=$(date -u -d yesterday +%Y-%m-%d); fi
+          BSINCE="${{ inputs.baseline_since }}"
+          if [ -z "$BSINCE" ]; then BSINCE="2026-08-18"; fi
+          BUNTIL="${{ inputs.baseline_until }}"
+          if [ -z "$BUNTIL" ]; then BUNTIL=$(date -u -d "$DAY -1 day" +%Y-%m-%d); fi
+          echo "day=$DAY"       >> $GITHUB_OUTPUT
+          echo "bsince=$BSINCE" >> $GITHUB_OUTPUT
+          echo "buntil=$BUNTIL" >> $GITHUB_OUTPUT
+          echo "Measuring $DAY against baseline $BSINCE..$BUNTIL"
+
+      - name: Archive present?
+        run: |
+          F="data/candles/${{ steps.win.outputs.day }}.csv.gz"
+          if [ ! -s "$F" ]; then
+            echo "MISSING $F — cannot measure a day that was never archived" >&2
+            exit 1
+          fi
+          echo "ok: $F ($(stat -c%s "$F") bytes)"
+
+      - name: Reconcile — measured day
+        env:
+          KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          python3 scripts/reconcile.py \
+            --since ${{ steps.win.outputs.day }} \
+            --until ${{ steps.win.outputs.day }} \
+            --json day.json | tee day_reconcile.txt
+
+      - name: Reconcile — baseline window
+        env:
+          KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          python3 scripts/reconcile.py \
+            --since ${{ steps.win.outputs.bsince }} \
+            --until ${{ steps.win.outputs.buntil }} \
+            --json base.json | tee base_reconcile.txt
+
+      - name: Gate replay
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KALSHI_API_KEY_ID:  ${{ secrets.KALSHI_API_KEY_ID }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          python3 scripts/gate_replay.py \
+            --since ${{ steps.win.outputs.day }} | tee day_gate.txt
+
+      - name: Score the pre-registered prediction
+        id: score
+        run: |
+          python3 - <<'PY' | tee verdict.txt
+          import json, os
+          def load(p):
+              d = json.load(open(p))
+              m, mi, ex = len(d["matched"]), len(d["missed"]), len(d["extra"])
+              denom = m + mi
+              return dict(matched=m, missed=mi, extra=ex,
+                          capture=(100.0 * m / denom) if denom else None,
+                          # EXTRA per model-opportunity, so the two windows compare
+                          # at different volumes without a raw-count illusion.
+                          extra_rate=(100.0 * ex / denom) if denom else None)
+          day, base = load("day.json"), load("base.json")
+
+          def fmt(v, s="%"): return "n/a" if v is None else f"{v:.1f}{s}"
+          lines = []
+          lines.append(f"{'metric':<22}{'baseline':>12}{'measured':>12}{'delta':>12}")
+          for key, label in (("capture", "capture %"),
+                             ("extra_rate", "EXTRA per opp %"),
+                             ("extra", "EXTRA (count)"),
+                             ("matched", "matched"),
+                             ("missed", "missed")):
+              b, d = base[key], day[key]
+              suffix = "%" if key in ("capture", "extra_rate") else ""
+              delta = "n/a" if (b is None or d is None) else f"{d - b:+.1f}{suffix}"
+              lines.append(f"{label:<22}{fmt(b, suffix):>12}{fmt(d, suffix):>12}{delta:>12}")
+
+          cap_up   = (day["capture"] is not None and base["capture"] is not None
+                      and day["capture"] > base["capture"])
+          # "Falls" needs a band: a rate that wobbles by a hair has not moved.
+          extra_dn = (day["extra_rate"] is not None and base["extra_rate"] is not None
+                      and day["extra_rate"] < base["extra_rate"] - 0.5)
+          extra_flat = (day["extra_rate"] is not None and base["extra_rate"] is not None
+                        and abs(day["extra_rate"] - base["extra_rate"]) <= 0.5)
+
+          if cap_up and extra_dn:
+              verdict = "CONFIRMED — capture up AND EXTRA down. #152 validated."
+          elif cap_up and extra_flat:
+              verdict = ("REFUTED — capture rose but EXTRA is FLAT. The "
+                         "mid-candle-noise explanation is wrong. REVERT #152. "
+                         "Do not rescue this with a new story.")
+          elif cap_up:
+              verdict = ("SPLIT — capture rose, EXTRA moved the wrong way. "
+                         "Not the pre-registered pattern; treat as REFUTED.")
+          elif not cap_up:
+              verdict = "NOT CONFIRMED — capture did not rise. #152 unsupported."
+
+          lines += ["", f"VERDICT: {verdict}", "",
+                    "Pre-registered: capture UP *and* EXTRA DOWN, together.",
+                    "Baseline recomputed with current code — the old 44.6% rests on a",
+                    "denominator invalidated by the sub-cent rounding fix (#163)."]
+          out = "\n".join(lines)
+          print(out)
+
+          short = verdict.split(" — ")[0]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"verdict={short}\n")
+              f.write(f"capture={fmt(day['capture'])}\n")
+          PY
+
+      - name: Email the result
+        if: always()
+        env:
+          COPY_EMAIL_FROM:     ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_TO:       ${{ secrets.COPY_EMAIL_TO }}
+          COPY_EMAIL_PASSWORD: ${{ secrets.COPY_EMAIL_PASSWORD }}
+          DAY:     ${{ steps.win.outputs.day }}
+          VERDICT: ${{ steps.score.outputs.verdict }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          # stdlib only, same reasoning as archive_candles.yml: the alert must not
+          # depend on the deps whose failure it may be reporting.
+          import os, smtplib
+          from email.mime.text import MIMEText
+          def read(p):
+              try:
+                  return open(p).read()
+              except OSError:
+                  return f"({p} not produced — the step before it failed)"
+          day     = os.environ.get("DAY", "?")
+          verdict = os.environ.get("VERDICT") or "INCOMPLETE"
+          body = "\n\n".join([
+              f"Clean-day measurement for {day}",
+              read("verdict.txt"),
+              "=" * 66, "RECONCILE — measured day", read("day_reconcile.txt"),
+              "=" * 66, "RECONCILE — baseline",     read("base_reconcile.txt"),
+              "=" * 66, "GATE REPLAY",              read("day_gate.txt"),
+              f"Run: {os.environ.get('RUN_URL','')}",
+          ])
+          to, frm, pw = (os.environ.get(k, "") for k in
+                         ("COPY_EMAIL_TO", "COPY_EMAIL_FROM", "COPY_EMAIL_PASSWORD"))
+          if not all([to, frm, pw]):
+              print("email secrets missing — result not sent\n" + body)
+              raise SystemExit(0)
+          m = MIMEText(body)
+          m["From"], m["To"] = frm, to
+          m["Subject"] = f"[Kalshi] {day} measurement — {verdict}"
+          with smtplib.SMTP("smtp.gmail.com", 587) as s:
+              s.starttls(); s.login(frm, pw); s.send_message(m)
+          print("result emailed")
+          PY
+
+      - name: Keep the parsed gate-log cache
+        if: always()
+        run: |
+          # Workflow logs expire; these parsed lines are the only permanent copy.
+          if [ -z "$(git status --porcelain data/gatelog)" ]; then
+            echo "no new gate-log lines"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/gatelog
+          git commit -m "data: gate-log cache through ${{ steps.win.outputs.day }}"
+          for i in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git fetch origin main
+            git rebase --abort 2>/dev/null || true
+            git pull --rebase origin main || git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "gate-log cache push failed after 3 attempts" >&2
+          exit 1
+
+      - name: Upload full output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: measurement-${{ steps.win.outputs.day }}
+          path: |
+            verdict.txt
+            day_reconcile.txt
+            base_reconcile.txt
+            day_gate.txt
+            day.json
+            base.json
+          if-no-files-found: warn
