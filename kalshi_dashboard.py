@@ -1156,10 +1156,39 @@ function render(d){
   const dS=alt?sett.filter(s=>new Date(s.ts).getTime()>=cutoff('1D')):hs;
   const dW=dS.filter(s=>s.won).length, dP=dS.reduce((a,s)=>a+s.pnl,0);
   const avg=inR.length?rangePnl/inR.length:0;
-  const be=inR.length?(wins/inR.length*100-92):null;   // break-even is ~92%
+
+  // A TRADE-weighted win rate against a flat 92% is the wrong comparison and has
+  // already misled once (CLAUDE.md: "Never compare a raw win rate to a flat 92%").
+  // P&L experiences a DOLLAR-weighted rate, and break-even moves with the price
+  // paid. Both are computed from the trades actually in range:
+  //   dollar-weighted WR = cost(winners) / cost(all)
+  //   break-even         = cost(all) / contracts(all) = cost-weighted avg price
+  // Contracts are exact for winners (settlement pays $1/contract, so rev IS the
+  // count). Losers carry no count, so they are imputed at the winner-implied
+  // average price; every trade sits in the same 90-93c band, which holds that
+  // error near 0.03pp — two orders below the ~1.2pp effect this is here to show.
+  function margin(rows){
+    if(!rows.length) return null;
+    const cost=rows.reduce((a,s)=>a+s.cost,0);
+    if(cost<=0) return null;
+    const W=rows.filter(s=>s.won);
+    const wCost=W.reduce((a,s)=>a+s.cost,0);
+    const wCon =W.reduce((a,s)=>a+s.rev ,0);          // $1/contract => rev = count
+    if(wCon<=0) return null;
+    const px=wCost/wCon;                               // implied avg entry price
+    if(!(px>0&&px<1)) return null;
+    const con=rows.reduce((a,s)=>a+(s.won?s.rev:s.cost/px),0);
+    if(con<=0) return null;
+    const dwWR=100*wCost/cost, bev=100*cost/con;
+    return {dwWR:dwWR, be:bev, margin:dwWR-bev};
+  }
+  const M=margin(inR);
+  const be=M?M.margin:null;
   const S=[
     ['l0',RLBL[range]+' P&L','v0',signed(rangePnl),cls(rangePnl),'s0',inR.length?signed(avg)+' / trade':''],
-    ['l1',RLBL[range]+' WR','v1',pct(wins,inR.length),'','s1',be==null?'':(be>=0?'+':'')+be.toFixed(1)+'pp vs break-even'],
+    ['l1',RLBL[range]+' WR ($-wtd)','v1',M?M.dwWR.toFixed(2)+'%':pct(wins,inR.length),
+     M?cls(M.margin):'','s1',
+     M?(M.margin>=0?'+':'')+M.margin.toFixed(2)+'pp vs '+M.be.toFixed(2)+'% b/e':''],
     ['l2',RLBL[range]+' trades','v2',String(inR.length),'mut','s2',wins+'W · '+(inR.length-wins)+'L'],
     ['l3',(alt?'Today':'Hour')+' P&L','v3',signed(dP),cls(dP),'s3',''],
     ['l4',(alt?'Today':'Hour')+' WR','v4',pct(dW,dS.length),'','s4',dS.length+' trades'],
