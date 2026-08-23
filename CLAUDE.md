@@ -576,7 +576,7 @@ Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-stud
 
 # 10. Running state — read this first, refresh it last
 
-**Last updated: 2026-08-22 ~14:20 ET.** If this is more than a few days stale, verify
+**Last updated: 2026-08-22 ~16:10 ET.** If this is more than a few days stale, verify
 everything in it before relying on it.
 
 ## Where the account is
@@ -675,6 +675,68 @@ file. Fixed in #161-#166. **Treat any capture or fill-quality figure written bef
 *frequency* (2 skips in 14 runs) without pricing what it blocked. Frequency was the
 wrong measure.
 
+## Why a 93.7% win rate still loses money — the decomposition to reach for first
+
+The monitor reports a TRADE-weighted win rate. P&L experiences a DOLLAR-weighted one,
+and break-even moves with the price paid. Since Aug 1:
+
+| | value |
+|---|---|
+| trade-weighted WR (what the monitor shows) | 93.56% |
+| **dollar-weighted WR (what P&L feels)** | **92.35%** |
+| blended break-even for the actual price/size mix | 92.50% |
+| **margin** | **-0.15pp** -> **-$149.62** |
+
+Average winner risked $37.32, average loser $44.93 — ratio **1.204**. Nothing selects
+bigger bets for losses; the bet ramped over the window and losses landed later. That
+alone drags the effective rate 1.2pp, which is most of the edge.
+
+`python3 -c` over settlements: dollar-weighted WR = sum(cost of winners)/sum(all cost);
+blended break-even = D/(D+U) where U is total upside if every trade won.
+
+**Never compare a raw win rate to a flat 92%.** Since Aug 1 you risked $59,320 to win
+$4,812 — $12.30 per $1, so one loss erases 12.3 wins and a 1.2pp weighting gap is not
+a rounding error. This decomposition only holds inside one price regime; it breaks on
+all-time, which mixes v5.16 with the pre-Aug-5 band.
+
+## The measurement that decides whether 2026-08-22's work helped
+
+2026-08-22 spans six code versions and is unmeasurable. The first clean day is
+**2026-08-23**, archived 2026-08-24 03:30 UTC. Run then:
+
+```bash
+python3 scripts/reconcile.py --since 2026-08-23 --until 2026-08-23
+python3 scripts/gate_replay.py --since 2026-08-23
+```
+
+**Pre-registered, and it is falsifiable:** capture should rise AND model-rejected
+(EXTRA) trades should fall, *together*. That is the same prediction for both, because
+they were one phase error. **If capture rises while EXTRA stays flat, the
+mid-candle-noise explanation is wrong and #152 should be reverted.** Do not rescue it
+with a new story.
+
+Last measured capture was 44.6% (Aug 18-21) against a denominator since proven wrong
+by the sub-cent rounding — treat it as a floor, not a baseline.
+
+## WebSocket — specced and validated, deliberately not wired in
+
+`docs/websocket_spec.md` carries the client contract plus an appendix of what was
+verified against production. Delta reconstruction is confirmed: **14 consecutive exact
+full-book matches** over 140s against `/markets/{ticker}/orderbook`.
+
+Working artifacts live outside the repo at
+`~/Documents/Codex/2026-08-20/i/outputs/` — `kalshi_orderbook_reconstructor.py`
+(fail-closed, multi-market) and `kalshi_ws_orderbook_validator.py` (`--self-test`, or a
+ticker plus `--duration`).
+
+Two things that cost a session to learn: **`seq` is contiguous per `sid`, not per
+ticker**, and **`new < 0` must GAP rather than pop the level**. One open question —
+Kalshi sent a second snapshot on a live subscription unasked; likely market rollover,
+unconfirmed. Probe a market away from close before running a client.
+
+**Do not wire it in before the 2026-08-23 measurement.** If the residual loss turns out
+to be depth exclusions or the concurrency cap, a streaming feed fixes nothing.
+
 **Do not chase 100% capture as a headline number.** Three of the funnel's exclusion
 categories — concurrency cap, book depth, already-holding — are the risk policy working
 and must never go to zero. Only observation misses and fetch failures are defects.
@@ -685,6 +747,7 @@ and must never go to zero. Only observation misses and fetch failures are defect
 |---|---|---|---|
 | `[SHADOW:MOM3]` adverse momentum | Aug 21 00:04 ET (data before that is invalid — partial-candle bug) | ~500 blocked trades | Live rate is 2/day vs 8-10 forecast. Re-check after a week; if it holds, dead on timeline |
 | `[EXEC]` fill quality by side | Aug 21 ~00:15 ET | ~500 NO fills, 12-16 days | `avg_fill` vs `book` by side; also prices the thin-book gate via `depth` |
+| `[QUOTE-DRIFT]` listing vs fresh ask | Aug 22 | ~1 week | Every band disagreement, marked RECOVERED or correctly-skipped. Two RECOVERED in the first 15-min job (ETH listing 89c, real ask 90.0c and 91.8c). Tunes LISTING_QUOTE_TOLERANCE=3c on our data instead of the audit's sample |
 | `[SHADOW:GATE]` poll-level gate inputs | Aug 21 12:09 ET | ~2 weeks | Scores ANY version on what the bot actually saw, unlike archive replay which is an upper bound. Ask is logged as a **float** — Kalshi quotes sub-cent (96.6000c seen live); any parser must accept decimals. `scripts/gate_replay.py` |
 
 ## Next actions, in order
