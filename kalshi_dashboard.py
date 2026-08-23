@@ -1162,7 +1162,11 @@ function render(d){
   // P&L experiences a DOLLAR-weighted rate, and break-even moves with the price
   // paid. Both are computed from the trades actually in range:
   //   dollar-weighted WR = cost(winners) / cost(all)
-  //   break-even         = cost(all) / contracts(all) = cost-weighted avg price
+  //   break-even         = (cost(all) + fees) / contracts(all)
+  // Fees belong INSIDE break-even. P&L is rev-cost-fee, so a break-even priced on
+  // cost alone is one a winner clears while the account still loses: at ~0.54c per
+  // contract that is 0.54pp, enough to show green at a real -0.2pp. Shipped wrong
+  // once; the fee term is the whole reason a 92.5% dollar-weighted rate lost money.
   // Contracts are exact for winners (settlement pays $1/contract, so rev IS the
   // count). Losers carry no count, so they are imputed at the winner-implied
   // average price; every trade sits in the same 90-93c band, which holds that
@@ -1170,6 +1174,7 @@ function render(d){
   function margin(rows){
     if(!rows.length) return null;
     const cost=rows.reduce((a,s)=>a+s.cost,0);
+    const fees=rows.reduce((a,s)=>a+(s.fee||0),0);
     if(cost<=0) return null;
     const W=rows.filter(s=>s.won);
     const wCost=W.reduce((a,s)=>a+s.cost,0);
@@ -1179,7 +1184,7 @@ function render(d){
     if(!(px>0&&px<1)) return null;
     const con=rows.reduce((a,s)=>a+(s.won?s.rev:s.cost/px),0);
     if(con<=0) return null;
-    const dwWR=100*wCost/cost, bev=100*cost/con;
+    const dwWR=100*wCost/cost, bev=100*(cost+fees)/con;
     return {dwWR:dwWR, be:bev, margin:dwWR-bev};
   }
   const M=margin(inR);
