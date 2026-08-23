@@ -4,6 +4,12 @@ name: Dashboard Keepalive
 # cold costs ~30s of staring at nothing. A cheap ping every 10 min keeps it warm.
 # The request is unauthenticated on purpose — an anonymous GET renders the login
 # screen, which is enough to wake the dyno and needs no secret.
+#
+# The host looks wrong but is not: the Kalshi dashboard is served from the
+# recycled "polymarket-monitor2" Render service. render.yaml calls the service
+# "kalshi-dashboard", which does NOT match the live hostname —
+# kalshi-dashboard.onrender.com is a suspended leftover (503). Verify with the
+# page <title> (Kalshi) before "fixing" this URL.
 
 on:
   schedule:
