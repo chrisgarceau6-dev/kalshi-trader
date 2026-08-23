@@ -312,7 +312,10 @@ def get_health():
             "last_run_status":      last.get("status"),
             "last_run_conclusion":  last.get("conclusion"),
             "last_success_ts":      succ.get("created_at") if succ else None,
-            "last_success_age_min": _age(succ["created_at"]) if succ else None,
+            # Age from run COMPLETION, not creation. Jobs run 900s (#157), so a
+            # created_at age can never fall below ~15 min and the health bands
+            # below would never see green.
+            "last_success_age_min": _age(succ["updated_at"]) if succ else None,
             "consec_failures":      fails,
             "error":                None,
         }
@@ -780,10 +783,11 @@ function renderHealth(h){
   else{
     const a=h.last_success_age_min, f=h.consec_failures||0;
     const ago=a==null?'never':(a<60?Math.round(a)+'m ago':(a/60).toFixed(1)+'h ago');
-    // Successful runs land every ~4.2 min, so a healthy age cycles 4-9 min.
+    // Jobs run 900s and land ~15 min apart, so age-since-completion cycles
+    // 0-15 min in health. Two missed cycles (>32) is a real outage.
     if(f>=2){ c='health-bad'; t=f+' consecutive failed runs'; }
-    else if(a==null||a>25){ c='health-bad'; t='trader down · '+ago; }
-    else if(a>15){ c='health-warn'; t='trader lagging · '+ago; }
+    else if(a==null||a>32){ c='health-bad'; t='trader down · '+ago; }
+    else if(a>18){ c='health-warn'; t='trader lagging · '+ago; }
     else { c='health-ok'; t='trader live · '+ago; }
   }
   el.className='health '+c; tx.textContent=t;
