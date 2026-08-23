@@ -56,6 +56,7 @@ def margin(rows):
     """Dollar-weighted WR vs its own break-even. See kalshi_dashboard.py for why a
     trade-weighted rate against a flat 92% is the wrong comparison."""
     cost = sum(r["cost"] for r in rows)
+    fees = sum(r.get("fee", 0.0) for r in rows)
     W = [r for r in rows if r["won"]]
     wcost, wcon = sum(r["cost"] for r in W), sum(r["contracts"] for r in W)
     if not (cost > 0 and wcon > 0):
@@ -64,7 +65,9 @@ def margin(rows):
     con = sum(r["contracts"] if r["won"] else r["cost"] / px for r in rows)
     if con <= 0:
         return None
-    dw, be = 100 * wcost / cost, 100 * cost / con
+    # Fees go INSIDE break-even: P&L is rev-cost-fee, so pricing break-even on
+    # cost alone reads green at a real loss (~0.54c/contract = 0.54pp).
+    dw, be = 100 * wcost / cost, 100 * (cost + fees) / con
     return dw, be, dw - be
 
 def main():
@@ -113,7 +116,7 @@ def main():
         def rows_for(pred):
             g = [p for p in S if pred(D.datetime.fromisoformat(p["opened_at"]))]
             return [dict(cost=p["cost"], contracts=p["contracts"], won=p["pnl"] > 0,
-                         pnl=p["pnl"]) for p in g]
+                         fee=p.get("fee_cost", 0.0), pnl=p["pnl"]) for p in g]
 
         td = rows_for(lambda t: t.astimezone(et).date() == today)
         if td:
