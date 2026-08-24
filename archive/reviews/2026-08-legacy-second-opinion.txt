@@ -1,0 +1,65 @@
+I'm running a late-certainty binary prediction market strategy on Kalshi. My AI assistant helped me with several things today and I want a second opinion on whether the reasoning and implementation are sound.
+
+The core strategy: Buy YES at 90-93c ask with 150-600s before close, provided the prior 2 candles are each >=75c. Hold to settlement. ~94% win rate historically on 15-minute crypto markets.
+
+---
+
+1. KXWTIH multi-strike finding
+
+Ran a backtest grouping Kalshi hourly WTI oil markets by close time. For each close time, collected all qualifying strikes (ask in [90,93]c, 150-600s remaining, prior 2 candles >=75c), sorted by ask descending (highest = most certain = "1st strike"). Results over 30 days, 33% OOS split:
+- 1st strike OOS: 64 trades, 92.2% WR, -$0.32/trade
+- 2nd strike OOS: 32 trades, 93.8% WR, +$0.77/trade
+
+Question: Is it statistically valid to conclude the 2nd strike is genuinely +EV and the 1st is -EV? Or could this be noise / selection bias? What's the 95% CI on n=32 OOS trades at 93.8% WR with ~$0.77/trade?
+
+---
+
+2. Deployment criteria (pre-registered)
+
+We agreed before running the backtest that deployment requires:
+- OOS n >= 25 trades
+- OOS $/trade >= +$0.30
+- OOS WR >= 93%
+- Full-dataset $/trade not worse than -$1.50 (train/OOS divergence check)
+
+KXWTIH 2nd strike met all four criteria. Question: Are these criteria appropriately tight or too loose for a 32-sample OOS window?
+
+---
+
+3. Survivorship bias fix in KXBTCD backtest
+
+KXBTCD has ~188 strike prices per hourly close. Initial backtest scanned strikes $300-$2,500 below the close price, found 100% win rate. My assistant identified this as survivorship bias: scanning below the close price guarantees all selected strikes already resolved YES. Fix: use BTC's price at T-300s (trigger time, before close is known) as the scan reference, only use close price for settlement determination. Results after fix: 5% trigger rate, OOS n=6.
+
+Question: Is the survivorship bias identification and fix correct? Is there any remaining bias in the corrected methodology?
+
+---
+
+4. Implementation of 2nd-strike logic in live trader
+
+MULTISTRIKE_SKIP1_SERIES = {"KXWTIH"}
+
+In the main loop:
+if series in MULTISTRIKE_SKIP1_SERIES:
+    def _ask_cents(m):
+        return int(round(float(m.get("yes_ask_dollars", 0) or 0) * 100))
+    in_band = sorted(
+        [m for m in markets if MIN_ASK_CENTS <= _ask_cents(m) <= MAX_ASK_CENTS],
+        key=_ask_cents,
+        reverse=True,
+    )
+    if len(in_band) >= 2:
+        try_trade(in_band[1], ...)  # skip index 0 (highest ask), take index 1
+
+try_trade then re-validates the ask live, does a prefetch, checks prior candles before placing.
+
+Question: Does this correctly implement "skip 1st qualifying strike, take 2nd"? Any edge cases or bugs?
+
+---
+
+5. Overall structural risks
+
+The base strategy (15M crypto, ~$416 balance, $45/trade flat, 6 series) runs at ~94% WR live. We added WTI 15M (KXWTI15M) and now hourly WTI 2nd-strike (KXWTIH). MAX_CONCURRENT_POSITIONS = 2 caps correlated exposure. The six 15M crypto series close simultaneously (correlated, capped at 2 concurrent). KXWTI15M and KXWTIH close at different times and are structurally independent of the crypto basket.
+
+Question: Any structural risks or logical errors you can spot?
+
+I'm using real money. Be critical. Tell me what's wrong, not what sounds good.

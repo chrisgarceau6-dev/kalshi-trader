@@ -1,10 +1,10 @@
 # Completeness gate
 
-Snapshot: 2026-08-24, current `main`. This closes the charter gate against generated filesystem and Git inputs, not against a curated Session 1 list.
+Snapshot: 2026-08-24 after execution of the approved M01-M13 and X01-X03 rows. This closes the charter gate against generated filesystem and Git inputs, not against a curated Session 1 list.
 
 ## Denominator corrections
 
-The current inventory adds seven rows beyond the original table:
+The current inventory adds eight rows beyond the original table:
 
 1. `.claude-flow/sessions/current.json`, tracked at the starting revision but omitted. Its pre-existing worktree deletion is preserved; the row uses the `HEAD` blob.
 2. `scripts/verify.py`, created during the audit and now current operational measurement.
@@ -13,15 +13,16 @@ The current inventory adds seven rows beyond the original table:
 5. One exact-manifest group for the other tracked Polymarket files.
 6. `xvenue_candidates.csv`, a Kalshi/Polymarket cross-venue research output.
 7. `xvenue_side_by_side.csv`, the corresponding Kalshi-side market snapshot.
+8. `vegas_cron.py`, a Kalshi/Prophet Exchange arbitrage tool using Vegas odds as a reference. It was incorrectly included in the Polymarket exclusion manifest and is now an individual M12 market-structure row.
 
-The two xvenue files are real Tier E evidence and carry M12 with their inventoried producer, `scripts/xlist_arb.py`. They are not hidden inside an exclusion.
+The two xvenue files and `vegas_cron.py` are real Kalshi evidence. They carry M12 in `archive/research/market-structure/` and are not hidden inside an exclusion.
 
 ```bash
 awk -F'|' '/^\| `/ {n++} END {print "table_rows", n+0}' docs/audit/codex/INVENTORY.md
 git ls-files | wc -l
 ```
 
-The table currently has 267 rows. Row count alone is not the completeness proof; the tracked-file `comm` gate below is.
+The table currently has 268 rows. Row count alone is not the completeness proof; the tracked-file `comm` gate below is.
 
 ## Exact tracked Polymarket exclusion manifest
 
@@ -62,7 +63,6 @@ snow_s00.csv
 snow_s03.csv
 strategy_dissect.py
 validate_screener.py
-vegas_cron.py
 vp_h4.csv
 vp_h6.csv
 vp_s03.csv
@@ -91,14 +91,14 @@ done | sort -n | sed -n '1p;$p'
 comm -23 <(poly_exclusions | sort) <(git ls-files | sort)
 ```
 
-The second command produces no output: every explicit exclusion is tracked.
+The final command produces no output: every explicit exclusion is tracked.
 
 ## Status semantics
 
 - `audited-retain-live` — reachable from the current live workflow import/resource graph.
 - `audited-retain-*` — classified and retained for the suffix role.
 - `audited-sensitive-retain` — credential/config material; values are outside the authorized content surface and must not be moved into tracked `archive/`.
-- `audited-move Mnn` / `audited-delete Xnn` — linked to one pending approval row in `MOVES.md`. Nothing has been executed.
+- `executed-move Mnn` / `executed-delete Xnn` — linked to one Chris-approved row in `MOVES.md`; the move or verified duplicate deletion has been executed.
 - `excluded-polymarket`, `excluded-polymarket-generated`, `excluded-polymarket-tracked` — explicitly charter-excluded.
 - `excluded-audit-work-product` — audit files created after the starting census; generated dynamically from the two audit directories.
 - `UNKNOWN` — inspected but unclassifiable. No row currently has this status.
@@ -139,7 +139,11 @@ Required result: no output and exit zero.
 ### 3. Every individual row resolves
 
 ```bash
-while IFS= read -r p; do
+while IFS=$'\t' read -r p s; do
+  if [[ "$s" == executed-delete\ * ]]; then
+    test ! -e "$p" || { echo "DELETE_SURVIVED $p"; exit 1; }
+    continue
+  fi
   case "$p" in
     '_tmp_*.csv (grouped; 3,538 files)'|\
     'docs/audit/{claude,codex}/** (grouped audit work papers)'|\
@@ -150,7 +154,11 @@ while IFS= read -r p; do
       ;;
   esac
   test -e "$p" || { echo "MISSING $p"; exit 1; }
-done < <(awk -F'|' '/^\| `/ {p=$2; gsub(/^ +`|` +$/, "", p); print p}' \
+done < <(awk -F'|' '/^\| `/ {
+  p=$2; gsub(/^ +`|` +$/, "", p)
+  s=$8; gsub(/^ +| +$/, "", s)
+  print p "\t" s
+}' \
   docs/audit/codex/INVENTORY.md)
 ```
 
@@ -192,12 +200,12 @@ comm -23 \
 
 Required result: no output. Unlike Gate 1, this begins with `git ls-files`; a missing inventory row cannot be concealed by the table it is checking.
 
-### 6. Every proposed action has an approval row
+### 6. Every executed action has an approval row
 
 ```bash
 comm -3 \
-  <(awk -F'|' '/^\| `/ && $8 ~ /audited-(move|delete)/ {
-       s=$8; gsub(/^ +| +$/, "", s); sub(/^audited-(move|delete) /, "", s); print s
+  <(awk -F'|' '/^\| `/ && $8 ~ /executed-(move|delete)/ {
+       s=$8; gsub(/^ +| +$/, "", s); sub(/^executed-(move|delete) /, "", s); print s
      }' docs/audit/codex/INVENTORY.md | sort -u) \
   <(awk -F'|' '/^\| [MX][0-9][0-9] / {
        id=$2; gsub(/^ +| +$/, "", id); print id
@@ -208,4 +216,4 @@ Required result: no output.
 
 ## Gate result
 
-**PASS requires all six commands to exit zero:** zero `unaudited`, zero `UNKNOWN`, unique keys, every individual row resolves, every tracked path is represented or exactly excluded, and every proposed action maps to an approval ID. No move, deletion, or trading-path edit is part of this gate.
+**PASS requires all six commands to exit zero:** zero `unaudited`, zero `UNKNOWN`, unique keys, every retained or moved individual row resolves, every executed deletion is absent, every tracked path is represented or exactly excluded, and every executed action maps to its approval ID. The gate does not alter the trading path.
