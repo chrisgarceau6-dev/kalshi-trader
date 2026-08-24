@@ -28,7 +28,7 @@ API pulls are cached for --ttl seconds, so repeat runs are instant.
 
 Full derivation and the dollar value of each divergence: docs/audit/claude/METRICS.md
 """
-import argparse, ast, json, math, os, subprocess, sys, tempfile, textwrap, time
+import argparse, ast, json, math, os, statistics, subprocess, sys, tempfile, textwrap, time
 import datetime as D
 from collections import defaultdict
 from pathlib import Path
@@ -629,6 +629,90 @@ def c_reconcile(ctx):
                   f"--since {ctx['since']} --until {max(r['day'] for r in rows)}")
 
 
+# The slippage figure every "at measured fill quality" backtest is quoted at.
+# CLAUDE.md l.175 asserts 0.105c, measured 2026-08-17 on YES fills only.
+DOCUMENTED_SLIP_CENTS = 0.105
+
+
+@check("slippage", needs=("state",))
+def c_slippage(ctx):
+    """What execution actually costs, against the book read ~128ms before the order.
+
+    This is the comparison the trader's own comment (l.1470) says is valid: avg fill
+    vs `book_at_entry`, by side, over distributions. NOT against a 1-min candle, which
+    is stale 47% of the time and yields a +0.85c regression-to-the-mean artifact.
+    Positive means paying MORE than the book showed, i.e. adverse.
+    """
+    st = ctx.get("state")
+    if st is None:
+        return "SKIP", "state artifact unavailable"
+    rows = [p for p in st.get("positions", {}).values()
+            if p.get("contracts") and p.get("book_at_entry")]
+    if len(rows) < 30:
+        return "SKIP", f"only {len(rows)} positions carry a book read"
+    d = {"yes": [], "no": []}
+    for p in rows:
+        d.setdefault(p.get("side", "?"), []).append(
+            100 * p["cost"] / p["contracts"] - p["book_at_entry"])
+    alld = d["yes"] + d["no"]
+    mean = statistics.mean(alld)
+    se = statistics.stdev(alld) / len(alld) ** 0.5
+    t = (mean - DOCUMENTED_SLIP_CENTS) / se if se else 0.0
+    by = "  ".join(f"{k.upper()} {statistics.mean(v):+.3f}c (n={len(v)})"
+                   for k, v in d.items() if v)
+    if abs(t) > 3:
+        return "FAIL", (f"measured slippage {mean:+.3f}c vs the documented "
+                        f"{DOCUMENTED_SLIP_CENTS:+.3f}c in CLAUDE.md l.175 — "
+                        f"differ by {mean - DOCUMENTED_SLIP_CENTS:+.3f}c, t={t:+.1f} "
+                        f"over n={len(alld)}. Every '--slip {DOCUMENTED_SLIP_CENTS}' "
+                        f"figure is quoted at the wrong number. {by}")
+    return "OK", (f"slippage {mean:+.3f}c vs documented {DOCUMENTED_SLIP_CENTS:+.3f}c "
+                  f"(t={t:+.1f}, n={len(alld)}).  {by}")
+
+
+@check("rounding", needs=("archive",))
+def c_rounding(ctx):
+    """Every archived day before 2026-08-22 stores integer cents. Measure what that
+    does to SELECTED TRADES, not to rows, by running the exact-cent days both ways."""
+    import backtest as B
+    import csv, glob, gzip
+    exact = []
+    for path in sorted(glob.glob(str(BASE / "data/candles/*.csv.gz"))):
+        if Path(path).name[:10] < "2026-08-22":
+            continue
+        with gzip.open(path, "rt") as f:
+            exact += [r for r in csv.DictReader(f) if r["series"] in SERIES]
+    if len(exact) < 500:
+        return "SKIP", f"only {len(exact)} exact-cent rows archived so far"
+
+    def build(round_it):
+        seen, out = set(), []
+        for r in exact:
+            k = (r["ticker"], r["side"], r["candle_idx"])
+            if k in seen:
+                continue
+            seen.add(k)
+            f = lambda v: float(v) if v not in ("", "None") else -1.0
+            g = (lambda v: float(int(f(v))) if f(v) >= 0 else -1.0) if round_it else f
+            out.append((r["series"], r["ticker"], int(r["close_ts"]), r["side"],
+                        g(r["ask"]), float(r["secs_left"]), r["won"] == "True",
+                        g(r["prior_1"]), g(r["prior_2"]), g(r["prior_3"])))
+        return out
+
+    cfg = B.live_config()
+    e, r = build(False), build(True)
+    se = B.summary(e, *B.simulate(e, cfg, 0.105))
+    sr = B.summary(r, *B.simulate(r, cfg, 0.105))
+    dn = sr["trades"] - se["trades"]
+    dp = sr["per_trade"] - se["per_trade"]
+    tone = "WARN" if abs(dn) or abs(dp) > 0.005 else "OK"
+    return tone, (f"on the {len(exact):,} exact-cent rows, rounding prices the way every "
+                  f"pre-2026-08-22 day stores them changes the simulator's picks by "
+                  f"{dn:+d} trades ({100 * dn / max(se['trades'], 1):+.1f}%) and "
+                  f"{dp:+.3f}/tr ({sr['wr'] - se['wr']:+.2f}pp WR) — always optimistic. "
+                  f"72 of 74 archived days carry this, so every pre-Aug-22 claim does too.")
+
+
 @check("edge")
 def c_edge(ctx):
     """Is the margin actually negative, or is that a story about variance? Reported
@@ -702,10 +786,10 @@ def main():
     since = a.since or (days[-3] if len(days) >= 3 else days[0])
     ctx = {"set_all": S, "set_live": live, "since": since}
 
-    if any(CHECKS[n].needs and "archive" in CHECKS[n].needs for n in names):
+    if any("archive" in (CHECKS[n].needs or ()) for n in names):
         import backtest as B
         ctx["archive"] = B.load()
-    if "state" in names and not a.no_state:
+    if any("state" in (CHECKS[n].needs or ()) or n == "state" for n in names) and not a.no_state:
         try:
             ctx["state"] = state(a.ttl)
         except Exception as exc:
