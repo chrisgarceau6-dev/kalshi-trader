@@ -43,9 +43,10 @@ to settlement.
 | book depth | **39** = `max(ceil(contracts x 1.5), 25)` at $25 | dynamic since #166; the legacy `MIN_BOOK_DEPTH=60` is no longer a gate. Not in harness (needs live book) |
 | `CRASH_FILL_TOLERANCE` | 3 | fills this far under the band are logged, not emailed |
 | `SURVIVOR_*` | shadow | logs 92-93¢→94-96¢ survivors; trades nothing |
-| `STOP_BALANCE` | 650 | — |
+| `STOP_BALANCE` | **400** | emergency floor, 1.5x worst drawdown; revisit on a large deposit/withdrawal |
 | `CONSEC_LOSS_LIMIT` | 9 | never fires in 68d either way |
-| poll cadence | 240s job / 15s interval | ~14-16 scans per CI job |
+| trailing-24h limit | **bet x 20** ($500 at $25) | emergency brake; denominated in bets so a sizing change cannot disarm it |
+| poll cadence | **900s job / 15s interval** | ~52 scans per CI job (measured, run 32776379439) |
 | `EDGE_DEGRADE_THRESHOLD` | 0.84 | catastrophic breaker only |
 | `BLACKOUT_HOURS` | `set()` | — |
 
@@ -292,7 +293,7 @@ that disagree — run that rather than trusting this text.
 ### What is live
 
 v5.17: ask **YES 88-93c / NO 90-93c**, 150-600s, prior >=75c x2, `<=91c` needs a 3rd
-prior >=80c, both sides, max 2 concurrent, **$25 flat**, stop $650, daily limit $300,
+prior >=80c, both sides, max 2 concurrent, **$25 flat**, stop **$400**, daily limit **bet x 20** ($500),
 no blackout hours. Six crypto 15M series; WTI/GOLD/SILVER are shadow-only. Jobs run
 900s at a 15s interval and land every ~15 min.
 
@@ -318,15 +319,40 @@ $50 Aug 19-21, transition Aug 22, $25 from Aug 23.** A $/trade number spanning
 
 Raise the bet only on the ratio rule in PART II, never on a good week.
 
-### Known-unexamined, deliberately
+### Risk controls — emergency brakes, deliberately not tight
 
-- `STOP_BALANCE=650` was set proportionally to a **$100** stake and never revalidated
-  at $25.
-- The **$300 daily limit is near-inert at $25**: the worst trailing-24h drawdown in
-  74 days of archive is -$309.25, so it fires once and blocks nothing. Engagement
-  scales with bet size; the threshold does not. `docs/audit/claude/DECISIONS.md` D1.
-- The edge breaker's 50/0.84, `ORDER_TTL_SECONDS`, `ORDER_RECONCILE_SECONDS`,
-  `ORDER_MIN_TOPUP_DOLLARS` and the 500-position cap have no value-specific evidence.
+Both halts were re-sized on 2026-08-24 after the audit found each sitting AT or BELOW
+normal variance, i.e. each would have fired during a drawdown the strategy has already
+survived. That is the expensive failure: a tight limit blocks exactly the trades that
+recover the stretch.
+
+| control | value | headroom vs worst measured |
+|---|---|---|
+| `STOP_BALANCE` | **$400** | 33 losses vs a $543.79 worst drawdown = **1.5x** |
+| trailing-24h limit | **bet x 20** = $500 at $25 | vs a -$309.25 worst 24h = **1.6x** |
+
+**The limit is denominated in BETS, not dollars, and that is the point.** The worst
+rolling-24h window is 21 losses at ANY bet size — loss count is set by win rate and
+volume, not sizing. So a fixed dollar threshold is a different control at every size:
+`max(300, bet*4)` was validated at $75 and, at $25, ended up nine dollars past the
+worst 24h in the whole archive, firing once in 74 days and blocking nothing. Exact
+mirror of the `MIN_BOOK_DEPTH` defect, where a fixed CONTRACT count silently tightened
+as the bet fell. **Fixed constants do not survive a sizing change; ratios do.**
+
+`STOP_BALANCE` is the exception and is still a constant, because it is a floor on the
+account rather than on a trade. It is a ratio to the balance dressed as a constant —
+**revisit it on any large deposit or withdrawal.** Set against a $1,227.48 balance.
+
+Pinned by `EmergencyBrakeTests`, which assert the PROPERTY (clears the worst measured
+day at every bet size, scales with the bet, leaves room for a normal drawdown) rather
+than the numbers, so the next sizing change cannot silently disarm them.
+Re-derive: `python3 docs/audit/claude/replay_loss_limit.py`.
+
+### Still unexamined, deliberately
+
+The edge breaker's 50/0.84, `ORDER_TTL_SECONDS`, `ORDER_RECONCILE_SECONDS`,
+`ORDER_MIN_TOPUP_DOLLARS` and the 500-position state cap have no value-specific
+evidence. None has caused a known problem; none has been tested either.
 
 **The power numbers that govern every "is it working" question** (measured, sd =
 $18.13/trade, cluster design effect 1.066, 95% conf / 80% power):
@@ -371,10 +397,9 @@ was priced and refuted.*
    during a measurement window is an unmeasurable coin flip.
 2. **Let the v5.17 clock run.** 200 88-89c YES trades from 2026-08-24. Do not read the
    subset early — that is the optional-stopping error #152 died of.
-3. **Decide the two unexamined risk controls** — `STOP_BALANCE` at $25 sizing, and the
-   daily limit that is now near-inert (`docs/audit/claude/DECISIONS.md` A4, D1). Both
-   are survival parameters, so neither follows from the archive; they need a call, not
-   a backtest.
+3. ~~Decide the two unexamined risk controls.~~ **DONE 2026-08-24** — both re-sized as
+   emergency brakes (PART I, risk controls). Watch for the first time either fires:
+   neither has fired on archive data, so the first live trip is information.
 4. **Re-check MOM3's blocked-trade rate.** Live incidence ran ~2/day against an 8-10
    forecast; if that holds it is dead on timeline regardless of effect size.
 5. Standing leads, unchanged and NOT proposals: `MIN_ASK=89`, the p3 inversion above
