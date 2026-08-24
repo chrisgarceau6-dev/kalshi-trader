@@ -120,7 +120,7 @@ to settlement.
 
 | Parameter | Value | Re-check |
 |---|---|---|
-| `FLAT_BET_DOLLARS` | 50 | balance-gated, see §4 |
+| `FLAT_BET_DOLLARS` | **25** | cut 50 -> 25 in #151 (2026-08-22); balance-gated, see §4 |
 | `MIN_ASK_CENTS` / `MAX_ASK_CENTS` | 90 / 93 | `--sweep min_ask 88 89 90 91` |
 | `MIN_SECS_LEFT` / `MAX_SECS_LEFT` | 150 / 600 | `--sweep min_secs 100 150 200 250` |
 | `PRIOR_MIN_CENTS` / `PRIOR_LOOKBACK` | 75 / 2 | `--sweep prior_min 70 75 80 85` |
