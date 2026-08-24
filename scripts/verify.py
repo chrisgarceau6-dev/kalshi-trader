@@ -472,7 +472,9 @@ def c_cap(ctx):
 
 @check("series")
 def c_series(ctx):
-    """Nothing outside SERIES_LIST may have been traded since the window opened."""
+    """Nothing outside SERIES_LIST may be traded, and no tool may count retired series
+    as strategy P&L. The dashboard filtered on ticker.endswith("15M") until 2026-08-24,
+    which attributed 307 settlements and -$245 to a strategy that never placed them."""
     off = [r for r in ctx["set_all"]
            if r["series"] not in SERIES and r["day"] and r["day"] >= ctx["since"]]
     if off:
@@ -482,21 +484,21 @@ def c_series(ctx):
         worst = ", ".join(f"{k} {v:+.2f}" for k, v in sorted(by.items(), key=lambda x: x[1]))
         return "FAIL", (f"{len(off)} settlement(s) since {ctx['since']} in series the "
                         f"trader does not list: {worst}")
-    strat = [r for r in ctx["set_all"]
-             if r["series"].endswith("15M") and r["series"] not in SERIES]
+    dash = (BASE / "kalshi_dashboard.py").read_text()
+    if 'endswith("15M")' in dash and "live_series()" not in dash:
+        strat = [r for r in ctx["set_all"]
+                 if r["series"].endswith("15M") and r["series"] not in SERIES]
+        return "FAIL", (f"kalshi_dashboard.py still filters strategy stats on "
+                        f'ticker.endswith("15M"), counting {len(strat)} retired '
+                        f"settlements (${sum(r['pnl'] for r in strat):+.2f}) as strategy "
+                        f"P&L. It must read SERIES_LIST by AST like reconcile.py does.")
     non15 = [r for r in ctx["set_all"] if not r["series"].endswith("15M")]
-    msg = f"no off-list trades since {ctx['since']}"
-    if strat or non15:
-        parts = []
-        if strat:
-            parts.append(f"kalshi_dashboard.py counts {len(strat)} retired *15M "
-                         f"settlements (${sum(r['pnl'] for r in strat):+.2f}) as strategy "
-                         f"P&L; reconcile.py excludes them")
-        if non15:
-            parts.append(f"{len(non15)} non-15M settlement(s) "
-                         f"(${sum(r['pnl'] for r in non15):+.2f}) move the balance but sit "
-                         f"outside every strategy stat")
-        return "WARN", msg + " — but " + "; ".join(parts)
+    msg = (f"no off-list trades since {ctx['since']}; dashboard filters strategy stats "
+           f"on the trader's SERIES_LIST")
+    if non15:
+        return "WARN", (msg + f" — note {len(non15)} non-15M settlement(s) "
+                        f"(${sum(r['pnl'] for r in non15):+.2f}) move the balance but sit "
+                        f"outside every strategy stat, by design")
     return "OK", msg
 
 
