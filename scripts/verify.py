@@ -255,7 +255,10 @@ def c_state(ctx):
     """The trader's own accounting vs the exchange's. These must be identical."""
     st = ctx.get("state")
     if st is None:
-        return "SKIP", "state artifact unavailable (gh not authenticated?)"
+        # Report the ACTUAL failure, never a guess. A check that says "unavailable"
+        # without saying why trains you to ignore it — and the first time this fired
+        # it was a transient GitHub blob-storage 500, not an auth problem.
+        return "SKIP", f"state artifact unavailable: {ctx.get('state_err', 'unknown')}"
     api = {r["ticker"]: r for r in ctx["set_all"]}
     P = {k: v for k, v in st.get("positions", {}).items() if v.get("settled")}
     both = [k for k in P if k in api]
@@ -655,7 +658,7 @@ def c_slippage(ctx):
     """
     st = ctx.get("state")
     if st is None:
-        return "SKIP", "state artifact unavailable"
+        return "SKIP", f"state artifact unavailable: {ctx.get('state_err', 'unknown')}"
     rows = [p for p in st.get("positions", {}).values()
             if p.get("contracts") and p.get("book_at_entry")]
     if len(rows) < 30:
