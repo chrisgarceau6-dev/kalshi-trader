@@ -9,160 +9,24 @@
 
 Claude Code reads this file automatically when opened in `/Users/chrisgarceau/pm/`.
 
-**How to read this file.** It is organised by how fast things rot. Invariants are
-structural and safe to rely on. Config is current and verifiable. Dated observations
-are perishable. The kill-list at the bottom is *the least reliable section in this
-file* — treat it as leads, not verdicts.
+**How to read this file.** Three parts, by what you need.
 
-## Who / What
+- **PART I — OPERATING.** What is live right now. Short. Read this one.
+- **PART II — EVIDENCE.** Why it is that way. Long. Every claim carries a command.
+- **PART III — GRAVEYARD.** Refuted. Do not re-propose these.
 
-- Chris Garceau — UMass freshman. Real money on Kalshi. No encouragement without
-  evidence, no emojis.
-- **RESPONSE FORMAT — critical.** Report only what he needs to stay informed and in
-  control. Numbers and tables, not prose. Cut ~90% of what you would naturally write:
-  no method narration, no restating his question, no describing work in progress, no
-  listing what you considered and discarded unless a discarded thing changes a
-  decision. Structure: **what changed → what it means → what's next / what needs his
-  call.** Findings go in tables. State caveats in one line, not a paragraph. If a
-  detail does not change a decision he would make, leave it out.
-- Repo: `/Users/chrisgarceau/pm/` → GitHub `chrisgarceau6-dev/kalshi-trader` (PUBLIC)
-  Renamed from `polymarket-monitor2` on 2026-08-18. **The Render service kept the old
-  name**, so the dashboard URL is still `polymarket-monitor2.onrender.com` — that
-  mismatch is expected, not stale. Renaming the service would change the URL with no
-  redirect. Workflow self-dispatch uses `$GITHUB_REPOSITORY`, so it survives renames.
-- Live entrypoint: `late_certainty_trader.py` on `origin/main`, workflow
-  `.github/workflows/late_certainty.yml`
-- **Primary trigger:** self-dispatch — each run sleeps ~30s then dispatches itself via
-  `GH_DISPATCH_TOKEN`. **Backup cron:** `*/5` and `2-59/5` staggered.
+Where PART I and PART II disagree, **PART I wins** — it is derived from the code,
+and `python3 scripts/verify.py` re-derives it against the live API on demand.
 
 ---
 
-# 1. Check claims, don't trust them
+# PART I — OPERATING
 
-**Every strategy claim in this file has a command. Run it.**
+*What is live. If you read one section, read this one. Everything here was verified
+against the code and the API on 2026-08-24 by two independent audits
+(`docs/audit/`).*
 
-```bash
-python3 scripts/backtest.py                       # live config, full history
-python3 scripts/backtest.py --compare yes_only=1  # baseline vs variant + bootstrap CI
-python3 scripts/backtest.py --sweep max_ask 92 93 94 95 96
-python3 scripts/backtest.py --slip 1              # one tick of adverse fill
-python3 scripts/backtest.py --since 2026-08-13    # holdout window
-```
-
-Defaults are read out of `late_certainty_trader.py` by AST, so the harness cannot
-drift from what is actually running. Data is `data/candles/*.csv.gz`.
-
-**Why this matters.** This file used to record conclusions as prose with numbers
-attached — "NO side is -EV", "two NOs per cluster is -$1,211", "C1 is -$7.25/trade".
-None could be re-run, so none could be challenged, and on 2026-08-17 all three turned
-out to be wrong or badly overstated after months of steering decisions. **A number
-with no command behind it is an assertion, not evidence.** If you cannot reproduce a
-figure with the harness, treat it as unverified no matter who wrote it down.
-
----
-
-# 1b. Audit findings that supersede this file (2026-08-24)
-
-Two agents audited this repo in parallel. Where anything below §1b disagrees with
-this section, **this section wins**. Full working in `docs/audit/claude/` and
-`docs/audit/codex/`; `python3 scripts/verify.py` re-derives every number and names any
-two sources that disagree.
-
-**"Lifetime P&L" is not a quotable number.** No source on this machine can produce
-one: `/portfolio/settlements` retains ~30 days, state caps at `MAX_POSITIONS_STATE=500`
-positions, and `stats` resets on every `STRATEGY_VERSION` bump — it currently reads
-**1 trade**. The **-$487** figure that circulated matches none of the three defensible
-scopes. Always quote a scope and a window:
-
-| scope | n | P&L |
-|---|---|---|
-| live series (6) | 1,946 | **-$320.91** |
-| + retired 15M — what the dashboard counts | 2,253 | **-$565.96** |
-| + non-15M (`KXMLBTOTAL` alone is **-$863.75 on 4 trades**) | 2,258 | **-$1,445.00** |
-
-**The archive is rounded before 2026-08-22, and it matters more than recorded.** The
-figures on file (18.4% of identities, 4.1% of rows) measure ROWS. Measured on the
-trades the simulator actually *picks*, by running the two exact-cent days both ways:
-**128 of 317 selections disagree (40.4%)**, volume **+13.5%**, $/trade **+0.023**, WR
-**+0.28pp** — always optimistic. 72 of 74 archived days carry it, and days before
-~2026-06-18 can no longer be re-archived. It compounds with the fill-quality error in
-§4 rather than cancelling. `scripts/verify.py --check rounding`.
-
-**v5.17 shipped inert and was fixed on 2026-08-24.** The 88-89c YES band could never
-place an order: the last look compared the book against `MIN_ASK_CENTS` instead of
-`_band_min(side)`, and three further sites mislabelled any such fill. Both auditors
-found it independently. The four `BandAsymmetryTests` that were cited as pinning it
-only ever exercised the helpers, which were correct — nothing drove the entry path.
-`BandReachabilityTests` now does. **The pre-registration clock starts 2026-08-24**, on
-its original terms (200 88-89c YES trades, revert below 88.5%, no early reads),
-because zero such trades had ever been placed.
-
-**Still open, deliberately not acted on:** `STOP_BALANCE=650` was set proportionally
-to a $100 stake and never revalidated at $25; Codex finds the $300 daily limit no
-longer establishes as optimal; the edge breaker's 50/0.84, `ORDER_TTL_SECONDS`,
-`ORDER_RECONCILE_SECONDS` and the 500-position cap have no value-specific evidence.
-The p3 signal inverts above 91c (p3<80 measures +0.315 vs +0.105) — the trader
-correctly does not gate there, the CI includes zero, and Invariant 8 applies.
-
-# 2. Invariants — these do not rot
-
-1. **You risk $50 to win ~$4.35.** Break-even is ~92% WR (90.6% at 90¢ → 93.5% at
-   93¢). **The entire edge is the gap above break-even**, harvested over thousands of
-   bets. No single trade is good.
-
-   **The realised gap is far smaller than this file used to claim.** It said "you run
-   ~94%", and the win rate is indeed 94.10% since Aug 1 (1,482W/93L on 1,575 trades) —
-   but that has delivered **+$82.14 total, or +$0.05/trade**, against the +$1.11/trade
-   that 94.10% implies at flat $50. Do not quote the win rate as if it were the edge.
-   Two separate reasons, and they must not be conflated:
-   - **Aug 1-11 is a sizing artifact** (§7): bet ran $2.79 → $74 inside the window, so
-     most wins were banked at $0.20 while losses landed at $45-74.
-   - **Aug 12-21 is not.** Sizing was $50-75 throughout and the win rate was
-     **92.12%** (538W/584) — only **0.62pp** above break-even, worth **+$0.056/trade**
-     realised. The split from Aug 1-11's 95.26% is -3.13pp, z=2.55, p≈0.011
-     unclustered (clustering widens it; treat as suggestive, and note it is confounded
-     by the NO side returning Aug 17 and WTI pausing Aug 19).
-
-   Practical consequence: at 92% the strategy is roughly break-even, and ordinary
-   variance is the entire experience. Any projection built on +$0.54-0.80/trade — the
-   harness figure — is an upper bound the live account has not delivered since Aug 11.
-   Check `daily_summary.py` before trusting a per-trade number in this file.
-2. **One cent ≈ half your edge.** A 1¢ move in entry price shifts break-even by ~1pp.
-   One tick removes ~69% of all profit (`--slip 1`). Execution quality dominates
-   every strategy parameter. Guard it; it is already near-optimal so there is little
-   to gain, and a lot to lose.
-3. **The 7 series settle simultaneously.** They are one correlated bet, not seven.
-   Any statistic must resample by *close cluster*, never by trade — the harness does
-   this. Per-trade CIs are wrong here and will overstate significance badly.
-4. **Kalshi retains settled markets ~67 days.** This is the binding constraint on all
-   validation. See §6.
-5. **These markets are fair coin flips.** 49.8% settle YES (n=27,908); spot is above
-   the strike in 49.5% of markets. Neither side is structurally favoured, and there is
-   no drift or strike-placement effect to exploit.
-6. **Signals are transient — the backtest sees more of them than the bot can.**
-   70% of qualifying signals are in-band for exactly ONE 1-min candle (median 1 of
-   ~8 possible). The ask passes *through* 90-93¢ on its way to 100¢ as certainty
-   resolves; it does not rest there. So **every backtest figure is an upper bound**
-   — it evaluates every candle, while the live bot only sees the ask at poll
-   instants. Before v5.16 the bot polled every ~48s and captured **27%** of the
-   entries the backtest takes (23 of 86 on 2026-08-16). It now polls every ~15s
-   inside a 240s job (~14-16 scans/job, ~18s effective cadence).
-   **When live P&L runs below backtest, check capture rate before suspecting edge
-   decay.** That gap explained a 3x shortfall that had been misread as decay.
-   The missed signals are not worse: transient 93.30% WR / +$0.58 per trade vs
-   persistent 93.27% / +$0.77.
-7. **Kalshi opens a 15M market only ~600s before its close.** `MAX_SECS_LEFT=600`
-   is therefore already at the structural ceiling — there is nothing earlier to
-   capture, and raising it gains nothing.
-8. **Post-hoc filter discovery has a terrible track record here.** H4, near-strike,
-   ET13, UTC blackouts, C1, and a "dispersion filter" built on 2026-08-17 all looked
-   convincing in-sample; the dispersion filter *inverted* out-of-sample. With ~2pp of
-   edge and ~68 days of data, filter-hunting mostly fits noise. **The wins have come
-   from removing restrictions, not adding them.**
-
----
-
-# 3. Current strategy — v5.17 (2026-08-24)
+## Current strategy — v5.17 (2026-08-24)
 
 Buy **either side** at ask [90,93]¢ with 150-600s left, provided the prior 2 same-side
 1-min candles are all ≥75¢. If ask ≤91¢, also requires a 3rd prior candle ≥80¢. Hold
@@ -205,81 +69,8 @@ is outside `[MIN_ASK, MAX_ASK]`. Orders log `book_age=Xms` — the residual race
 
 ---
 
-# 4. Why the config is what it is
 
-**`YES_ONLY = False` (v5.16).** The NO side was suspended on live YES 46W/1L vs NO
-74W/8L. That is **not significant**: z=1.64, two-sided p=0.102, on n=47 YES trades —
-about five coin flips of luck, worth roughly the entire $210 P&L gap. Over the full
-68 days NO wins **93.65%** and YES **93.79%**; the cluster-bootstrapped difference is
-+0.75pp [-0.36, +1.86] in-sample and **-1.59pp** [-4.54, +1.35] on holdout — both
-include zero and the sign flips. `--compare yes_only=1` reproduces it; the Aug 13-17
-holdout independently confirms YES-only is worse (delta -$1,037, CI excludes zero).
-
-**Execution gap = +0.227¢ (re-measured 2026-08-24, n=500, both sides).** Live fills
-land **0.227¢ ABOVE the book's best offer** at the last look, SE 0.018 — YES +0.253¢
-(n=269), NO +0.196¢ (n=231), difference t=1.55 so **the two sides are
-indistinguishable**. Median +0.097¢; only 5.8% of fills are worse than the book by
-more than a cent, so this is a shifted centre, not a fat tail.
-
-~~+0.105¢ (measured 2026-08-17)~~ was **YES-only and measured against a 1-min candle**,
-which is stale 47% of the time. The correct comparison is against `book_at_entry`, the
-book read ~128ms before the order, over distributions. At **t=+6.6** the old constant
-is not stale-but-close; it is wrong by more than double, and every `--slip 0.105`
-figure ever written in this file is optimistic by ~10% of the stated edge. Re-run them
-at `--slip 0.227`. I re-ran every config sweep at both levels and **no ranking
-inverts**, so this corrects magnitudes and not decisions.
-
-This also closes the "we have **no NO-side fill data at all**" open question that was
-the main stated risk of v5.16: NO fills as well as YES. `python3 scripts/verify.py
---check slippage` re-derives it; `docs/audit/claude/CLAIMS.md` §1 has the working.
-
-**`MAX_CONCURRENT_POSITIONS = 2`.** Caps a settlement cluster at $150 **regardless of
-side** — worst observed cluster is -$150 with or without NO. 3-4 backtest better at
-perfect fills and clearly worse at one tick, and raise worst-cluster loss to -$225.
-
-**`MAX_ASK_CENTS = 93` is a slippage bet, not a validated edge.** 94-96¢ backtest
-higher at quoted fills and worse at one tick: at 96¢ you win 4¢, so a 1¢ slip costs
-25% of gross profit versus 10% at 90¢. Widening spends your best asset for a backtest
-number. **Do not raise it without re-measuring fill quality first.**
-
-**Position sizing — $50 as of 2026-08-19 (was $75).** The rule below is symmetric and
-it cut, rather than raised: bet size must be ≤4.6% of balance. After a -$345 stretch the
-balance was $1,088.87, where $75 is **6.9%** — above the design ratio — and $50 is 4.6%
-exactly. Room to the $650 stop went from 6 losses to 9. Cost: the backtest edge scales
-linearly, +$1.00/trade → +$0.67. Side effect worth knowing: `compute_daily_loss_limit`
-is `bet x 4`, so the daily halt tightened from $300 to **$200** automatically. Raise back
-to $75 when balance ≥ $1,630 (the ratio that held at $1,631), not before, and never on a
-win-rate argument.
-
-**Original sizing note — $75 until balance ≥ $2,200.** Bet size is a risk decision, never a
-win-rate decision. Rule: raise only when the new size is ≤4.6% of balance (the ratio
-$75 held at $1,631). Block bootstrap over 60d: $75 → 13.3% chance of touching the $650
-stop; $100 → 24.6%. $100 buys +$372 of profit for -$386 of extra drawdown. Rejected.
-The old "200 settlements ≥93% WR" gate was met at exactly 93.0% but tested the wrong
-quantity — break-even is ~92%, so it authorised leverage on a 1pp margin.
-
-**Daily loss limit ($300, rolling 24h) — validated, do NOT loosen.** The formula is
-`max(300, bet x 4)` as of 2026-08-19: a bare `bet x 4` meant cutting the bet to $50
-silently retightened the threshold to **$200**, a level nothing has tested, and it
-held the trader halted for most of 2026-08-19. The $300 floor is the level the
-evidence below actually refers to. Note halting does not pause data collection —
-`archive_candles.py` runs regardless; only live fill evidence stops. Fires ~7 days in
-68 at full capture. The trades it blocks are genuinely bad: **90.51% WR, -$1.62/trade
-over 495 trades**, against ~92% break-even — blocking them is worth **+$802** over 68
-days. Mechanism: the 7 series settle together, so a -$300 day is a whipsaw regime and
-it persists for hours. Contrast with the polling gap, where missed trades won 93.30%
-vs 93.27% for captured ones — that was a genuine leak; this is a filter that works.
-More halts at higher volume is the control doing its job.
-
-**All other halts check out too.** `CONSEC_LOSS_LIMIT=9` never fires in 68 days at
-either volume. `MAX_CONCURRENT=3` is *worse* than 2 at measured fill quality
-(+$108 vs +$112/day) and collapses under one tick (+$6 vs +$29/day) while doubling
-per-cluster exposure. Nothing here is too conservative — verify with
-`--sweep max_conc 1 2 3 4 --slip 0.105` before revisiting.
-
----
-
-# 5. Operational
+## Operational
 
 **Key files**
 
@@ -453,167 +244,8 @@ hardcode a strategy constant into the dashboard.
 
 ---
 
-# 6. Data archival — read before proposing any research
 
-**Kalshi retains settled markets only ~67 days.** This one fact blocked every strategy
-question this project ever asked: by the time a hypothesis exists, the only data that
-exists is the data it was formed on. The NO question sat unresolved for months because
-its gate demanded 90 days of clean holdout — on 2026-08-17 the entire available
-holdout was **7.6 days**.
-
-`.github/workflows/archive_candles.yml` runs nightly and commits
-`data/candles/YYYY-MM-DD.csv.gz` (all series, both sides, ask 88-96¢, 100-800s —
-deliberately wider than the live gates). Backfilled to 2026-06-11, no gaps.
-**Adding a series needs a FORCED backfill.** `--backfill N` skips any date whose file
-already exists, so a new series captures nothing historical without it. The workflow
-takes a `force` input: `gh workflow run archive_candles.yml -f backfill=N -f force=true`.
-Costs ~3 min/day of runtime. Used 2026-08-19 to capture Gold/Silver back to Aug 1.
-
-**Every archived day is untouched out-of-sample data for every hypothesis formed after
-it.** Backfill with `--backfill N`. Never delete this directory. If the workflow has
-been failing, fixing it outranks whatever research prompted the check — a day not
-archived is validation capacity permanently destroyed.
-
----
-
-# 7. Dated observations — perishable
-
-Each needs re-checking; none is settled.
-
-| Observation | Date | Status |
-|---|---|---|
-| **v5.17 DEPLOYED 2026-08-24 — 88-89c YES-only band. PRE-REGISTERED, read before judging it** | Aug 24 | **Written before deployment, unlike #152.** Change: YES entries reach to 88c; **NO stays at 90c** (88-89c measures YES +$0.39/tr vs NO -$0.42/tr, so symmetric sweeps cancel it to -$2.07/day — that is why `MIN_ASK=89` sat unresolved for a week). Runs on the **existing 2 slots**, so simultaneous exposure is UNCHANGED; new entries displace marginal 90-93c ones. The existing <=91c low-ask gate (3rd prior >= 80c) already covers 88-89 and cuts the population 3,995 -> 1,959, keeping the better half. **Backtest (full archive, 0.105c slip, $25):** live +$2,657 / +$0.299/tr / +$35.93/day -> combined **+$3,101 / +$0.338/tr / +$41.92/day**, delta **+$443, CI [+68, +826], P(>0)=0.987**. Per-trade value RISES, which is the signature of displacing marginal trades rather than adding volume. 3 slots was tested and is WORSE (CI [-228,+1219], $/tr falls to 0.278) — do not add slots. **PREDICTION:** the 88-89c YES subset wins at ~90.7% and returns ~+$0.39/tr; overall $/tr rises from ~0.30 toward ~0.34. **HORIZON: 200 88-89c-YES trades. At ~3.7/day taken after slot competition that is ~54 days (~2026-10-17) — deliberately long, because that is the honest rate; do not read the subset before then.** **DECISION RULE, fixed now:** revert if the 88-89c YES subset WR is **below 88.5%** (its break-even) at n=200, or if overall $/tr falls below 0.25 at any point. Keep otherwise; full validation at n=1,000. **Do not stop early on a good stretch — that is the optional-stopping error that #152 died of.** Pinned by 4 tests in `test_order_safety.py::BandAsymmetryTests` so a future symmetric "cleanup" cannot silently reintroduce the -EV NO side. |
-| **The archive is ROUNDED before 2026-08-22 — ~4% of the live band is phantom** | Aug 24 | Measured, not inferred. Every archived day from 2026-06-11 to 2026-08-21 stores **integer cents**; only 2026-08-22 onward is exact (#163). On the exact-cent days, **106 of 2,563 rows (4.1%) change band under rounding — all of them `outside -> 90-93`**, e.g. a true 93.4c ask becoming 93c. So roughly **4% of every historical row in the live 90-93c band was never really in the band**, and every pre-Aug-22 claim inherits it: `PRIOR_MIN_CENTS=75` (filter audit Aug 10), `MIN_ASK=89`, edge-by-price, entry-timing, and the config sweeps. **The 88-89c band gains ZERO rows from rounding**, so v5.17's new band is clean — but its BASELINE carries the 4%, which could bias the measured delta. Flagged under the freeze, not acted on. Re-deriving any pre-Aug-22 claim requires either restricting to 2026-08-22+ or re-archiving with `--force` (the raw candles are recoverable from Kalshi for ~67 days, so **days before ~2026-06-18 are already unrecoverable**). |
-| **"EXTRA" is NOT bad trades — it is a resolution artifact** | Aug 24 | Diagnosed all 56 Aug-23 EXTRA trades against the archive and the fill records. **100% filled INSIDE the 90-93c band** (range 90.0-93.0), **100% inside the 150-600s window**, **94.6% met ALL THREE criteria** including priors. The model rejects them because the 1-min archive samples once a candle while the bot polls ~4x/min: the archived close ask reads 93.3 or 94.5 while the bot filled at 91.9. **The bot is already doing what the criteria specify.** EXTRA measures reconciliation coverage, not trade quality. Baseline EXTRA was *also* 97.5% in-band yet lost -$3.65/tr at 86% WR, and priors held in ~93% of BOTH groups (baseline priors-held: 87.6% WR, -$2.64/tr; Aug 23 priors-held: 94.3% WR, +$0.55/tr), so neither price nor priors explains the quality gap — no mechanism was found, which supports the #180 revert rather than undermining it. |
-| **100% capture is not a goal worth having — it is worth about -$3** | Aug 24 | Every one of the 42 Aug-23 misses classified: **17 price NOT purchasable** (depth<60 — the quote was not on offer; model pnl +$34.69 is phantom), **17 seen + purchasable but not taken** (model pnl **+$7.87 total**, i.e. $0.46/tr), **8 never observed** (model pnl **-$10.60** — missing them MADE money). Closing the entire capture gap from 65.3% to 100% nets **about -$2.73**. Capture is a diagnostic, not an objective; the raw % understates true capture because ~40% of misses were never buyable. |
-| **The concurrency cap blocks half of everything and costs nothing** | Aug 24 | `heat check: N open positions` is **102 of ~200 skips (51%)** across 8 sampled runs — by far the largest reason a qualifying entry is not placed (next: 74 ask-moved-between-scan-and-order, 16 priors-failed-at-order, 6 thin book). But sweeping it over the full archive at 0.105c slip, $25 flat: **max_conc 2 = 9,383tr +$2,624 (+$0.28/tr); 3 = 11,715tr +$2,610; 4 = 12,906tr +$2,860; 5 = 13,422tr +$2,483; 6 = +$2,538.** Going 2->3 adds 2,332 trades and **loses $14**. Slots are allocated earliest-signal-first and earlier entries are better (§ entry timing), so everything the cap blocks is marginal by construction. **Do not raise MAX_CONCURRENT to buy volume** — it buys trades, not dollars, at strictly worse $/tr and higher simultaneous exposure. This retires the "more slots is the path to more P&L" idea recorded on Aug 23. |
-| **#152 MEASUREMENT RESULT — failed its own test, REVERTED in #180** | Aug 24 | The pre-registered clean-day test ran on 2026-08-23. **Capture 45.1% -> 65.3% (+20.2pp)**, the highest of any day measured. **EXTRA did NOT fall**: 25.3% -> 46.3% per opportunity, count 38/day -> 56. #152's own commit message says: *"If EXTRA does not fall, the mid-candle-noise explanation is wrong and this should be reverted."* **By the letter of the pre-registration, revert.** BUT the metric was a proxy and the thing it proxied for inverted: **EXTRA went from -$3.503/tr (-$563.98 over Aug 18-22) to +$0.153/tr (+$8.58)**, WR 85.71% -> 92.86%. Live total -$497.79 -> **+$98.11**. Confound checked and rejected: Aug 20 was also a strongly positive day (+$122.56 live) and EXTRA still lost there (-$0.464/tr), so this is not a good-day artifact — per-day EXTRA $/tr runs -9.004, -0.464, -5.989, -2.418, **+0.153**. **RESOLVED: reverted in #180.** The profitability rescue does not survive arithmetic — the +$8.58 is 52 wins against 4 losses, avg win +$2.02 vs avg loss -$24.06, so **one win becoming a loss makes it -$17.49** and two makes it -$43.57; 45 distinct settlement clusters among 56 trades, so effective n is smaller again. A coin flip, not evidence. An outside review made the decisive point: proposing to **wait one more day only after seeing a favourable day is optional stopping** — the wait would not have been proposed on a -$50 day. **Reverting is not a claim that #152 is harmful**; the 20pp capture gain may be real. It is the consequence of the rule chosen before the result was known. If boundary-capture is worth recovering, it needs a FRESH prospective test: exclude Aug 23 as pilot data, freeze the implementation, use settlement-cluster inference, and fix the horizon in advance at the ~1,300-trade bar — not 56. Note the honest risk: this is exactly the "rescue it with a new story" trap the pre-registration was written to prevent, and one day at n=56 EXTRA cannot distinguish a fixed selection problem from a lucky one. `git revert` CONFLICTS (#157/#161-166 touched the same regions), so #180 is surgical: **every #165 daemon failure control is kept** (that is what caught the 2026-08-23 connection resets), and **#164's gate log was adapted** — it gated itself on candle alignment, which only worked while #152 existed, so an unadapted revert would have silently killed the gate log. 36 order-safety tests pass. |
-| **Depth gate is NOT too strict — the $48/day was an artifact** | Aug 23 | `depth==0` is **50.6%** of all gate-log rows and **88% of every block**, and it does not mean "thin book" — it means **nobody is offering at the price the signal fired on**. For depth-0 rows the real best price is **+1.30c worse** (median, 85% of cases); for depth 1-59 it is +1.15c worse. Only depth>=60 fills **better** than the signalled ask (-1.15c), which is exactly why execution measures as an ASSET (+$77.72). The backtest scored the blocked population as fills at the candle ask, so the "~$48/day" was pricing trades that were never purchasable. Arithmetic: at 92c break-even is 92.0% against ~93.5% WR (+1.5pp); pay 1.3c more and break-even is 93.3% -> **+0.2pp, gone**. `MIN_BOOK_DEPTH=60` is a near-perfect availability detector. Do not loosen it. |
-| **88-89c YES-only, run as a SEPARATE book — the one survivor** | Aug 23 | Best new candidate found in the Aug 23 search. Disjoint from live by construction (below the band, YES only): **n=1,833, WR 90.73%, +$0.39/tr, +$9.88/day** at 0.105c slip, bootstrap **CI [-35,+1435], P(>0)=0.970**, and critically **84% executable** (depth>=60) versus 11-15% for the 94-96c candidates. Survives every split: slippage 0->0.105->0.5->1 tick = +0.421/+0.393/+0.287/+0.155 (never inverts), all three time-thirds positive (+0.267/+0.831/+0.109), 5 of 6 series positive (DOGE -0.267 the exception). **Side asymmetry is the whole point** — at 88-89c YES makes +$0.39/tr while NO loses **-$0.42/tr**, so a symmetric sweep cancels it to -$2.07/day, which is why `MIN_ASK=89` never showed up as significant. **Only additive with its OWN concurrency slots**; on the existing two it displaces live trades — the same reason `max_ask=94` reads P=0.65 as a config widening and P=0.998 as a separate book. Realistic after executability and the ~47% live capture: **+$4-5/day, ~+20%, NOT a doubling.** Caveats: CI touches zero, and the latest third is the weakest. |
-| ask-94 as a separate book — killed by executability | Aug 23 | Model looks strong (n=3,628 disjoint, WR 95.48%, +$14.28/day, **P(>0)=0.998**, holds across halves and 6/6 series) but **only 11-15% of 94-96c signals have depth>=60** versus 47% in the live 90-93c band. Realistic value is ~15% of the model, **~+$2/day**. Notable structural oddity worth remembering: **BNB (+0.535) and SOL (+0.464) are BEST at 94c while being worst in the live band** (+0.03, -0.11) — whatever drives edge at 94c is not what drives it at 91c. |
-| **Weather is CLOSED — three independent methods** | Aug 23 | 2.04M vol/24h (2nd largest complex on Kalshi, 40+ temperature series incl. international) and **none of it is usable**. (1) *Forecast edge fails:* Brier **model 0.1499 vs market 0.0932 on n=1,886, market better in 6 of 6 cities**, edge -0.0567 against a +0.0100 gate; the threshold rule loses **-$4,003 over 1,160 trades**. Open-meteo ensembles are public, so they are already in the price. (2) *No mispricing to harvest:* T-24h calibration **n=291, mean_p 0.170 vs actual 0.175 — a 0.5pp gap**, i.e. correctly priced (crypto is +1.42pp at 88c). (3) *The population does not exist:* across **1,184 quote observations**, only **0.9%** sit in 88-96c — **0% inside 6h of close**. Do not reopen this on the strength of the volume figure; the volume is real and irrelevant. |
-| **Archetype filter — which markets CAN host this strategy** | Aug 23 | Generalises the weather result. The late-certainty edge requires a **continuously-priced underlying with a fixed short deadline**: the underlying sits near the strike and each passing minute mechanically walks P through 88 -> 91 -> 93 -> 96, creating the band. **Event markets — weather, sports, politics — resolve in JUMPS**: once the afternoon high is in, price goes straight to 100 and never spends time at 92. They structurally cannot host this strategy at any liquidity. Applying the filter to everything with real volume leaves: crypto 15M (live), **KXSILVER15M (the lead)**, KXGOLD15M (-$0.42/tr, tested), KXWTI15M (paused), INX/NDQ 15M (zero volume), and **FX/index hourly (KXINXU 9,617, KXEURUSDH) — the one genuinely untested corner**. For this archetype the space is close to exhausted. |
-| Doubling P&L is a slots decision, not a search result | Aug 23 | Every candidate shares one bottleneck: the same six underlyings, the same **2 concurrency slots**, the same fee floor. A second strategy on the existing slots **displaces** live trades rather than adding to them. The Aug 23 search closed weather, the depth gate and ask-94, and returned exactly one candidate worth ~+20%. More P&L therefore comes from `MAX_CONCURRENT` (swept but unestablished: `max_conc=4 +$437 P=0.65`) or a genuinely uncorrelated venue (Silver, ~late Sep) — the first is a risk decision about simultaneous exposure and a shared daily loss limit, and no backtest settles it. |
-| **Silver ≠ Gold — the bundle was hiding a lead** | Aug 23 | Scoring the archive per series (Aug 1-22, live gates, $25 flat) ranks **KXSILVER15M 4th of 9 at 93.52% WR, +$0.32/tr, +$7.04/day** — above XRP (+$0.17), BNB (+$0.03) and SOL (-$0.11), all of which are LIVE. Gold is genuinely bad (**-$0.42/tr, worst of nine**), so averaging the two as "metals" carried opposite signs and buried Silver. Survives slippage where the live marginals do not: +0.32 -> **+0.29** at the measured 0.105c -> **+0.07** at one full tick, while BNB and SOL both invert. **NOT established:** bootstrap 95% CI **[-$155, +$415], P(>0)=0.842**, n=463. The ~1,000-trade bar lands **~late Sep** at ~29 trades/trading-day (metals are weekdays only) — it is already archiving, so this needs no work, only the calendar. Do not act before then, and note this is the SAME strategy on an uncorrelated underlying (diversification, not a second edge). Re-run: `python3 scripts/backtest.py --since 2026-08-01` then split by `r[0]` via `backtest.load`/`simulate`/`summary`. |
-| Searchable space is 76 series, not 13,389 | Aug 23 | Kalshi lists **13,389 series**, but validating an edge needs ~1,300 comparable trades, so frequency is the binding filter: `fifteen_min` **19**, `hourly` **57**, `daily` 250, and **12,433 (93%) are annual/one_off/custom** which can never accumulate the sample. Of the 76 high-frequency series, **37 carry real volume/OI**. The ~3% historical hit rate across ~30 tested ideas is therefore not idea scarcity — it is that direction-neutral structures all die to the same fee load (§ fees below), 11 for 11. **Field-name trap:** the markets endpoint uses `volume_fp` / `volume_24h_fp` / `open_interest_fp` / `yes_bid_dollars`, NOT `volume`/`open_interest`/`yes_bid`; querying the latter returns 0 for every series **including ones the bot is actively filling**, which reads as "market is dead". |
-| Fees are 0.539pp of break-even — put them INSIDE it | Aug 23 | Break-even is `(cost + fees)/contracts`, never `cost/contracts`. The fee-blind form is a bar a winner clears while the account still loses: the dashboard showed **+0.34pp green on a since-Aug-1 window that had lost $64.97**, and 2026-08-19 reads **+0.06pp margin against -$18.68 realised**. At ~0.539c/contract the omitted term is larger than the entire margin being reported. Fixed in #174; across all seven settled windows the corrected margin sign now matches the P&L sign, where the old form disagreed on one. This is also why every direction-neutral structure in §"Direction-neutral structures" died. |
-| Flat sizing closed the dollar-weighting drag | Aug 23 | The 1.204 loser/winner size ratio that dragged the effective rate ~1.2pp is **gone**: at flat $25 the ratio is **0.998** and dollar-weighted WR now equals trade-weighted (94.38% both, since #151+audit fixes). Mechanical, not luck. That window ran **+2.52% on 160 trades**, but p=0.0497 against prior with a bootstrap CI of **[-1.64%, +6.02%]** — consistent with a real edge, not evidence of one. |
-| **The edge is fragile, not broken** | Aug 21 | The most important frame in this file. Break-even 91.5%; a **1.4pp** win-rate wobble — routine, and undetectable at n=584 (z=1.34, p=0.18) — is the difference between **+$0.62/tr and +$0.07/tr**. Live dollars exactly match live WR, so there is no hidden P&L leak; the whole question is always "is this WR real or noise", and you need **~1,300 trades (~2 weeks)** before a 1.4pp gap is even 2σ. Nobody can tell unlucky from degraded faster than that. Do not act on shorter windows. |
-| Strategy is NOT decaying | Aug 21 | Model edge by fortnight: Jun 11-24 **+$0.84**, Jun 25-Jul 8 **+$0.14**, Jul 9-22 +$0.54, Jul 23-Aug 5 +$0.54, **Aug 6-20 +$0.91** — the most recent fortnight is the best in the archive. Jun 25-Jul 8 shows the model itself running near break-even for two weeks and recovering. `python3 scripts/backtest.py --since X --until Y` |
-| Capture rate — **disputed, do not quote a number** | Aug 21 | `audit2.py` reports 75.2% for Aug 20 and 41.4% for Aug 19. `scripts/reconcile.py`, built later the same day and also restricted to `SERIES_LIST`, reports **38.0%** and **17.9%** — a consistent ~2x on both days, which points at a denominator difference (log-derived entry *attempts* vs settled *fills*) rather than a data disagreement. Until one is reconciled against the other, capture is an open question and the "capture is fine, no WebSocket needed" conclusion does not stand on it. `python3 scripts/reconcile.py --since 2026-08-20 --until 2026-08-20` |
-| Selection IS costing money — **reverses the entry below** | Aug 21 | Full reconciliation over Aug 12-20 (n=533 live, 1170 model): live-only trades run **205 at 90.24% WR, −$250.56**, below the ~92% break-even. Execution is an *asset* (+$77.72; fills land 0.239c BETTER than the modelled ask, and matched-trade WR equals model WR to the decimal). Capture costs the most in absolute terms (−$506.37) but missed trades win at 93.47% vs 93.90% taken — same quality, so it is a volume leak, not a selection leak. `python3 scripts/reconcile.py --since 2026-08-12 --until 2026-08-20` |
-| ~~Aug 19 "selection leak" was a halt artifact~~ — **superseded, see above** | Aug 21 | Aug 19 showed bot-only extras at 76.2% WR / −$8.65/tr and looked like a slot-allocation defect. Aug 20 (clean): same population ran **93.8% WR / +$0.91/tr**. Random series order is not costing anything; do not "fix" slot allocation. |
-| Live per-side, first real read | Aug 21 | Aug 20 settlements by side: **NO 37tr 97.30% +$2.68/tr**, YES 54tr 92.59% +$0.30/tr, all 91tr 94.51% **+$1.27/tr** — which *beat* the model's +$0.62 for that window. NO-side execution was the prime suspect for the live-vs-model gap; this points the other way. n=37, one day. |
-| ~~Thin-book gate may be too strict~~ — **REFUTED Aug 23, see top of table** | Aug 21 | `MIN_BOOK_DEPTH=60` blocked 13 entries worth **+$50.24** (Aug 19) and 12 worth **+$46.79** (Aug 20) — consistent ~$48/day. **Upper bound only**: the model assumes a fill at the candle ask and knows nothing about what a thin book does to the fill. `[EXEC]` now logs `depth` beside `avg_fill`, so this becomes measurable rather than speculative in ~2 weeks. ~~Best open lead.~~ |
-| `[EXEC]` fill records now logged | Aug 21 | Every fill emits `side / scan / fresh / book / depth / book_age_ms / limit / contracts / cost / fee / avg_fill / attempts`. Compare `avg_fill` to `book` **by side, over distributions** — never per-fill against a candle (+0.85¢ artifact, §4). ~500 NO fills ≈ **12-16 days**. Harvest: `grep '\[EXEC\]'` over run logs. |
-| MOM3 live rate is far below forecast | Aug 21 | Research predicted the veto bucket at ~8% of volume (8-10/day). First live day: **2/day** at m3>+0.50, 1/day at >+1.00, median m3 **−0.58** (n=62). At that rate 500 blocked trades is **~250 days**, not 6-8 weeks. If it holds a week, MOM3-as-veto is dead on timeline alone and only survives as a sizing input. |
-| Loss cooldowns and size-up-after-loss | Aug 21 | Both refuted. Losses are **not** clustered: lag-1 lift +1.91pp, permutation **p=0.095**; lags 2/3/8 negative. Every cooldown loses money and the blocked trades were profitable (+$0.31 to +$0.56/tr). No post-loss edge either (+$0.16/tr, P(>0)=0.61), and sizing up after a loss would *loosen* the daily limit via `max(300, bet×4)`. `research/loss_cooldown/` |
-| $200 daily-limit threshold, now measured | Aug 21 | The level the `bet×4` bug created is **worse than having no limit at all** (+$4,676 vs +$4,737); $300 is the best in the sweep (+$5,178). Retroactively confirms PR #134. Directional — the rolling-P&L sim approximates `daily_pnl` rather than reproducing it. |
-| 94% WR with ~zero P&L is a SIZING artifact | Aug 19 | Win rate counts trades; P&L counts dollars. Bet size ran **$2.79 → $74 (26x)** inside the Aug 1-18 window, so most wins were banked when a win paid **$0.20** while the losses landed at $45-74. One $74 loss erases ~370 early wins. Dashboard showed 94.5% WR and **+$0.16/trade** against a +$1.00 backtest at flat $75. Now that sizing is flat $50 this distortion is gone — and it means the historical figure *understates* the edge. |
-| Kalshi incentives: not worth pursuing | Aug 19 | Public endpoint `GET /trade-api/v2/incentive_programs` (filters `status`, `type`). 145,145 programs, $9.0M liquidity / $0.9M volume. **SOL/DOGE/BNB/XRP/HYPE/NEAR: never incentivized.** BTC/ETH 15M had volume programs that **ended 2026-05-12**, and zero volume programs are active exchange-wide. Even live they paid $20 pool ÷ 1.68M contracts = **$0.00001/contract** — the $0.005/contract cap never binds. Liquidity programs pay real money but the exploitable pattern is parking unfillable penny walls in dead markets, which risks the "abusive behavior and fake trading" clause. Full write-up + scripts: `research/kalshi_incentives/README.md`. |
-| WTI paused; Gold/Silver still out — **Silver refined Aug 23, see top of table** | Aug 19 | All three launched **2026-07-31** (verified: 0 markets pre-July, 24 on Jul 31). WTI was added v5.8 on a 13-day backtest (+$1.75/tr OOS); over its whole life it measures **-$0.33/tr on 290 trades** — the justifying evidence inverted. Silver (+$0.31/tr) was *better* than WTI while excluded, so trading one and not the others was an accident of timing. Paused, not condemned: -$0.33 is ~1.1 SE from break-even. Revisit all three at ~1,000 trades each, together, one standard. |
-| SOL is fine — August was noise | Aug 19 | Full archive: **1,810 trades, 93.15% WR, +$0.41/tr**. August alone reads -$0.12/tr. Picking any 18-day window makes some series look broken; this is exactly what Invariant 8 warns about. Do not act on single-window series stats. |
-| Gold/Silver first real read | Aug 19 | 15 trading days, live gates, no slippage, no concurrency cap: **GOLD 357 trades 89.92% WR -$1.28/tr** (worst in the book), **SILVER 369 trades 92.95% WR +$0.31/tr**. Neither is established (~1.1-1.6 SE). Metals trade weekdays only — ~5/7 the days of crypto, so per-day comparisons mislead. Archived from 2026-08-01 onward. |
-| Edge by price: dies at 95¢ | Aug 18 | 88¢ **+1.42pp**, 91¢ +0.98, 92¢ +0.70, 93¢ +0.66, 94¢ +0.95 (all significant); 95-96¢ **+0.07pp — gone**. n=83,337 obs / 6,402 clusters. Independent support for the `MIN_ASK=89` lead. `python3 scripts/calibration.py` |
-| Entry timing: earlier is better | Aug 18 | Edge by time left: 100-150s **-1.26pp**, 150-240s -0.57, 360-480s **+1.27**, 480-600s +0.87. The 60s-average settlement is priced, possibly over-priced — late entries are not safer. `python3 scripts/calibration.py` |
-| Waiting for a better price loses | Aug 18 | A 90-91¢ contract at 8-10 min is **gone from the 88-96¢ band 85.8% of the time** by 3-4 min. Buying what is *still* 90-93¢ late: -3.31pp, **-$2.71/trade** — adversely selected. Buying early: +$0.58/trade. `python3 scripts/entry_timing.py` |
-| Survivor re-entry (92-93¢ → 94-96¢) | Aug 18 | +3.95pp in-sample, +4.88pp holdout — but 41 holdout obs with ~zero losses, so the rule-of-three floor (WR≥92.7%) sits **below** the 95.2¢ break-even. **Shadow-logged only** (`[SHADOW:SURVIVOR94]`), revisit at n≈500. |
-| BRTI runs rich vs Coinbase | Aug 18 | Strike (a BRTI print) is **+0.96bp above** Coinbase at the same minute, sd 2.41bp, \|basis\|>10bp in 0.5% of windows. ~12% of a typical 15-min move — it biases every near-strike call the bot makes on Coinbase data. `python3 scripts/calibration.py` |
-| Volume is no longer the constraint | Aug 18 | Cumulative counter ran 7 → 138 across Aug 18: **~140 trades/day live vs 121/day modelled**. The 27% capture rate in Invariant 6 is pre-v5.16 and stale; live now trades *more* than the backtest universe, at lower WR — suspect the marginal extra trades. |
-| Config sweeps: nothing established | Aug 18 | `min_ask`=89 +$481 P=0.79 · `max_conc`=4 +$437 P=0.65 · `max_ask`=94 +$427 P=0.67 (at 0.105¢ slip) · `min_secs` flat. Four independent levers, none significant — consistent with Invariant 2 that the config is near-optimal. |
-| 15M vs hourly parity — still untested | Aug 20 | Both settle on the identical BRTI print at the top of the hour, so the KXBTCD ladder interpolated at the 15M strike is a second price for the same event. They only coexist in the final ~10 min, so it needs a sampler firing at :50. **Trading the hourly ladder on its own merits is now refuted (row above); the parity/relative-value question is separate and still unmeasured.** |
-| Crash fills are **+EV so far**, not the leak | Aug 18 | 12 fills landed below the band on Aug 18 and settled **11W/1L, +$90.63** (avg +$7.55/trade vs the ~$6.50 target). The two deep ones netted -$6.48 (-$47.48 DOGE @57.6¢, +$41.00 BTC @47¢). Cheaper entry pays more when it wins. Do **not** auto-exit them on instinct; n=12. |
-| ~~The actual leak is the core~~ — Aug 18 was just a bad day | Aug 20 | **Downgraded from "unexplained leak".** v5.16's 120/135 = 88.9% WR / -$236.20 read as edge decay. It was not: the archive says **Aug 18 was the single worst day in 68 days** — the modelled universe at live gates lost **-$338 (-$2.01/tr, 88.69% WR)** that day, and live actually *beat* it (-$7 on 139 trades). Nothing to investigate. `python3 scripts/backtest.py --since 2026-08-18 --until 2026-08-18` |
-| Adverse spot momentum predicts losses | Aug 20 | **Best-supported edge lead in the file; shadow-logged as `[SHADOW:MOM3]` on 2026-08-20, not gated.** Spot drifting toward the strike in the 3 min before entry: `m3 = -sign*ln(S/S₋₃ₘ)/(σ√3)`, σ = sd of trailing 60 one-min returns. Blocked bucket (m3 > +0.50) ran **-$1.56/tr on n=569**, difference vs kept **CI [-3.95, -0.75], P(worse)=1.000**. Pre-registered, monotone in both windows, 5 of 6 series, both sides, all 3 months. Worth **+$10-14/day** at $50 flat (~+12%), blocking ~8% of volume. Critically it helps **more** at one tick of slippage, so it is not a fill artifact. m3 > +0.25 **fails OOS** — do not over-tighten. `python3 research/perp_overlay/s1_robustness.py` |
-| Hourly crypto ladders (KXBTCD/KXETHD) — no edge | Aug 20 | **Refuted.** 45-day archive, live gates, $50 flat: **1,641 trades, -$0.03/tr, -$41** (-$129 at the measured 0.105¢ gap, -$868 at one tick), vs the 15M book at **+$85.90/day** over the same window. Win rate straddles the ~92.3% break-even and **flips sign between halves for both series** (BTCD -0.57→+0.35, ETHD -1.34→+1.15). The multi-strike "leverage" worry that kept it in shadow was **backwards**: 310 of 392 stacked closes are a YES below spot + a NO above spot, which cannot both lose — 0 all-lose events in 45 days. Real finding: **100% of hourly entries settle on the same BRTI print as the :00 15M close on the same underlying**, and `MAX_CONCURRENT` does not see them as related. `python3 research/hourly_crypto/analyze_hourly.py` |
-| C1 quarantine (SOL + prior2 75-79¢) | Aug 17 | Worth **~$260 over 68 days** — noise, not the "-$7.25/tr" originally recorded. Quarantined on 60+80 trades, violating the 500-trade bar. Left in place as harmless; do not cite as precedent. `--compare c1=0` |
-| `MIN_ASK = 89` may beat 90 | Aug 17 | Better at *both* slippage levels — the only parameter that didn't flip. Worth real work. `--sweep min_ask 88 89 90 91` |
-| ET08 hour | — | -$2.39/tr, unconfirmed across periods. Needs 500+ trades. |
-| BNB exclusion | — | 92.2% WR, +$0.06/tr — borderline. |
-| Thursday blackout | — | 349 trades at -$1.20/tr — suggestive, underpowered. |
-| C5 (prior1≥95 + prior3≥95) | — | 54 OOS trades — not blockable. |
-| $100/trade bump | Aug 17 | Hold until balance ≥ $2,200. |
-| Window-based consecutive loss | — | Group by expiry timestamp, not individual trades. |
-
-**Crash fills (was "DANGER FILL", renamed Aug 18).** A fill below `MIN_ASK` means the
-order swept a book that had already collapsed — not that a limit was breached. Aug 18's
-worst: 80 BTC NO at **47¢ average on a 92.5¢ quote**, and 80 DOGE YES at **57.6¢ on a
-92.8¢ quote**. The exchange fee confirms the price is real (`0.07·C·P·(1-P)` came to
-$1.40, which only solves near P≈0.47) — this is not an accounting artifact.
-
-Two regimes, and they must not be conflated:
-- **within 3¢ of the band** — the book moving inside the order's flight time. Benign;
-  logged, never emailed. Six of Aug 18's twelve.
-- **deeper** — a genuinely different bet: a ~50¢ contract is a coin flip with ±$40
-  swings, against a strategy sized to risk $75 to win $6.50. Emails as `CRASH FILL`.
-
-Counting them: `gh run list --workflow=late_certainty.yml --limit 400 --json databaseId,createdAt`
-then grep run logs for `SETTLED <ticker>`; the settlement line for a market appears in
-the run that was already in flight at its close, so search from `close-5min`. Alert
-history is in Gmail (`subject:"CRASH FILL"`, `subject:"DANGER FILL"` before Aug 18).
-
----
-
-# 8. Not currently pursued
-
-**Calibration warning:** this section was previously titled "tested and rejected" and
-every row said "Dead". On 2026-08-17, two of its NO-related claims failed to
-replicate, and the headline "NO is -EV" verdict was overturned entirely. These are
-**leads about where effort went**, so you don't redo expensive work — they are not
-verdicts, and none of them can be reproduced from anything in this repo. If a
-question matters, re-run it with `scripts/backtest.py` against current data.
-
-*Volatility / dispersion filter (pre-registered, 2026-08-18):* **refuted.** Bucketing
-entries by prior-candle price range (`max-min` of ask,p1,p2,p3) gives a *non-monotonic*
-WR — MID is the worst bucket in both windows — and the cluster-bootstrapped HIGH-LOW
-delta includes zero in-sample and out-of-sample. Decisive point: HIGH-dispersion entries
-are **66% of volume and 77% of holdout profit**, so excluding them cuts holdout P&L from
-+$4,242 to +$992. High dispersion is the ask *transiting* 90-93c toward 100c as certainty
-resolves (Invariant 6) — the strategy working, not a danger signal. Note the prior-candle
-gate (`PRIOR_MIN=75`) is already a volatility filter; this tested for residual signal after
-it. Third attempt at this idea (`backtest_vol_filter.py` Aug 9, dispersion filter Aug 17
-which inverted OOS). `python3 scripts/vol_bucket_test.py`
-
-*Perp hedging (pre-registered, 2026-08-20):* **dead, and it fails at ZERO fees.** Hedging
-each position with an opposing perp was tested at fixed notional, at the digital's true
-per-trade delta (`C·φ(z)/(σ√τ)`, median **$7,842** per $50 bet), netted to one BTC leg per
-settlement cluster, and dynamically on an adverse strike crossing. Best case — correct
-delta sizing, **0bp** — earns **+$0.32/tr against a +$0.52 baseline** and cuts return/sd
-from 2.70% to 1.82%: worse on both axes. A perp's expected return is zero, so the overlay
-can only reshape variance and pay fees. The Kelly escape (cut variance, size up) fails by
-~100x: the 8.3% sd cut buys a 1.19x size increase worth **+$0.098/trade**, needing a
-round-trip cost under **~0.1bp** against a real 4-12bp. Cluster-netting does not rescue it
-— only **4%** of notional cancels, because concurrent positions nearly always point the
-same way. **The position is already collateralised and loss-capped at the premium; there
-is no tail to hedge.** Signal tests on the same spot data: H1 distance-to-strike, H3
-vol regime, H4 cross-asset BTC, H9 slot ranking, H10 replacing the prior gate — all
-refuted OOS. Only H2 (adverse momentum) survived; see §7. `research/perp_overlay/`
-
-*Directional / entry variants:* longshot crash-reversal · cross-asset lag · candle
-acceleration · stuck-market breakout · per-series WR kill switch · early-window entry
-(600-800s) · spot-Kalshi dislocation scalp · oracle-lag final 0-150s ·
-KXETH15M exclusion (would have **cost $978** — ETH is the best series; do not re-raise
-on a losing streak).
-
-*Direction-neutral structures (Aug 15-17, all negative after fees):* complete-set
-accumulator · matched-pair maker · cross-crypto relative value · market-neutral pairs ·
-vertical/cross-strike arb · all-taker catalog scan · maker-then-hedge · WTI ladder
-maker · liquidity-reward farming · hourly range-pin · one-touch barriers.
-
-*Other markets:* new 15M series (HYPE -$1.76/tr, NEAR, Gold, Silver) · weather
-crossed-strike · cross-venue sports arb (**account is US-only** — this kills most
-venue arb) · Kalshi vs sportsbook · sports-futures dominance · Fed complete set.
-
-*Cross-listing 3-leg arb (range book vs threshold ladder):* **real and verified but
-economically worthless** — 4 opportunities in 14 days worth **+$1.05 total** at 10
-contracts, requiring a websocket service and non-atomic batch orders. Re-scan with
-`PYTHONPATH=. python3 scripts/xlist_arb.py BTC ETH` before ever reconsidering.
-
-Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-study/work/`
-
----
-
-# 9. Rules
+## Rules
 
 1. Read files before editing. **Surgical edits only to the live trader — real money.**
 2. Never add "while I'm here" cleanups or abstractions to the live trader.
@@ -650,17 +282,51 @@ Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-stud
 
 ---
 
-# 10. Running state — read this first, refresh it last
 
-**Last updated: 2026-08-22 ~16:10 ET.** If this is more than a few days stale, verify
-everything in it before relying on it.
+## Running state
 
-## Where the account is
+**Last verified 2026-08-24** against the code and the live API by two independent
+audits. `python3 scripts/verify.py` re-derives all of it and names any two sources
+that disagree — run that rather than trusting this text.
 
-Balance **$1,177.13** at 11:01 ET Aug 21, down from ~$1,285 overnight — Aug 21 ran
-51W/8L on 59 settled trades, **−$185.91**. Since Aug 1 the account is roughly flat.
-Raise the bet to $75 only at balance ≥ $1,630. **Do not scale on the current realised
-edge.** Headroom to the $650 stop is ~10 losses at $50 flat.
+### What is live
+
+v5.17: ask **YES 88-93c / NO 90-93c**, 150-600s, prior >=75c x2, `<=91c` needs a 3rd
+prior >=80c, both sides, max 2 concurrent, **$25 flat**, stop $650, daily limit $300,
+no blackout hours. Six crypto 15M series; WTI/GOLD/SILVER are shadow-only. Jobs run
+900s at a 15s interval and land every ~15 min.
+
+**The 88-89c YES band began trading 2026-08-24** and not before — it shipped inert on
+2026-08-24 and was fixed the same day (PART II, audit findings). Its pre-registration
+clock starts from that date: 200 88-89c YES trades, revert if that subset wins below
+88.5%, no early reads.
+
+### Account P&L — quote a scope, never "lifetime"
+
+No source here can produce a lifetime figure (settlements retain ~30 days, state caps
+at 500 positions, `stats` resets on every version bump). Over the API window:
+
+| scope | n | P&L |
+|---|---|---|
+| live series (6) | 1,946 | **-$320.91** |
+| + retired 15M — what the dashboard counts | 2,253 | -$565.96 |
+| + non-15M (`KXMLBTOTAL` is -$863.75 on 4 trades) | 2,258 | -$1,445.00 |
+
+Bet sizing history, which any per-trade figure must respect: **$75 through Aug 18,
+$50 Aug 19-21, transition Aug 22, $25 from Aug 23.** A $/trade number spanning
+2026-08-22 is averaged across two bet sizes and is not an edge.
+
+Raise the bet only on the ratio rule in PART II, never on a good week.
+
+### Known-unexamined, deliberately
+
+- `STOP_BALANCE=650` was set proportionally to a **$100** stake and never revalidated
+  at $25.
+- The **$300 daily limit is near-inert at $25**: the worst trailing-24h drawdown in
+  74 days of archive is -$309.25, so it fires once and blocks nothing. Engagement
+  scales with bet size; the threshold does not. `docs/audit/claude/DECISIONS.md` D1.
+- The edge breaker's 50/0.84, `ORDER_TTL_SECONDS`, `ORDER_RECONCILE_SECONDS`,
+  `ORDER_MIN_TOPUP_DOLLARS` and the 500-position cap have no value-specific evidence.
 
 **The power numbers that govern every "is it working" question** (measured, sd =
 $18.13/trade, cluster design effect 1.066, 95% conf / 80% power):
@@ -678,6 +344,381 @@ separately, which makes the `[EXEC]` monitor a prerequisite rather than a nicety
 "~1,300 trades" figure in the kill-list is significance-only with no power term; the
 honest number for 1.5pp is 2,418.
 
+
+**Archive alerts can cry wolf.** A manual dispatch racing the cron on Aug 21 produced
+two runs 43s apart; both archived Aug 20, the loser died in a binary rebase its retry
+loop could not clear, and it sent `ARCHIVE FAILED`. No data was lost. Fixed with a
+concurrency group and a push-first retry (#145, verified by firing two dispatches back
+to back). **Before acting on that email, check whether the day is actually on main.**
+
+## Collecting right now — do not disturb
+
+| Experiment | Started | Decides at | Watch for |
+|---|---|---|---|
+| `[SHADOW:MOM3]` adverse momentum | Aug 21 00:04 ET (data before that is invalid — partial-candle bug) | ~500 blocked trades | Live rate is 2/day vs 8-10 forecast. Re-check after a week; if it holds, dead on timeline |
+| `[EXEC]` fill quality by side | Aug 21 ~00:15 ET | ~500 NO fills, 12-16 days | `avg_fill` vs `book` by side; also prices the thin-book gate via `depth` |
+| `[QUOTE-DRIFT]` listing vs fresh ask | Aug 22 | ~1 week | Every band disagreement, marked RECOVERED or correctly-skipped. Two RECOVERED in the first 15-min job (ETH listing 89c, real ask 90.0c and 91.8c). Tunes LISTING_QUOTE_TOLERANCE=3c on our data instead of the audit's sample |
+| `[SHADOW:GATE]` poll-level gate inputs | Aug 21 12:09 ET | ~2 weeks | Scores ANY version on what the bot actually saw, unlike archive replay which is an upper bound. Ask is logged as a **float** — Kalshi quotes sub-cent (96.6000c seen live); any parser must accept decimals. `scripts/gate_replay.py` |
+
+## Next actions, in order
+
+*Rewritten 2026-08-24 after the audit. Items 3 and 4 of the old list are DONE — NO-side
+fill quality is measured (they are indistinguishable from YES) and the thin-book gate
+was priced and refuted.*
+
+1. **Wait, and do not change config.** The edge is ~2pp against break-even; nothing is
+   measurable on a shorter horizon than the experiments below. Every config change
+   during a measurement window is an unmeasurable coin flip.
+2. **Let the v5.17 clock run.** 200 88-89c YES trades from 2026-08-24. Do not read the
+   subset early — that is the optional-stopping error #152 died of.
+3. **Decide the two unexamined risk controls** — `STOP_BALANCE` at $25 sizing, and the
+   daily limit that is now near-inert (`docs/audit/claude/DECISIONS.md` A4, D1). Both
+   are survival parameters, so neither follows from the archive; they need a call, not
+   a backtest.
+4. **Re-check MOM3's blocked-trade rate.** Live incidence ran ~2/day against an 8-10
+   forecast; if that holds it is dead on timeline regardless of effect size.
+5. Standing leads, unchanged and NOT proposals: `MIN_ASK=89`, the p3 inversion above
+   91c, time-weighted sizing (exploratory, needs 4-9 months).
+
+## Open threads and loose ends
+
+- **Time-weighted sizing** — +15.6% OOS but CIs include zero, the seven weight
+  functions are ~1.26 effective dimensions, and it needs **122-279 days** of fresh data.
+  Exploratory. The free paired shadow test (log weighted−flat per cluster) has not been
+  started. `research/top5/`
+- **Live-vs-model gap** — Aug 12-21 live trailed the model by 1.37pp, but Aug 20 alone
+  *beat* it (+$1.27 vs +$0.62). The gap may be an artifact of a window containing two
+  known-broken days (Aug 17 outage, Aug 19 halt bug), both since fixed. Strip those and
+  re-measure before treating it as real.
+- **Monitoring hole** — `if: failure()` cannot catch a workflow that never *runs*. The
+  archive silently skipped its cron on Aug 21 and had to be triggered by hand. The
+  `daily_summary` staleness line is the only backstop and it fires ~22h late.
+- `stash@{0}` ("auto-stash diag") — `.claude-flow` churn plus the always-empty
+  `certainty_state.json`. Safe to drop; left alone pending Chris's call.
+- Commit `9fdf8722` was pushed **directly to main**, bypassing the PR flow (rule 8).
+  Research-only, revertable, disclosed.
+
+## Working with Chris
+
+Terse, tables, numbers first — see §Who/What and rule 15. He checks in often and reacts
+to daily P&L; the honest answer is almost always "that is noise, here is the horizon at
+which it stops being noise." He is right to push back, and did tonight: challenging a
+claim of mine is what surfaced the Invariant 1 error. **Verify before reassuring.**
+
+---
+
+# PART II — EVIDENCE
+
+*Why the config is what it is. Long by design. Nothing here is authoritative over
+PART I — if the two disagree, the code won and this text rotted.*
+
+## Check claims, don't trust them
+
+**Every strategy claim in this file has a command. Run it.**
+
+```bash
+python3 scripts/backtest.py                       # live config, full history
+python3 scripts/backtest.py --compare yes_only=1  # baseline vs variant + bootstrap CI
+python3 scripts/backtest.py --sweep max_ask 92 93 94 95 96
+python3 scripts/backtest.py --slip 1              # one tick of adverse fill
+python3 scripts/backtest.py --since 2026-08-13    # holdout window
+```
+
+Defaults are read out of `late_certainty_trader.py` by AST, so the harness cannot
+drift from what is actually running. Data is `data/candles/*.csv.gz`.
+
+**Why this matters.** This file used to record conclusions as prose with numbers
+attached — "NO side is -EV", "two NOs per cluster is -$1,211", "C1 is -$7.25/trade".
+None could be re-run, so none could be challenged, and on 2026-08-17 all three turned
+out to be wrong or badly overstated after months of steering decisions. **A number
+with no command behind it is an assertion, not evidence.** If you cannot reproduce a
+figure with the harness, treat it as unverified no matter who wrote it down.
+
+---
+
+
+## Audit findings that supersede this file (2026-08-24)
+
+Two agents audited this repo in parallel. Where anything below §1b disagrees with
+this section, **this section wins**. Full working in `docs/audit/claude/` and
+`docs/audit/codex/`; `python3 scripts/verify.py` re-derives every number and names any
+two sources that disagree.
+
+**"Lifetime P&L" is not a quotable number.** No source on this machine can produce
+one: `/portfolio/settlements` retains ~30 days, state caps at `MAX_POSITIONS_STATE=500`
+positions, and `stats` resets on every `STRATEGY_VERSION` bump — it currently reads
+**1 trade**. The **-$487** figure that circulated matches none of the three defensible
+scopes. Always quote a scope and a window:
+
+| scope | n | P&L |
+|---|---|---|
+| live series (6) | 1,946 | **-$320.91** |
+| + retired 15M — what the dashboard counts | 2,253 | **-$565.96** |
+| + non-15M (`KXMLBTOTAL` alone is **-$863.75 on 4 trades**) | 2,258 | **-$1,445.00** |
+
+**The archive is rounded before 2026-08-22, and it matters more than recorded.** The
+figures on file (18.4% of identities, 4.1% of rows) measure ROWS. Measured on the
+trades the simulator actually *picks*, by running the two exact-cent days both ways:
+**128 of 317 selections disagree (40.4%)**, volume **+13.5%**, $/trade **+0.023**, WR
+**+0.28pp** — always optimistic. 72 of 74 archived days carry it, and days before
+~2026-06-18 can no longer be re-archived. It compounds with the fill-quality error in
+§4 rather than cancelling. `scripts/verify.py --check rounding`.
+
+**v5.17 shipped inert and was fixed on 2026-08-24.** The 88-89c YES band could never
+place an order: the last look compared the book against `MIN_ASK_CENTS` instead of
+`_band_min(side)`, and three further sites mislabelled any such fill. Both auditors
+found it independently. The four `BandAsymmetryTests` that were cited as pinning it
+only ever exercised the helpers, which were correct — nothing drove the entry path.
+`BandReachabilityTests` now does. **The pre-registration clock starts 2026-08-24**, on
+its original terms (200 88-89c YES trades, revert below 88.5%, no early reads),
+because zero such trades had ever been placed.
+
+**Still open, deliberately not acted on:** `STOP_BALANCE=650` was set proportionally
+to a $100 stake and never revalidated at $25; Codex finds the $300 daily limit no
+longer establishes as optimal; the edge breaker's 50/0.84, `ORDER_TTL_SECONDS`,
+`ORDER_RECONCILE_SECONDS` and the 500-position cap have no value-specific evidence.
+The p3 signal inverts above 91c (p3<80 measures +0.315 vs +0.105) — the trader
+correctly does not gate there, the CI includes zero, and Invariant 8 applies.
+
+
+## Invariants — these do not rot
+
+1. **You risk $50 to win ~$4.35.** Break-even is ~92% WR (90.6% at 90¢ → 93.5% at
+   93¢). **The entire edge is the gap above break-even**, harvested over thousands of
+   bets. No single trade is good.
+
+   **The realised gap is far smaller than this file used to claim.** It said "you run
+   ~94%", and the win rate is indeed 94.10% since Aug 1 (1,482W/93L on 1,575 trades) —
+   but that has delivered **+$82.14 total, or +$0.05/trade**, against the +$1.11/trade
+   that 94.10% implies at flat $50. Do not quote the win rate as if it were the edge.
+   Two separate reasons, and they must not be conflated:
+   - **Aug 1-11 is a sizing artifact** (§7): bet ran $2.79 → $74 inside the window, so
+     most wins were banked at $0.20 while losses landed at $45-74.
+   - **Aug 12-21 is not.** Sizing was $50-75 throughout and the win rate was
+     **92.12%** (538W/584) — only **0.62pp** above break-even, worth **+$0.056/trade**
+     realised. The split from Aug 1-11's 95.26% is -3.13pp, z=2.55, p≈0.011
+     unclustered (clustering widens it; treat as suggestive, and note it is confounded
+     by the NO side returning Aug 17 and WTI pausing Aug 19).
+
+   Practical consequence: at 92% the strategy is roughly break-even, and ordinary
+   variance is the entire experience. Any projection built on +$0.54-0.80/trade — the
+   harness figure — is an upper bound the live account has not delivered since Aug 11.
+   Check `daily_summary.py` before trusting a per-trade number in this file.
+2. **One cent ≈ half your edge.** A 1¢ move in entry price shifts break-even by ~1pp.
+   One tick removes ~69% of all profit (`--slip 1`). Execution quality dominates
+   every strategy parameter. Guard it; it is already near-optimal so there is little
+   to gain, and a lot to lose.
+3. **The 7 series settle simultaneously.** They are one correlated bet, not seven.
+   Any statistic must resample by *close cluster*, never by trade — the harness does
+   this. Per-trade CIs are wrong here and will overstate significance badly.
+4. **Kalshi retains settled markets ~67 days.** This is the binding constraint on all
+   validation. See §6.
+5. **These markets are fair coin flips.** 49.8% settle YES (n=27,908); spot is above
+   the strike in 49.5% of markets. Neither side is structurally favoured, and there is
+   no drift or strike-placement effect to exploit.
+6. **Signals are transient — the backtest sees more of them than the bot can.**
+   70% of qualifying signals are in-band for exactly ONE 1-min candle (median 1 of
+   ~8 possible). The ask passes *through* 90-93¢ on its way to 100¢ as certainty
+   resolves; it does not rest there. So **every backtest figure is an upper bound**
+   — it evaluates every candle, while the live bot only sees the ask at poll
+   instants. Before v5.16 the bot polled every ~48s and captured **27%** of the
+   entries the backtest takes (23 of 86 on 2026-08-16). It now polls every ~15s
+   inside a 240s job (~14-16 scans/job, ~18s effective cadence).
+   **When live P&L runs below backtest, check capture rate before suspecting edge
+   decay.** That gap explained a 3x shortfall that had been misread as decay.
+   The missed signals are not worse: transient 93.30% WR / +$0.58 per trade vs
+   persistent 93.27% / +$0.77.
+7. **Kalshi opens a 15M market only ~600s before its close.** `MAX_SECS_LEFT=600`
+   is therefore already at the structural ceiling — there is nothing earlier to
+   capture, and raising it gains nothing.
+8. **Post-hoc filter discovery has a terrible track record here.** H4, near-strike,
+   ET13, UTC blackouts, C1, and a "dispersion filter" built on 2026-08-17 all looked
+   convincing in-sample; the dispersion filter *inverted* out-of-sample. With ~2pp of
+   edge and ~68 days of data, filter-hunting mostly fits noise. **The wins have come
+   from removing restrictions, not adding them.**
+
+---
+
+
+## Why the config is what it is
+
+**`YES_ONLY = False` (v5.16).** The NO side was suspended on live YES 46W/1L vs NO
+74W/8L. That is **not significant**: z=1.64, two-sided p=0.102, on n=47 YES trades —
+about five coin flips of luck, worth roughly the entire $210 P&L gap. Over the full
+68 days NO wins **93.65%** and YES **93.79%**; the cluster-bootstrapped difference is
++0.75pp [-0.36, +1.86] in-sample and **-1.59pp** [-4.54, +1.35] on holdout — both
+include zero and the sign flips. `--compare yes_only=1` reproduces it; the Aug 13-17
+holdout independently confirms YES-only is worse (delta -$1,037, CI excludes zero).
+
+**Execution gap = +0.227¢ (re-measured 2026-08-24, n=500, both sides).** Live fills
+land **0.227¢ ABOVE the book's best offer** at the last look, SE 0.018 — YES +0.253¢
+(n=269), NO +0.196¢ (n=231), difference t=1.55 so **the two sides are
+indistinguishable**. Median +0.097¢; only 5.8% of fills are worse than the book by
+more than a cent, so this is a shifted centre, not a fat tail.
+
+~~+0.105¢ (measured 2026-08-17)~~ was **YES-only and measured against a 1-min candle**,
+which is stale 47% of the time. The correct comparison is against `book_at_entry`, the
+book read ~128ms before the order, over distributions. At **t=+6.6** the old constant
+is not stale-but-close; it is wrong by more than double, and every `--slip 0.105`
+figure ever written in this file is optimistic by ~10% of the stated edge. Re-run them
+at `--slip 0.227`. I re-ran every config sweep at both levels and **no ranking
+inverts**, so this corrects magnitudes and not decisions.
+
+This also closes the "we have **no NO-side fill data at all**" open question that was
+the main stated risk of v5.16: NO fills as well as YES. `python3 scripts/verify.py
+--check slippage` re-derives it; `docs/audit/claude/CLAIMS.md` §1 has the working.
+
+**`MAX_CONCURRENT_POSITIONS = 2`.** Caps a settlement cluster at $150 **regardless of
+side** — worst observed cluster is -$150 with or without NO. 3-4 backtest better at
+perfect fills and clearly worse at one tick, and raise worst-cluster loss to -$225.
+
+**`MAX_ASK_CENTS = 93` is a slippage bet, not a validated edge.** 94-96¢ backtest
+higher at quoted fills and worse at one tick: at 96¢ you win 4¢, so a 1¢ slip costs
+25% of gross profit versus 10% at 90¢. Widening spends your best asset for a backtest
+number. **Do not raise it without re-measuring fill quality first.**
+
+**Position sizing — $50 as of 2026-08-19 (was $75).** The rule below is symmetric and
+it cut, rather than raised: bet size must be ≤4.6% of balance. After a -$345 stretch the
+balance was $1,088.87, where $75 is **6.9%** — above the design ratio — and $50 is 4.6%
+exactly. Room to the $650 stop went from 6 losses to 9. Cost: the backtest edge scales
+linearly, +$1.00/trade → +$0.67. Side effect worth knowing: `compute_daily_loss_limit`
+is `bet x 4`, so the daily halt tightened from $300 to **$200** automatically. Raise back
+to $75 when balance ≥ $1,630 (the ratio that held at $1,631), not before, and never on a
+win-rate argument.
+
+**Original sizing note — $75 until balance ≥ $2,200.** Bet size is a risk decision, never a
+win-rate decision. Rule: raise only when the new size is ≤4.6% of balance (the ratio
+$75 held at $1,631). Block bootstrap over 60d: $75 → 13.3% chance of touching the $650
+stop; $100 → 24.6%. $100 buys +$372 of profit for -$386 of extra drawdown. Rejected.
+The old "200 settlements ≥93% WR" gate was met at exactly 93.0% but tested the wrong
+quantity — break-even is ~92%, so it authorised leverage on a 1pp margin.
+
+**Daily loss limit ($300, rolling 24h) — validated, do NOT loosen.** The formula is
+`max(300, bet x 4)` as of 2026-08-19: a bare `bet x 4` meant cutting the bet to $50
+silently retightened the threshold to **$200**, a level nothing has tested, and it
+held the trader halted for most of 2026-08-19. The $300 floor is the level the
+evidence below actually refers to. Note halting does not pause data collection —
+`archive_candles.py` runs regardless; only live fill evidence stops. Fires ~7 days in
+68 at full capture. The trades it blocks are genuinely bad: **90.51% WR, -$1.62/trade
+over 495 trades**, against ~92% break-even — blocking them is worth **+$802** over 68
+days. Mechanism: the 7 series settle together, so a -$300 day is a whipsaw regime and
+it persists for hours. Contrast with the polling gap, where missed trades won 93.30%
+vs 93.27% for captured ones — that was a genuine leak; this is a filter that works.
+More halts at higher volume is the control doing its job.
+
+**All other halts check out too.** `CONSEC_LOSS_LIMIT=9` never fires in 68 days at
+either volume. `MAX_CONCURRENT=3` is *worse* than 2 at measured fill quality
+(+$108 vs +$112/day) and collapses under one tick (+$6 vs +$29/day) while doubling
+per-cluster exposure. Nothing here is too conservative — verify with
+`--sweep max_conc 1 2 3 4 --slip 0.105` before revisiting.
+
+---
+
+
+## Data archival — read before proposing any research
+
+**Kalshi retains settled markets only ~67 days.** This one fact blocked every strategy
+question this project ever asked: by the time a hypothesis exists, the only data that
+exists is the data it was formed on. The NO question sat unresolved for months because
+its gate demanded 90 days of clean holdout — on 2026-08-17 the entire available
+holdout was **7.6 days**.
+
+`.github/workflows/archive_candles.yml` runs nightly and commits
+`data/candles/YYYY-MM-DD.csv.gz` (all series, both sides, ask 88-96¢, 100-800s —
+deliberately wider than the live gates). Backfilled to 2026-06-11, no gaps.
+**Adding a series needs a FORCED backfill.** `--backfill N` skips any date whose file
+already exists, so a new series captures nothing historical without it. The workflow
+takes a `force` input: `gh workflow run archive_candles.yml -f backfill=N -f force=true`.
+Costs ~3 min/day of runtime. Used 2026-08-19 to capture Gold/Silver back to Aug 1.
+
+**Every archived day is untouched out-of-sample data for every hypothesis formed after
+it.** Backfill with `--backfill N`. Never delete this directory. If the workflow has
+been failing, fixing it outranks whatever research prompted the check — a day not
+archived is validation capacity permanently destroyed.
+
+---
+
+
+## Dated observations — perishable
+
+Each needs re-checking; none is settled.
+
+| Observation | Date | Status |
+|---|---|---|
+| **v5.17 DEPLOYED 2026-08-24 — 88-89c YES-only band. PRE-REGISTERED, read before judging it** | Aug 24 | **Written before deployment, unlike #152.** Change: YES entries reach to 88c; **NO stays at 90c** (88-89c measures YES +$0.39/tr vs NO -$0.42/tr, so symmetric sweeps cancel it to -$2.07/day — that is why `MIN_ASK=89` sat unresolved for a week). Runs on the **existing 2 slots**, so simultaneous exposure is UNCHANGED; new entries displace marginal 90-93c ones. The existing <=91c low-ask gate (3rd prior >= 80c) already covers 88-89 and cuts the population 3,995 -> 1,959, keeping the better half. **Backtest (full archive, 0.105c slip, $25):** live +$2,657 / +$0.299/tr / +$35.93/day -> combined **+$3,101 / +$0.338/tr / +$41.92/day**, delta **+$443, CI [+68, +826], P(>0)=0.987**. Per-trade value RISES, which is the signature of displacing marginal trades rather than adding volume. 3 slots was tested and is WORSE (CI [-228,+1219], $/tr falls to 0.278) — do not add slots. **PREDICTION:** the 88-89c YES subset wins at ~90.7% and returns ~+$0.39/tr; overall $/tr rises from ~0.30 toward ~0.34. **HORIZON: 200 88-89c-YES trades. At ~3.7/day taken after slot competition that is ~54 days (~2026-10-17) — deliberately long, because that is the honest rate; do not read the subset before then.** **DECISION RULE, fixed now:** revert if the 88-89c YES subset WR is **below 88.5%** (its break-even) at n=200, or if overall $/tr falls below 0.25 at any point. Keep otherwise; full validation at n=1,000. **Do not stop early on a good stretch — that is the optional-stopping error that #152 died of.** Pinned by 4 tests in `test_order_safety.py::BandAsymmetryTests` so a future symmetric "cleanup" cannot silently reintroduce the -EV NO side. |
+| **The archive is ROUNDED before 2026-08-22 — ~4% of the live band is phantom** | Aug 24 | Measured, not inferred. Every archived day from 2026-06-11 to 2026-08-21 stores **integer cents**; only 2026-08-22 onward is exact (#163). On the exact-cent days, **106 of 2,563 rows (4.1%) change band under rounding — all of them `outside -> 90-93`**, e.g. a true 93.4c ask becoming 93c. So roughly **4% of every historical row in the live 90-93c band was never really in the band**, and every pre-Aug-22 claim inherits it: `PRIOR_MIN_CENTS=75` (filter audit Aug 10), `MIN_ASK=89`, edge-by-price, entry-timing, and the config sweeps. **The 88-89c band gains ZERO rows from rounding**, so v5.17's new band is clean — but its BASELINE carries the 4%, which could bias the measured delta. Flagged under the freeze, not acted on. Re-deriving any pre-Aug-22 claim requires either restricting to 2026-08-22+ or re-archiving with `--force` (the raw candles are recoverable from Kalshi for ~67 days, so **days before ~2026-06-18 are already unrecoverable**). |
+| **"EXTRA" is NOT bad trades — it is a resolution artifact** | Aug 24 | Diagnosed all 56 Aug-23 EXTRA trades against the archive and the fill records. **100% filled INSIDE the 90-93c band** (range 90.0-93.0), **100% inside the 150-600s window**, **94.6% met ALL THREE criteria** including priors. The model rejects them because the 1-min archive samples once a candle while the bot polls ~4x/min: the archived close ask reads 93.3 or 94.5 while the bot filled at 91.9. **The bot is already doing what the criteria specify.** EXTRA measures reconciliation coverage, not trade quality. Baseline EXTRA was *also* 97.5% in-band yet lost -$3.65/tr at 86% WR, and priors held in ~93% of BOTH groups (baseline priors-held: 87.6% WR, -$2.64/tr; Aug 23 priors-held: 94.3% WR, +$0.55/tr), so neither price nor priors explains the quality gap — no mechanism was found, which supports the #180 revert rather than undermining it. |
+| **100% capture is not a goal worth having — it is worth about -$3** | Aug 24 | Every one of the 42 Aug-23 misses classified: **17 price NOT purchasable** (depth<60 — the quote was not on offer; model pnl +$34.69 is phantom), **17 seen + purchasable but not taken** (model pnl **+$7.87 total**, i.e. $0.46/tr), **8 never observed** (model pnl **-$10.60** — missing them MADE money). Closing the entire capture gap from 65.3% to 100% nets **about -$2.73**. Capture is a diagnostic, not an objective; the raw % understates true capture because ~40% of misses were never buyable. |
+| **The concurrency cap blocks half of everything and costs nothing** | Aug 24 | `heat check: N open positions` is **102 of ~200 skips (51%)** across 8 sampled runs — by far the largest reason a qualifying entry is not placed (next: 74 ask-moved-between-scan-and-order, 16 priors-failed-at-order, 6 thin book). But sweeping it over the full archive at 0.105c slip, $25 flat: **max_conc 2 = 9,383tr +$2,624 (+$0.28/tr); 3 = 11,715tr +$2,610; 4 = 12,906tr +$2,860; 5 = 13,422tr +$2,483; 6 = +$2,538.** Going 2->3 adds 2,332 trades and **loses $14**. Slots are allocated earliest-signal-first and earlier entries are better (§ entry timing), so everything the cap blocks is marginal by construction. **Do not raise MAX_CONCURRENT to buy volume** — it buys trades, not dollars, at strictly worse $/tr and higher simultaneous exposure. This retires the "more slots is the path to more P&L" idea recorded on Aug 23. |
+| **Depth gate is NOT too strict — the $48/day was an artifact** | Aug 23 | `depth==0` is **50.6%** of all gate-log rows and **88% of every block**, and it does not mean "thin book" — it means **nobody is offering at the price the signal fired on**. For depth-0 rows the real best price is **+1.30c worse** (median, 85% of cases); for depth 1-59 it is +1.15c worse. Only depth>=60 fills **better** than the signalled ask (-1.15c), which is exactly why execution measures as an ASSET (+$77.72). The backtest scored the blocked population as fills at the candle ask, so the "~$48/day" was pricing trades that were never purchasable. Arithmetic: at 92c break-even is 92.0% against ~93.5% WR (+1.5pp); pay 1.3c more and break-even is 93.3% -> **+0.2pp, gone**. `MIN_BOOK_DEPTH=60` is a near-perfect availability detector. Do not loosen it. |
+| **88-89c YES-only, run as a SEPARATE book — the one survivor** | Aug 23 | Best new candidate found in the Aug 23 search. Disjoint from live by construction (below the band, YES only): **n=1,833, WR 90.73%, +$0.39/tr, +$9.88/day** at 0.105c slip, bootstrap **CI [-35,+1435], P(>0)=0.970**, and critically **84% executable** (depth>=60) versus 11-15% for the 94-96c candidates. Survives every split: slippage 0->0.105->0.5->1 tick = +0.421/+0.393/+0.287/+0.155 (never inverts), all three time-thirds positive (+0.267/+0.831/+0.109), 5 of 6 series positive (DOGE -0.267 the exception). **Side asymmetry is the whole point** — at 88-89c YES makes +$0.39/tr while NO loses **-$0.42/tr**, so a symmetric sweep cancels it to -$2.07/day, which is why `MIN_ASK=89` never showed up as significant. **Only additive with its OWN concurrency slots**; on the existing two it displaces live trades — the same reason `max_ask=94` reads P=0.65 as a config widening and P=0.998 as a separate book. Realistic after executability and the ~47% live capture: **+$4-5/day, ~+20%, NOT a doubling.** Caveats: CI touches zero, and the latest third is the weakest. |
+| **Archetype filter — which markets CAN host this strategy** | Aug 23 | Generalises the weather result. The late-certainty edge requires a **continuously-priced underlying with a fixed short deadline**: the underlying sits near the strike and each passing minute mechanically walks P through 88 -> 91 -> 93 -> 96, creating the band. **Event markets — weather, sports, politics — resolve in JUMPS**: once the afternoon high is in, price goes straight to 100 and never spends time at 92. They structurally cannot host this strategy at any liquidity. Applying the filter to everything with real volume leaves: crypto 15M (live), **KXSILVER15M (the lead)**, KXGOLD15M (-$0.42/tr, tested), KXWTI15M (paused), INX/NDQ 15M (zero volume), and **FX/index hourly (KXINXU 9,617, KXEURUSDH) — the one genuinely untested corner**. For this archetype the space is close to exhausted. |
+| Doubling P&L is a slots decision, not a search result | Aug 23 | Every candidate shares one bottleneck: the same six underlyings, the same **2 concurrency slots**, the same fee floor. A second strategy on the existing slots **displaces** live trades rather than adding to them. The Aug 23 search closed weather, the depth gate and ask-94, and returned exactly one candidate worth ~+20%. More P&L therefore comes from `MAX_CONCURRENT` (swept but unestablished: `max_conc=4 +$437 P=0.65`) or a genuinely uncorrelated venue (Silver, ~late Sep) — the first is a risk decision about simultaneous exposure and a shared daily loss limit, and no backtest settles it. |
+| **Silver ≠ Gold — the bundle was hiding a lead** | Aug 23 | Scoring the archive per series (Aug 1-22, live gates, $25 flat) ranks **KXSILVER15M 4th of 9 at 93.52% WR, +$0.32/tr, +$7.04/day** — above XRP (+$0.17), BNB (+$0.03) and SOL (-$0.11), all of which are LIVE. Gold is genuinely bad (**-$0.42/tr, worst of nine**), so averaging the two as "metals" carried opposite signs and buried Silver. Survives slippage where the live marginals do not: +0.32 -> **+0.29** at the measured 0.105c -> **+0.07** at one full tick, while BNB and SOL both invert. **NOT established:** bootstrap 95% CI **[-$155, +$415], P(>0)=0.842**, n=463. The ~1,000-trade bar lands **~late Sep** at ~29 trades/trading-day (metals are weekdays only) — it is already archiving, so this needs no work, only the calendar. Do not act before then, and note this is the SAME strategy on an uncorrelated underlying (diversification, not a second edge). Re-run: `python3 scripts/backtest.py --since 2026-08-01` then split by `r[0]` via `backtest.load`/`simulate`/`summary`. |
+| Searchable space is 76 series, not 13,389 | Aug 23 | Kalshi lists **13,389 series**, but validating an edge needs ~1,300 comparable trades, so frequency is the binding filter: `fifteen_min` **19**, `hourly` **57**, `daily` 250, and **12,433 (93%) are annual/one_off/custom** which can never accumulate the sample. Of the 76 high-frequency series, **37 carry real volume/OI**. The ~3% historical hit rate across ~30 tested ideas is therefore not idea scarcity — it is that direction-neutral structures all die to the same fee load (§ fees below), 11 for 11. **Field-name trap:** the markets endpoint uses `volume_fp` / `volume_24h_fp` / `open_interest_fp` / `yes_bid_dollars`, NOT `volume`/`open_interest`/`yes_bid`; querying the latter returns 0 for every series **including ones the bot is actively filling**, which reads as "market is dead". |
+| Fees are 0.539pp of break-even — put them INSIDE it | Aug 23 | Break-even is `(cost + fees)/contracts`, never `cost/contracts`. The fee-blind form is a bar a winner clears while the account still loses: the dashboard showed **+0.34pp green on a since-Aug-1 window that had lost $64.97**, and 2026-08-19 reads **+0.06pp margin against -$18.68 realised**. At ~0.539c/contract the omitted term is larger than the entire margin being reported. Fixed in #174; across all seven settled windows the corrected margin sign now matches the P&L sign, where the old form disagreed on one. This is also why every direction-neutral structure in §"Direction-neutral structures" died. |
+| Flat sizing closed the dollar-weighting drag | Aug 23 | The 1.204 loser/winner size ratio that dragged the effective rate ~1.2pp is **gone**: at flat $25 the ratio is **0.998** and dollar-weighted WR now equals trade-weighted (94.38% both, since #151+audit fixes). Mechanical, not luck. That window ran **+2.52% on 160 trades**, but p=0.0497 against prior with a bootstrap CI of **[-1.64%, +6.02%]** — consistent with a real edge, not evidence of one. |
+| **The edge is fragile, not broken** | Aug 21 | The most important frame in this file. Break-even 91.5%; a **1.4pp** win-rate wobble — routine, and undetectable at n=584 (z=1.34, p=0.18) — is the difference between **+$0.62/tr and +$0.07/tr**. Live dollars exactly match live WR, so there is no hidden P&L leak; the whole question is always "is this WR real or noise", and you need **~1,300 trades (~2 weeks)** before a 1.4pp gap is even 2σ. Nobody can tell unlucky from degraded faster than that. Do not act on shorter windows. |
+| Strategy is NOT decaying | Aug 21 | Model edge by fortnight: Jun 11-24 **+$0.84**, Jun 25-Jul 8 **+$0.14**, Jul 9-22 +$0.54, Jul 23-Aug 5 +$0.54, **Aug 6-20 +$0.91** — the most recent fortnight is the best in the archive. Jun 25-Jul 8 shows the model itself running near break-even for two weeks and recovering. `python3 scripts/backtest.py --since X --until Y` |
+| Capture rate — **disputed, do not quote a number** | Aug 21 | `audit2.py` reports 75.2% for Aug 20 and 41.4% for Aug 19. `scripts/reconcile.py`, built later the same day and also restricted to `SERIES_LIST`, reports **38.0%** and **17.9%** — a consistent ~2x on both days, which points at a denominator difference (log-derived entry *attempts* vs settled *fills*) rather than a data disagreement. Until one is reconciled against the other, capture is an open question and the "capture is fine, no WebSocket needed" conclusion does not stand on it. `python3 scripts/reconcile.py --since 2026-08-20 --until 2026-08-20` |
+| Selection IS costing money — **reverses the entry below** | Aug 21 | Full reconciliation over Aug 12-20 (n=533 live, 1170 model): live-only trades run **205 at 90.24% WR, −$250.56**, below the ~92% break-even. Execution is an *asset* (+$77.72; fills land 0.239c BETTER than the modelled ask, and matched-trade WR equals model WR to the decimal). Capture costs the most in absolute terms (−$506.37) but missed trades win at 93.47% vs 93.90% taken — same quality, so it is a volume leak, not a selection leak. `python3 scripts/reconcile.py --since 2026-08-12 --until 2026-08-20` |
+| ~~Aug 19 "selection leak" was a halt artifact~~ — **superseded, see above** | Aug 21 | Aug 19 showed bot-only extras at 76.2% WR / −$8.65/tr and looked like a slot-allocation defect. Aug 20 (clean): same population ran **93.8% WR / +$0.91/tr**. Random series order is not costing anything; do not "fix" slot allocation. |
+| Live per-side, first real read | Aug 21 | Aug 20 settlements by side: **NO 37tr 97.30% +$2.68/tr**, YES 54tr 92.59% +$0.30/tr, all 91tr 94.51% **+$1.27/tr** — which *beat* the model's +$0.62 for that window. NO-side execution was the prime suspect for the live-vs-model gap; this points the other way. n=37, one day. |
+| `[EXEC]` fill records now logged | Aug 21 | Every fill emits `side / scan / fresh / book / depth / book_age_ms / limit / contracts / cost / fee / avg_fill / attempts`. Compare `avg_fill` to `book` **by side, over distributions** — never per-fill against a candle (+0.85¢ artifact, §4). ~500 NO fills ≈ **12-16 days**. Harvest: `grep '\[EXEC\]'` over run logs. |
+| MOM3 live rate is far below forecast | Aug 21 | Research predicted the veto bucket at ~8% of volume (8-10/day). First live day: **2/day** at m3>+0.50, 1/day at >+1.00, median m3 **−0.58** (n=62). At that rate 500 blocked trades is **~250 days**, not 6-8 weeks. If it holds a week, MOM3-as-veto is dead on timeline alone and only survives as a sizing input. |
+| $200 daily-limit threshold, now measured | Aug 21 | The level the `bet×4` bug created is **worse than having no limit at all** (+$4,676 vs +$4,737); $300 is the best in the sweep (+$5,178). Retroactively confirms PR #134. Directional — the rolling-P&L sim approximates `daily_pnl` rather than reproducing it. |
+| 94% WR with ~zero P&L is a SIZING artifact | Aug 19 | Win rate counts trades; P&L counts dollars. Bet size ran **$2.79 → $74 (26x)** inside the Aug 1-18 window, so most wins were banked when a win paid **$0.20** while the losses landed at $45-74. One $74 loss erases ~370 early wins. Dashboard showed 94.5% WR and **+$0.16/trade** against a +$1.00 backtest at flat $75. Now that sizing is flat $50 this distortion is gone — and it means the historical figure *understates* the edge. |
+| WTI paused; Gold/Silver still out — **Silver refined Aug 23, see top of table** | Aug 19 | All three launched **2026-07-31** (verified: 0 markets pre-July, 24 on Jul 31). WTI was added v5.8 on a 13-day backtest (+$1.75/tr OOS); over its whole life it measures **-$0.33/tr on 290 trades** — the justifying evidence inverted. Silver (+$0.31/tr) was *better* than WTI while excluded, so trading one and not the others was an accident of timing. Paused, not condemned: -$0.33 is ~1.1 SE from break-even. Revisit all three at ~1,000 trades each, together, one standard. |
+| SOL is fine — August was noise | Aug 19 | Full archive: **1,810 trades, 93.15% WR, +$0.41/tr**. August alone reads -$0.12/tr. Picking any 18-day window makes some series look broken; this is exactly what Invariant 8 warns about. Do not act on single-window series stats. |
+| Gold/Silver first real read | Aug 19 | 15 trading days, live gates, no slippage, no concurrency cap: **GOLD 357 trades 89.92% WR -$1.28/tr** (worst in the book), **SILVER 369 trades 92.95% WR +$0.31/tr**. Neither is established (~1.1-1.6 SE). Metals trade weekdays only — ~5/7 the days of crypto, so per-day comparisons mislead. Archived from 2026-08-01 onward. |
+| Edge by price: dies at 95¢ | Aug 18 | 88¢ **+1.42pp**, 91¢ +0.98, 92¢ +0.70, 93¢ +0.66, 94¢ +0.95 (all significant); 95-96¢ **+0.07pp — gone**. n=83,337 obs / 6,402 clusters. Independent support for the `MIN_ASK=89` lead. `python3 scripts/calibration.py` |
+| Entry timing: earlier is better | Aug 18 | Edge by time left: 100-150s **-1.26pp**, 150-240s -0.57, 360-480s **+1.27**, 480-600s +0.87. The 60s-average settlement is priced, possibly over-priced — late entries are not safer. `python3 scripts/calibration.py` |
+| Waiting for a better price loses | Aug 18 | A 90-91¢ contract at 8-10 min is **gone from the 88-96¢ band 85.8% of the time** by 3-4 min. Buying what is *still* 90-93¢ late: -3.31pp, **-$2.71/trade** — adversely selected. Buying early: +$0.58/trade. `python3 scripts/entry_timing.py` |
+| Survivor re-entry (92-93¢ → 94-96¢) | Aug 18 | +3.95pp in-sample, +4.88pp holdout — but 41 holdout obs with ~zero losses, so the rule-of-three floor (WR≥92.7%) sits **below** the 95.2¢ break-even. **Shadow-logged only** (`[SHADOW:SURVIVOR94]`), revisit at n≈500. |
+| BRTI runs rich vs Coinbase | Aug 18 | Strike (a BRTI print) is **+0.96bp above** Coinbase at the same minute, sd 2.41bp, \|basis\|>10bp in 0.5% of windows. ~12% of a typical 15-min move — it biases every near-strike call the bot makes on Coinbase data. `python3 scripts/calibration.py` |
+| Volume is no longer the constraint | Aug 18 | Cumulative counter ran 7 → 138 across Aug 18: **~140 trades/day live vs 121/day modelled**. The 27% capture rate in Invariant 6 is pre-v5.16 and stale; live now trades *more* than the backtest universe, at lower WR — suspect the marginal extra trades. |
+| Config sweeps: nothing established | Aug 18 | `min_ask`=89 +$481 P=0.79 · `max_conc`=4 +$437 P=0.65 · `max_ask`=94 +$427 P=0.67 (at 0.105¢ slip) · `min_secs` flat. Four independent levers, none significant — consistent with Invariant 2 that the config is near-optimal. |
+| 15M vs hourly parity — still untested | Aug 20 | Both settle on the identical BRTI print at the top of the hour, so the KXBTCD ladder interpolated at the 15M strike is a second price for the same event. They only coexist in the final ~10 min, so it needs a sampler firing at :50. **Trading the hourly ladder on its own merits is now refuted (row above); the parity/relative-value question is separate and still unmeasured.** |
+| Crash fills are **+EV so far**, not the leak | Aug 18 | 12 fills landed below the band on Aug 18 and settled **11W/1L, +$90.63** (avg +$7.55/trade vs the ~$6.50 target). The two deep ones netted -$6.48 (-$47.48 DOGE @57.6¢, +$41.00 BTC @47¢). Cheaper entry pays more when it wins. Do **not** auto-exit them on instinct; n=12. |
+| ~~The actual leak is the core~~ — Aug 18 was just a bad day | Aug 20 | **Downgraded from "unexplained leak".** v5.16's 120/135 = 88.9% WR / -$236.20 read as edge decay. It was not: the archive says **Aug 18 was the single worst day in 68 days** — the modelled universe at live gates lost **-$338 (-$2.01/tr, 88.69% WR)** that day, and live actually *beat* it (-$7 on 139 trades). Nothing to investigate. `python3 scripts/backtest.py --since 2026-08-18 --until 2026-08-18` |
+| Adverse spot momentum predicts losses | Aug 20 | **Best-supported edge lead in the file; shadow-logged as `[SHADOW:MOM3]` on 2026-08-20, not gated.** Spot drifting toward the strike in the 3 min before entry: `m3 = -sign*ln(S/S₋₃ₘ)/(σ√3)`, σ = sd of trailing 60 one-min returns. Blocked bucket (m3 > +0.50) ran **-$1.56/tr on n=569**, difference vs kept **CI [-3.95, -0.75], P(worse)=1.000**. Pre-registered, monotone in both windows, 5 of 6 series, both sides, all 3 months. Worth **+$10-14/day** at $50 flat (~+12%), blocking ~8% of volume. Critically it helps **more** at one tick of slippage, so it is not a fill artifact. m3 > +0.25 **fails OOS** — do not over-tighten. `python3 research/perp_overlay/s1_robustness.py` |
+| C1 quarantine (SOL + prior2 75-79¢) | Aug 17 | Worth **~$260 over 68 days** — noise, not the "-$7.25/tr" originally recorded. Quarantined on 60+80 trades, violating the 500-trade bar. Left in place as harmless; do not cite as precedent. `--compare c1=0` |
+| `MIN_ASK = 89` may beat 90 | Aug 17 | Better at *both* slippage levels — the only parameter that didn't flip. Worth real work. `--sweep min_ask 88 89 90 91` |
+| ET08 hour | — | -$2.39/tr, unconfirmed across periods. Needs 500+ trades. |
+| BNB exclusion | — | 92.2% WR, +$0.06/tr — borderline. |
+| Thursday blackout | — | 349 trades at -$1.20/tr — suggestive, underpowered. |
+| C5 (prior1≥95 + prior3≥95) | — | 54 OOS trades — not blockable. |
+| $100/trade bump | Aug 17 | Hold until balance ≥ $2,200. |
+| Window-based consecutive loss | — | Group by expiry timestamp, not individual trades. |
+
+**Crash fills (was "DANGER FILL", renamed Aug 18).** A fill below `MIN_ASK` means the
+order swept a book that had already collapsed — not that a limit was breached. Aug 18's
+worst: 80 BTC NO at **47¢ average on a 92.5¢ quote**, and 80 DOGE YES at **57.6¢ on a
+92.8¢ quote**. The exchange fee confirms the price is real (`0.07·C·P·(1-P)` came to
+$1.40, which only solves near P≈0.47) — this is not an accounting artifact.
+
+Two regimes, and they must not be conflated:
+- **within 3¢ of the band** — the book moving inside the order's flight time. Benign;
+  logged, never emailed. Six of Aug 18's twelve.
+- **deeper** — a genuinely different bet: a ~50¢ contract is a coin flip with ±$40
+  swings, against a strategy sized to risk $75 to win $6.50. Emails as `CRASH FILL`.
+
+Counting them: `gh run list --workflow=late_certainty.yml --limit 400 --json databaseId,createdAt`
+then grep run logs for `SETTLED <ticker>`; the settlement line for a market appears in
+the run that was already in flight at its close, so search from `close-5min`. Alert
+history is in Gmail (`subject:"CRASH FILL"`, `subject:"DANGER FILL"` before Aug 18).
+
+---
+
+
+---
+
+## History — how the current config was arrived at
+
+*Moved out of PART I on 2026-08-24: this is narrative about work already
+completed, not state anyone operates from. Kept in full because it records
+why several things are the way they are.*
+
 ## Overfitting — settled, do not re-litigate
 
 All **14** gate configurations recoverable from git history were replayed against the
@@ -693,18 +734,6 @@ leader (s240/yo1/mc6, +$0.79/tr) makes *less* money than v5.16 because it takes 
 fewer trades, and the bootstrap cannot separate them: delta −$986, CI [−3700, +1828],
 P(better)=0.212. Picking the max of 14 correlated estimates inflates the winner by
 ~1.7 SE, which here is most of the entire edge.
-
-## What is live and healthy
-
-v5.16, config unchanged for two weeks: ask 90-93¢, 150-600s, prior≥75×2, both sides,
-max 2 concurrent, $50 flat, stop $650, daily limit $300. Runs land every ~4 min.
-Nothing on Aug 21 changed a trading decision — every trader PR was logging only.
-
-**Archive alerts can cry wolf.** A manual dispatch racing the cron on Aug 21 produced
-two runs 43s apart; both archived Aug 20, the loser died in a binary rebase its retry
-loop could not clear, and it sent `ARCHIVE FAILED`. No data was lost. Fixed with a
-concurrency group and a push-first retry (#145, verified by firing two dispatches back
-to back). **Before acting on that email, check whether the day is actually on main.**
 
 ## Execution work, 2026-08-22 — capture, not strategy
 
@@ -817,46 +846,83 @@ to be depth exclusions or the concurrency cap, a streaming feed fixes nothing.
 categories — concurrency cap, book depth, already-holding — are the risk policy working
 and must never go to zero. Only observation misses and fetch failures are defects.
 
-## Collecting right now — do not disturb
+# PART III — GRAVEYARD
 
-| Experiment | Started | Decides at | Watch for |
-|---|---|---|---|
-| `[SHADOW:MOM3]` adverse momentum | Aug 21 00:04 ET (data before that is invalid — partial-candle bug) | ~500 blocked trades | Live rate is 2/day vs 8-10 forecast. Re-check after a week; if it holds, dead on timeline |
-| `[EXEC]` fill quality by side | Aug 21 ~00:15 ET | ~500 NO fills, 12-16 days | `avg_fill` vs `book` by side; also prices the thin-book gate via `depth` |
-| `[QUOTE-DRIFT]` listing vs fresh ask | Aug 22 | ~1 week | Every band disagreement, marked RECOVERED or correctly-skipped. Two RECOVERED in the first 15-min job (ETH listing 89c, real ask 90.0c and 91.8c). Tunes LISTING_QUOTE_TOLERANCE=3c on our data instead of the audit's sample |
-| `[SHADOW:GATE]` poll-level gate inputs | Aug 21 12:09 ET | ~2 weeks | Scores ANY version on what the bot actually saw, unlike archive replay which is an upper bound. Ask is logged as a **float** — Kalshi quotes sub-cent (96.6000c seen live); any parser must accept decimals. `scripts/gate_replay.py` |
+*Refuted, closed, or not worth re-opening. **This section exists so nothing gets
+re-proposed.** Before suggesting an idea, check here first.*
 
-## Next actions, in order
+*Nothing is deleted, only moved: the reasoning is kept so a future revisit starts from
+the evidence rather than from scratch. A row here can be re-opened — but only with
+NEW data, never with a new argument about the old data.*
 
-1. **Wait.** The edge is 2pp; nothing is measurable on a shorter horizon than the two
-   experiments above. Resist config changes — each one is now an unmeasurable coin flip.
-2. Re-check the MOM3 blocked-trade rate after ~7 days.
-3. Once `[EXEC]` has ~500 NO fills: measure fill quality by side, then price the
-   thin-book gate (best open lead, ~$48/day upper bound).
-4. Standing leads, unchanged: `MIN_ASK=89`, time-weighted sizing (exploratory only —
-   needs 4-9 months, see below).
+## Refuted hypotheses (moved from dated observations, 2026-08-24)
 
-## Open threads and loose ends
+| Observation | Date | Status |
+|---|---|---|
+| **#152 MEASUREMENT RESULT — failed its own test, REVERTED in #180** | Aug 24 | The pre-registered clean-day test ran on 2026-08-23. **Capture 45.1% -> 65.3% (+20.2pp)**, the highest of any day measured. **EXTRA did NOT fall**: 25.3% -> 46.3% per opportunity, count 38/day -> 56. #152's own commit message says: *"If EXTRA does not fall, the mid-candle-noise explanation is wrong and this should be reverted."* **By the letter of the pre-registration, revert.** BUT the metric was a proxy and the thing it proxied for inverted: **EXTRA went from -$3.503/tr (-$563.98 over Aug 18-22) to +$0.153/tr (+$8.58)**, WR 85.71% -> 92.86%. Live total -$497.79 -> **+$98.11**. Confound checked and rejected: Aug 20 was also a strongly positive day (+$122.56 live) and EXTRA still lost there (-$0.464/tr), so this is not a good-day artifact — per-day EXTRA $/tr runs -9.004, -0.464, -5.989, -2.418, **+0.153**. **RESOLVED: reverted in #180.** The profitability rescue does not survive arithmetic — the +$8.58 is 52 wins against 4 losses, avg win +$2.02 vs avg loss -$24.06, so **one win becoming a loss makes it -$17.49** and two makes it -$43.57; 45 distinct settlement clusters among 56 trades, so effective n is smaller again. A coin flip, not evidence. An outside review made the decisive point: proposing to **wait one more day only after seeing a favourable day is optional stopping** — the wait would not have been proposed on a -$50 day. **Reverting is not a claim that #152 is harmful**; the 20pp capture gain may be real. It is the consequence of the rule chosen before the result was known. If boundary-capture is worth recovering, it needs a FRESH prospective test: exclude Aug 23 as pilot data, freeze the implementation, use settlement-cluster inference, and fix the horizon in advance at the ~1,300-trade bar — not 56. Note the honest risk: this is exactly the "rescue it with a new story" trap the pre-registration was written to prevent, and one day at n=56 EXTRA cannot distinguish a fixed selection problem from a lucky one. `git revert` CONFLICTS (#157/#161-166 touched the same regions), so #180 is surgical: **every #165 daemon failure control is kept** (that is what caught the 2026-08-23 connection resets), and **#164's gate log was adapted** — it gated itself on candle alignment, which only worked while #152 existed, so an unadapted revert would have silently killed the gate log. 36 order-safety tests pass. |
+| ask-94 as a separate book — killed by executability | Aug 23 | Model looks strong (n=3,628 disjoint, WR 95.48%, +$14.28/day, **P(>0)=0.998**, holds across halves and 6/6 series) but **only 11-15% of 94-96c signals have depth>=60** versus 47% in the live 90-93c band. Realistic value is ~15% of the model, **~+$2/day**. Notable structural oddity worth remembering: **BNB (+0.535) and SOL (+0.464) are BEST at 94c while being worst in the live band** (+0.03, -0.11) — whatever drives edge at 94c is not what drives it at 91c. |
+| **Weather is CLOSED — three independent methods** | Aug 23 | 2.04M vol/24h (2nd largest complex on Kalshi, 40+ temperature series incl. international) and **none of it is usable**. (1) *Forecast edge fails:* Brier **model 0.1499 vs market 0.0932 on n=1,886, market better in 6 of 6 cities**, edge -0.0567 against a +0.0100 gate; the threshold rule loses **-$4,003 over 1,160 trades**. Open-meteo ensembles are public, so they are already in the price. (2) *No mispricing to harvest:* T-24h calibration **n=291, mean_p 0.170 vs actual 0.175 — a 0.5pp gap**, i.e. correctly priced (crypto is +1.42pp at 88c). (3) *The population does not exist:* across **1,184 quote observations**, only **0.9%** sit in 88-96c — **0% inside 6h of close**. Do not reopen this on the strength of the volume figure; the volume is real and irrelevant. |
+| ~~Thin-book gate may be too strict~~ — **REFUTED Aug 23, see top of table** | Aug 21 | `MIN_BOOK_DEPTH=60` blocked 13 entries worth **+$50.24** (Aug 19) and 12 worth **+$46.79** (Aug 20) — consistent ~$48/day. **Upper bound only**: the model assumes a fill at the candle ask and knows nothing about what a thin book does to the fill. `[EXEC]` now logs `depth` beside `avg_fill`, so this becomes measurable rather than speculative in ~2 weeks. ~~Best open lead.~~ |
+| Loss cooldowns and size-up-after-loss | Aug 21 | Both refuted. Losses are **not** clustered: lag-1 lift +1.91pp, permutation **p=0.095**; lags 2/3/8 negative. Every cooldown loses money and the blocked trades were profitable (+$0.31 to +$0.56/tr). No post-loss edge either (+$0.16/tr, P(>0)=0.61), and sizing up after a loss would *loosen* the daily limit via `max(300, bet×4)`. `research/loss_cooldown/` |
+| Kalshi incentives: not worth pursuing | Aug 19 | Public endpoint `GET /trade-api/v2/incentive_programs` (filters `status`, `type`). 145,145 programs, $9.0M liquidity / $0.9M volume. **SOL/DOGE/BNB/XRP/HYPE/NEAR: never incentivized.** BTC/ETH 15M had volume programs that **ended 2026-05-12**, and zero volume programs are active exchange-wide. Even live they paid $20 pool ÷ 1.68M contracts = **$0.00001/contract** — the $0.005/contract cap never binds. Liquidity programs pay real money but the exploitable pattern is parking unfillable penny walls in dead markets, which risks the "abusive behavior and fake trading" clause. Full write-up + scripts: `research/kalshi_incentives/README.md`. |
+| Hourly crypto ladders (KXBTCD/KXETHD) — no edge | Aug 20 | **Refuted.** 45-day archive, live gates, $50 flat: **1,641 trades, -$0.03/tr, -$41** (-$129 at the measured 0.105¢ gap, -$868 at one tick), vs the 15M book at **+$85.90/day** over the same window. Win rate straddles the ~92.3% break-even and **flips sign between halves for both series** (BTCD -0.57→+0.35, ETHD -1.34→+1.15). The multi-strike "leverage" worry that kept it in shadow was **backwards**: 310 of 392 stacked closes are a YES below spot + a NO above spot, which cannot both lose — 0 all-lose events in 45 days. Real finding: **100% of hourly entries settle on the same BRTI print as the :00 15M close on the same underlying**, and `MAX_CONCURRENT` does not see them as related. `python3 research/hourly_crypto/analyze_hourly.py` |
 
-- **Time-weighted sizing** — +15.6% OOS but CIs include zero, the seven weight
-  functions are ~1.26 effective dimensions, and it needs **122-279 days** of fresh data.
-  Exploratory. The free paired shadow test (log weighted−flat per cluster) has not been
-  started. `research/top5/`
-- **Live-vs-model gap** — Aug 12-21 live trailed the model by 1.37pp, but Aug 20 alone
-  *beat* it (+$1.27 vs +$0.62). The gap may be an artifact of a window containing two
-  known-broken days (Aug 17 outage, Aug 19 halt bug), both since fixed. Strip those and
-  re-measure before treating it as real.
-- **Monitoring hole** — `if: failure()` cannot catch a workflow that never *runs*. The
-  archive silently skipped its cron on Aug 21 and had to be triggered by hand. The
-  `daily_summary` staleness line is the only backstop and it fires ~22h late.
-- `stash@{0}` ("auto-stash diag") — `.claude-flow` churn plus the always-empty
-  `certainty_state.json`. Safe to drop; left alone pending Chris's call.
-- Commit `9fdf8722` was pushed **directly to main**, bypassing the PR flow (rule 8).
-  Research-only, revertable, disclosed.
+## Not currently pursued
 
-## Working with Chris
+**Calibration warning:** this section was previously titled "tested and rejected" and
+every row said "Dead". On 2026-08-17, two of its NO-related claims failed to
+replicate, and the headline "NO is -EV" verdict was overturned entirely. These are
+**leads about where effort went**, so you don't redo expensive work — they are not
+verdicts, and none of them can be reproduced from anything in this repo. If a
+question matters, re-run it with `scripts/backtest.py` against current data.
 
-Terse, tables, numbers first — see §Who/What and rule 15. He checks in often and reacts
-to daily P&L; the honest answer is almost always "that is noise, here is the horizon at
-which it stops being noise." He is right to push back, and did tonight: challenging a
-claim of mine is what surfaced the Invariant 1 error. **Verify before reassuring.**
+*Volatility / dispersion filter (pre-registered, 2026-08-18):* **refuted.** Bucketing
+entries by prior-candle price range (`max-min` of ask,p1,p2,p3) gives a *non-monotonic*
+WR — MID is the worst bucket in both windows — and the cluster-bootstrapped HIGH-LOW
+delta includes zero in-sample and out-of-sample. Decisive point: HIGH-dispersion entries
+are **66% of volume and 77% of holdout profit**, so excluding them cuts holdout P&L from
++$4,242 to +$992. High dispersion is the ask *transiting* 90-93c toward 100c as certainty
+resolves (Invariant 6) — the strategy working, not a danger signal. Note the prior-candle
+gate (`PRIOR_MIN=75`) is already a volatility filter; this tested for residual signal after
+it. Third attempt at this idea (`backtest_vol_filter.py` Aug 9, dispersion filter Aug 17
+which inverted OOS). `python3 scripts/vol_bucket_test.py`
+
+*Perp hedging (pre-registered, 2026-08-20):* **dead, and it fails at ZERO fees.** Hedging
+each position with an opposing perp was tested at fixed notional, at the digital's true
+per-trade delta (`C·φ(z)/(σ√τ)`, median **$7,842** per $50 bet), netted to one BTC leg per
+settlement cluster, and dynamically on an adverse strike crossing. Best case — correct
+delta sizing, **0bp** — earns **+$0.32/tr against a +$0.52 baseline** and cuts return/sd
+from 2.70% to 1.82%: worse on both axes. A perp's expected return is zero, so the overlay
+can only reshape variance and pay fees. The Kelly escape (cut variance, size up) fails by
+~100x: the 8.3% sd cut buys a 1.19x size increase worth **+$0.098/trade**, needing a
+round-trip cost under **~0.1bp** against a real 4-12bp. Cluster-netting does not rescue it
+— only **4%** of notional cancels, because concurrent positions nearly always point the
+same way. **The position is already collateralised and loss-capped at the premium; there
+is no tail to hedge.** Signal tests on the same spot data: H1 distance-to-strike, H3
+vol regime, H4 cross-asset BTC, H9 slot ranking, H10 replacing the prior gate — all
+refuted OOS. Only H2 (adverse momentum) survived; see §7. `research/perp_overlay/`
+
+*Directional / entry variants:* longshot crash-reversal · cross-asset lag · candle
+acceleration · stuck-market breakout · per-series WR kill switch · early-window entry
+(600-800s) · spot-Kalshi dislocation scalp · oracle-lag final 0-150s ·
+KXETH15M exclusion (would have **cost $978** — ETH is the best series; do not re-raise
+on a losing streak).
+
+*Direction-neutral structures (Aug 15-17, all negative after fees):* complete-set
+accumulator · matched-pair maker · cross-crypto relative value · market-neutral pairs ·
+vertical/cross-strike arb · all-taker catalog scan · maker-then-hedge · WTI ladder
+maker · liquidity-reward farming · hourly range-pin · one-touch barriers.
+
+*Other markets:* new 15M series (HYPE -$1.76/tr, NEAR, Gold, Silver) · weather
+crossed-strike · cross-venue sports arb (**account is US-only** — this kills most
+venue arb) · Kalshi vs sportsbook · sports-futures dominance · Fed complete set.
+
+*Cross-listing 3-leg arb (range book vs threshold ladder):* **real and verified but
+economically worthless** — 4 opportunities in 14 days worth **+$1.05 total** at 10
+contracts, requiring a websocket service and non-atomic batch orders. Re-scan with
+`PYTHONPATH=. python3 scripts/xlist_arb.py BTC ETH` before ever reconsidering.
+
+Raw 2026-08-15/17 work: `~/Documents/Codex/2026-08-12/i-ran-a-full-ablation-study/work/`
+
+---
+
