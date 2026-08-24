@@ -813,6 +813,60 @@ class BandReachabilityTests(unittest.TestCase):
                          "any later crash-fill analysis")
 
 
+class EmergencyBrakeTests(unittest.TestCase):
+    """The halts are circuit breakers, not drawdown optimisers.
+
+    Both must sit ABOVE normal variance, and must KEEP sitting above it when the bet
+    size changes. A fixed dollar threshold does not: max(300, bet*4) was validated at
+    $75 and, at $25, ended up nine dollars past the worst 24h stretch in 74 days of
+    archive — firing once and blocking nothing. These pin the property, not the value,
+    so the next sizing change cannot silently disarm them.
+
+    Measured over 74 days at live config (docs/audit/claude/replay_loss_limit.py):
+    worst rolling-24h P&L -$309.25 at $25, and 21 losses in the worst window at ANY
+    bet size, because loss count is set by win rate and volume rather than by sizing.
+    """
+
+    WORST_24H_AT_25 = 309.25       # dollars, live config, 0.227c slip
+    WORST_24H_LOSSES = 21          # bet-size invariant
+
+    def test_daily_limit_clears_the_worst_measured_day_at_every_bet_size(self):
+        for bet in (10, 25, 50, 75, 100):
+            with self.subTest(bet=bet):
+                limit = trader.compute_daily_loss_limit(bet)
+                worst = self.WORST_24H_AT_25 * (bet / 25.0)   # scales with principal
+                self.assertGreater(
+                    limit, worst * 1.25,
+                    f"at ${bet}/trade the limit is ${limit} against a worst measured "
+                    f"24h of ${worst:.0f} — that is a drawdown control, not an "
+                    f"emergency brake, and it will halt during ordinary variance")
+
+    def test_daily_limit_scales_with_the_bet(self):
+        """A fixed threshold is a different control at every size. This is the D1 bug."""
+        a, b = trader.compute_daily_loss_limit(25), trader.compute_daily_loss_limit(75)
+        self.assertAlmostEqual(b / a, 3.0, places=6,
+                               msg="the limit must be proportional to the bet; a "
+                                   "constant silently disarms when the bet is cut")
+
+    def test_daily_limit_is_not_absurdly_loose(self):
+        """Emergency-only is not the same as absent."""
+        for bet in (25, 75):
+            self.assertLess(trader.compute_daily_loss_limit(bet), bet * 40)
+
+    def test_stop_balance_leaves_room_for_a_normal_drawdown(self):
+        """The cash floor must not fire on a drawdown the strategy has survived."""
+        worst_dd = 543.79          # peak-to-trough over 74 days at $25
+        balance_when_set = 1227.48
+        headroom = balance_when_set - trader.STOP_BALANCE
+        self.assertGreater(
+            headroom, worst_dd * 1.25,
+            f"STOP_BALANCE={trader.STOP_BALANCE} leaves ${headroom:.0f} of headroom "
+            f"against a ${worst_dd} worst measured drawdown — it would halt during "
+            f"a stretch the strategy has already survived")
+        self.assertGreater(trader.STOP_BALANCE, 0,
+                           "a zero floor is not a stop")
+
+
 class TopUpDepthTests(unittest.TestCase):
     """One order must not carry two depth thresholds."""
 

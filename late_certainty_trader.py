@@ -304,17 +304,37 @@ def compute_bet_dollars(balance):
     return FLAT_BET_DOLLARS
 
 
-def compute_daily_loss_limit(bet_dollars):
-    """Trailing-24h realized-loss floor, never tighter than the validated $300.
+DAILY_LOSS_LIMIT_BETS = 20   # trailing-24h halt at 20x the bet. See below.
 
-    The floor matters: the control was validated at $300 with $75 bets (fires ~7 days
-    in 68; the trades it blocks run 90.51% WR / -$1.62 per trade, worth +$802 over 68
-    days). Scaling purely off bet size meant cutting the bet to $50 on 2026-08-19
-    silently retightened the threshold to $200 — a level nothing has ever tested, and
-    which halted the trader for most of a day. Restoring $300 returns the validated
-    dollar level; the bet_dollars term still scales it upward for larger sizing.
+
+def compute_daily_loss_limit(bet_dollars):
+    """Trailing-24h realized-loss halt, as a MULTIPLE OF THE BET. Emergency only.
+
+    This is a circuit breaker for "something is broken", not a drawdown optimiser.
+    It must sit ABOVE normal variance or it fires on ordinary bad days, which costs
+    real money — the trades a too-tight limit blocks are the ones that recover it.
+
+    Denominated in bets, not dollars, because THE LOSS COUNT IS BET-SIZE INVARIANT.
+    Over 74 days of archive the worst rolling-24h stretch is 21 losses whatever the
+    bet is — it is set by win rate and volume. So a fixed dollar threshold means a
+    different control at every size, which is exactly what went wrong:
+
+      max(300, bet*4) was validated at $75, where $300 is ~4 net losses. At the $25
+      bet it needs ~12, and the worst rolling-24h P&L in the entire archive is
+      -$309.25 — nine dollars past it. The control fired ONCE in 74 days and blocked
+      ZERO trades. Cutting the bet silently disarmed it. Mirror image of the
+      MIN_BOOK_DEPTH defect, where a fixed CONTRACT count silently tightened as the
+      bet fell (see min_book_depth). Fixed constants do not survive a sizing change;
+      ratios do.
+
+    20x is 1.6x the worst 24h stretch measured ($500 against -$309.25 at $25), so it
+    cannot fire on anything the archive has seen, and it holds that ratio at every
+    bet size. No max() floor: the floor is what created the fixed-dollar bug, and at
+    20x every plausible bet is already well clear of normal variance.
+
+    Reproduce the sizing: python3 docs/audit/claude/replay_loss_limit.py
     """
-    return max(300, bet_dollars * 4)
+    return bet_dollars * DAILY_LOSS_LIMIT_BETS
 
 ROLLING_PNL_SECONDS = 86400  # trailing 24h window avoids double-limit at midnight UTC
 
@@ -335,7 +355,19 @@ def daily_pnl(state, now_ts=None):
     ), 2)
 
 # Kill switches (some now dynamic)
-STOP_BALANCE            = 650  # absolute cash-balance floor retained after the 2026-08-14 deposit
+# Absolute cash floor — the "stop and reassess" brake, not a drawdown control.
+#
+# 650 -> 400 on 2026-08-24. At $650 the headroom from a $1,227 balance was $577, or 23
+# losses at $25. The worst peak-to-trough drawdown in 74 days of archive is $543.79 —
+# 22 losses. So the stop sat one bad trade past ordinary variance and would have fired
+# on a stretch the strategy has already survived, which is the expensive failure mode:
+# it halts precisely during the drawdown it should be riding out.
+#
+# 400 gives 33 losses of headroom = 1.5x the worst drawdown measured, and still
+# preserves a third of the account to restart or reassess from. Emergency only, as
+# intended. Revisit on any large deposit or withdrawal — this is a ratio to the
+# balance dressed as a constant, and it goes stale when the balance moves a lot.
+STOP_BALANCE            = 400
 CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
 MAX_CONCURRENT_POSITIONS = 2  # 2×$75=$150=10.9% of balance; matches old $90=10.5% exposure ratio
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
