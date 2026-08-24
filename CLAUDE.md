@@ -1,5 +1,12 @@
 # Kalshi Trading — Auto-Context
 
+> **AUDIT AND FREEZE IN FORCE (from 2026-08-24).** Read `docs/audit/CHARTER.md`
+> BEFORE doing anything in this repo. The trading path is READ-ONLY and **nothing
+> live changes without Chris's explicit approval** — if you find a live bug, flag it
+> and stop, do not fix it. Two agents (Claude Code, Codex) are auditing in parallel;
+> each writes only to its own `docs/audit/<agent>/` directory and must not read the
+> other's until the Session 2 diff. The bot keeps trading throughout.
+
 Claude Code reads this file automatically when opened in `/Users/chrisgarceau/pm/`.
 
 **How to read this file.** It is organised by how fast things rot. Invariants are
