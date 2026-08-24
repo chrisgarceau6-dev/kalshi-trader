@@ -691,5 +691,39 @@ class OrderSafetyTests(unittest.TestCase):
         place.assert_not_called()
 
 
+class BandAsymmetryTests(unittest.TestCase):
+    """The 88-89c extension is YES-only and must stay that way.
+
+    Over the full archive 88-89c measures YES +$0.39/tr against NO -$0.42/tr.
+    Trading both sides cancels to -$2.07/day, which is exactly why every
+    symmetric MIN_ASK sweep found nothing. A future 'tidy up the band
+    constants' change that symmetrises this silently reintroduces a -EV
+    population, so it is pinned here rather than left to a comment.
+    """
+
+    def test_yes_reaches_88_but_no_does_not(self):
+        self.assertEqual(trader._band_min("yes"), 88)
+        self.assertEqual(trader._band_min("no"), trader.MIN_ASK_CENTS)
+        for ask in (88, 89):
+            self.assertTrue(trader._in_band(ask, "yes"),
+                            f"YES must be allowed at {ask}c")
+            self.assertFalse(trader._in_band(ask, "no"),
+                             f"NO must be REJECTED at {ask}c (-$0.42/tr)")
+
+    def test_shared_band_unchanged_for_both_sides(self):
+        for ask in (90, 91, 92, 93):
+            self.assertTrue(trader._in_band(ask, "yes"))
+            self.assertTrue(trader._in_band(ask, "no"))
+
+    def test_outside_band_rejected_on_both_sides(self):
+        for ask in (87, 94, 96):
+            self.assertFalse(trader._in_band(ask, "yes"))
+            self.assertFalse(trader._in_band(ask, "no"))
+
+    def test_none_ask_is_never_in_band(self):
+        self.assertFalse(trader._in_band(None, "yes"))
+        self.assertFalse(trader._in_band(None, "no"))
+
+
 if __name__ == "__main__":
     unittest.main()

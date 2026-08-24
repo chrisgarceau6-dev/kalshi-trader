@@ -139,10 +139,35 @@ SERIES_LIST     = [
 SHADOW_SERIES   = ["KXHYPE15M", "KXBTCD", "KXETHD", "KXWTIH",
                    "KXWTI15M", "KXGOLD15M", "KXSILVER15M"]
 
-STRATEGY_VERSION = "v5.16"  # NO side re-enabled (YES_ONLY=False), side-aware book depth
+STRATEGY_VERSION = "v5.17"  # 88-89c YES-only band extension (side-asymmetric below 90c)
 
 MIN_ASK_CENTS   = 90     # v5: widened entry from [95,99] to [90,99] — more volume
 MAX_ASK_CENTS   = 93     # v5.6.4: lowered 95→93 to avoid partial fills at thin 94-95c book
+
+# ── 88-89c YES-ONLY EXTENSION (v5.17, 2026-08-24) ───────────────────────────
+# The band is SIDE-ASYMMETRIC below 90c. Over the full archive at 0.105c slip,
+# 88-89c measures YES +$0.39/tr against NO -$0.42/tr, so trading both sides
+# cancels to -$2.07/day — which is why every symmetric MIN_ASK sweep found
+# nothing and MIN_ASK=89 sat as an unresolved lead for a week.
+#
+# Deliberately NOT a widening of MIN_ASK_CENTS: NO entries at 88-89c are
+# -EV and must keep skipping. Runs on the EXISTING 2 slots, so simultaneous
+# exposure is unchanged — the new entries displace marginal 90-93c ones and
+# per-trade value rises (+$0.299 -> +$0.338/tr).
+#
+# The <=91c low-ask gate (3rd prior >= 80c) already covers 88-89 and does the
+# heavy lifting: it cuts the qualifying population from 3,995 to 1,959, keeping
+# the better half. No new gate is introduced.
+LOW_BAND_MIN_CENTS = 88
+
+
+def _band_min(side):
+    """Lower edge of the entry band for this side. YES reaches to 88c; NO does not."""
+    return LOW_BAND_MIN_CENTS if side == "yes" else MIN_ASK_CENTS
+
+
+def _in_band(ask, side):
+    return ask is not None and _band_min(side) <= ask <= MAX_ASK_CENTS
 PRIOR_MIN_CENTS = 75     # v5.6.5: relaxed 80→75c — same WR, +38% volume (filter audit Aug 10)
 PRIOR_LOOKBACK  = 2      # v5.6.5: relaxed 3→2 candles — -0.1pp WR, +53% volume (filter audit Aug 10)
 # v5.16: NO side re-enabled. The Aug 11 audit that suspended it (live YES 46W/1L
@@ -977,8 +1002,7 @@ def shadow_momentum(market, series):
     pending = []
     for side in ("yes", "no"):
         ask = price_cents(market.get(f"{side}_ask_dollars"))
-        if (ask is not None and MIN_ASK_CENTS <= ask <= MAX_ASK_CENTS
-                and (ticker, side) not in _MOMENTUM_SEEN):
+        if (_in_band(ask, side) and (ticker, side) not in _MOMENTUM_SEEN):
             pending.append((side, ask))
     if not pending:
         return
@@ -1126,12 +1150,13 @@ def try_trade(
     # true [MIN_ASK_CENTS, MAX_ASK_CENTS] band, so a market that is genuinely outside
     # still skips. The only effect is that near-band markets get a real quote instead
     # of being dismissed on a stale one.
-    lo = MIN_ASK_CENTS - LISTING_QUOTE_TOLERANCE
     hi = MAX_ASK_CENTS + LISTING_QUOTE_TOLERANCE
+    lo_yes = _band_min("yes") - LISTING_QUOTE_TOLERANCE
+    lo_no  = _band_min("no")  - LISTING_QUOTE_TOLERANCE
     side, ask_cents = None, None
-    if lo <= yes_ask <= hi:
+    if lo_yes <= yes_ask <= hi:
         side, ask_cents = "yes", yes_ask
-    elif not YES_ONLY and lo <= no_ask <= hi:
+    elif not YES_ONLY and lo_no <= no_ask <= hi:
         side, ask_cents = "no",  no_ask
     # v5.16: the NO 90-91c shadow apparatus that used to live here is gone —
     # the NO side trades for real now. state["shadow_no_*"] keys are retained
@@ -1175,15 +1200,15 @@ def try_trade(
     # Measure the listing-vs-fresh disagreement that motivated the tolerance, so the
     # width can be tuned on data instead of the audit's one-off sample. RECOVERED means
     # the listing alone would have discarded a genuinely in-band entry.
-    _in_listing = MIN_ASK_CENTS <= ask_cents <= MAX_ASK_CENTS
-    _in_fresh = MIN_ASK_CENTS <= fresh_ask <= MAX_ASK_CENTS
+    _in_listing = _in_band(ask_cents, side)
+    _in_fresh = _in_band(fresh_ask, side)
     if _in_listing != _in_fresh:
         log(f"  [QUOTE-DRIFT] {ticker} {side.upper()} listing={ask_cents}c "
             f"fresh={fresh_ask}c delta={float(fresh_ask - ask_cents):+.2f}c "
             f"{'RECOVERED' if _in_fresh else 'correctly-skipped'}")
-    if fresh_ask < MIN_ASK_CENTS:
+    if fresh_ask < _band_min(side):
         log(f"  SKIP {ticker} — {side} ask crashed to {fresh_ask}c "
-            f"(< {MIN_ASK_CENTS}c) between scan ({ask_cents}c) and order — "
+            f"(< {_band_min(side)}c) between scan ({ask_cents}c) and order — "
             f"unsafe entry, underlying moved against thesis")
         return
     if fresh_ask > MAX_ASK_CENTS:
