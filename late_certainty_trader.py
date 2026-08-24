@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
-"""Late-certainty trader v5.12 — late-certainty YES entries.
+"""Late-certainty trader v5.17 — late-certainty entries on BOTH sides.
+
+Every figure below is the value the code actually uses. Until 2026-08-24 this
+docstring described v5.12: YES-only, $75, a $600 loss limit, five consecutive
+losses and an ET-13 blackout — none of which had been true for weeks. If you
+change a constant, change it here too, or read the constant rather than this text.
 
 STRATEGY:
-  Buy YES at a 90-93 cent ask with 150-600 seconds remaining when each of
-  the two preceding 1-minute YES asks was at least 75 cents. Hold through
-  settlement. ET hour 13 (1pm ET) is excluded. Live series are the six 15-minute
-  crypto markets; excluded candidates are shadow-logged only.
+  Buy YES or NO at a 90-93 cent ask with 150-600 seconds remaining when each of
+  the two preceding 1-minute same-side asks was at least 75 cents. Below 90c the
+  band is SIDE-ASYMMETRIC: YES reaches to 88c, NO does not. An ask at or below 91c
+  additionally requires the third prior candle at 80c or better. No ET hour is
+  blocked. Hold through settlement. Live series are the six 15-minute crypto
+  markets; excluded candidates are shadow-logged only.
 
 BET SIZING:
-  Flat $75 principal-risk budget per order. Contract count is sized from
-  the limit price so principal at the worst allowed fill cannot exceed $75.
+  Flat $25 principal-risk budget per order. Contract count is sized from
+  the limit price so principal at the worst allowed fill cannot exceed $25.
   Exchange fees are additional.
 
 KILL SWITCHES:
   STOP_BALANCE=$650
-  trailing-24h loss limit = 8x bet size ($600 at current sizing)
-  5 consecutive losses -> 60-minute cooldown
+  trailing-24h realized-loss limit = max($300, 4x bet size) -> $300 at current sizing
+  9 consecutive losses -> 60-minute cooldown
   50-trade WR below 84% -> 2-hour degradation halt
   ambiguous execution state -> persistent fail-closed halt
 
-usage: --once | --dry-run | --status
+usage: --once | --dry-run | --status | --daemon [--interval N] [--duration N]
 """
 
 import argparse, base64, hashlib, json, math, os, smtplib, time, urllib.request, urllib.error, uuid
