@@ -30,7 +30,7 @@ EXAMPLES
   python3 scripts/backtest.py --set yes_only=1         # YES-only comparison
   python3 scripts/backtest.py --compare yes_only=1     # baseline vs variant + CI
   python3 scripts/backtest.py --sweep max_ask 92 93 94 95 96
-  python3 scripts/backtest.py --slip 1                 # one tick of adverse fill
+  python3 scripts/backtest.py --slip 0.227             # measured fill quality (vs book, n=500)
   python3 scripts/backtest.py --since 2026-08-01       # holdout window
 """
 import argparse
@@ -58,7 +58,8 @@ def live_config():
     """Pull module-level constants out of the trader by AST. Never imports it."""
     want = {"MIN_ASK_CENTS", "MAX_ASK_CENTS", "MIN_SECS_LEFT", "MAX_SECS_LEFT",
             "PRIOR_MIN_CENTS", "PRIOR_LOOKBACK", "YES_ONLY",
-            "MAX_CONCURRENT_POSITIONS", "FLAT_BET_DOLLARS", "STRATEGY_VERSION"}
+            "MAX_CONCURRENT_POSITIONS", "FLAT_BET_DOLLARS", "STRATEGY_VERSION",
+            "LOW_BAND_MIN_CENTS", "SERIES_LIST"}
     out = {}
     tree = ast.parse(open(TRADER).read())
     for node in tree.body:
@@ -76,6 +77,12 @@ def live_config():
               f"using fallbacks", file=sys.stderr)
     return dict(
         min_ask=out.get("MIN_ASK_CENTS", 90),
+        # The band is SIDE-ASYMMETRIC below min_ask: YES reaches to LOW_BAND_MIN_CENTS,
+        # NO does not (88-89c measures YES +$0.39/tr against NO -$0.42/tr). This
+        # harness applied one symmetric band to both sides while labelling its output
+        # v5.17, so it could not model the running strategy at all and would not have
+        # reproduced the number its own pre-registration was quoted from.
+        low_band_min=out.get("LOW_BAND_MIN_CENTS", out.get("MIN_ASK_CENTS", 90)),
         max_ask=out.get("MAX_ASK_CENTS", 93),
         min_secs=out.get("MIN_SECS_LEFT", 150),
         max_secs=out.get("MAX_SECS_LEFT", 600),
@@ -87,14 +94,23 @@ def live_config():
         # Not constants in the trader — encoded here, override with --set.
         p3_gate=1,      # ask<=91 requires 3rd prior >= p3_min
         p3_min=80,
-        c1=1,           # KXSOL15M + prior2 75-79c quarantine (YES side)
+        # The trader has NO side test here (l.1246) and quarantines NO as well, and it
+        # truncates with int() before comparing. This read `side == "yes"` with a
+        # comment claiming it matched the live trader; it did not.
+        c1=1,           # KXSOL15M + int(prior2) in 75-79c quarantine, BOTH sides
         version=out.get("STRATEGY_VERSION", "?"),
+        # The archive also holds KXWTI15M / KXGOLD15M / KXSILVER15M, which are
+        # SHADOW_SERIES the bot deliberately does not trade. Scoring them understated
+        # per-trade EV by $0.019 and inflated the trade count by 5.4%, so every capture
+        # figure measured against this harness carried an inflated denominator.
+        # scripts/reconcile.py already filtered; the harness it calls canonical did not.
+        series=set(out.get("SERIES_LIST", [])),
     )
 
 
 # ── data ──────────────────────────────────────────────────────────────────────
 
-def load(since=None, until=None):
+def load(since=None, until=None, series=None):
     files = sorted(glob.glob(os.path.join(DATA, "*.csv.gz")))
     if not files:
         sys.exit(f"no data in {DATA} — run scripts/archive_candles.py --backfill N")
@@ -109,6 +125,8 @@ def load(since=None, until=None):
             continue
         with gzip.open(path, "rt") as f:
             for r in csv.DictReader(f):
+                if series and r["series"] not in series:
+                    continue
                 k = (r["ticker"], r["side"], r["candle_idx"])
                 if k in seen:
                     continue
@@ -129,8 +147,13 @@ def pnl(won, ask, bet, slip):
     return contracts * (1 - price / 100.0) * (1 - FEE) if won else -bet
 
 
+def band_min(cfg, side):
+    """Lower edge of the entry band for this side. Mirrors trader._band_min()."""
+    return cfg["low_band_min"] if side == "yes" else cfg["min_ask"]
+
+
 def qualifies(cfg, series, side, ask, secs, p1, p2, p3):
-    if not (cfg["min_ask"] <= ask <= cfg["max_ask"]):
+    if not (band_min(cfg, side) <= ask <= cfg["max_ask"]):
         return False
     if not (cfg["min_secs"] <= secs <= cfg["max_secs"]):
         return False
@@ -141,8 +164,9 @@ def qualifies(cfg, series, side, ask, secs, p1, p2, p3):
         return False
     if side == "no" and cfg["yes_only"]:
         return False
-    # C1 quarantine applies to the YES side only, matching the live trader.
-    if cfg["c1"] and side == "yes" and series == "KXSOL15M" and 75 <= p2 <= 79:
+    # C1 quarantine, exactly as the live trader applies it: both sides, and on the
+    # INTEGER-TRUNCATED prior, which matters now that prices carry decimals.
+    if cfg["c1"] and series == "KXSOL15M" and p2 >= 0 and 75 <= int(p2) <= 79:
         return False
     return True
 
@@ -230,22 +254,32 @@ def main():
     ap.add_argument("--sweep", nargs="+", metavar=("KEY", "VAL"),
                     help="sweep one key over several values")
     ap.add_argument("--slip", type=float, default=0.0,
-                    help="adverse fill in cents (measured live: ~0.105)")
+                    help="adverse fill in cents (measured live: 0.227 vs book, n=500)")
     ap.add_argument("--since", help="YYYY-MM-DD inclusive")
     ap.add_argument("--until", help="YYYY-MM-DD inclusive")
+    ap.add_argument("--all-series", action="store_true",
+                    help="include SHADOW_SERIES (GOLD/SILVER/WTI). Off by default: "
+                         "they are archived but never traded, so scoring them measures "
+                         "a strategy nobody is running.")
     a = ap.parse_args()
 
     cfg = live_config()
-    rows = load(a.since, a.until)
+    rows = load(a.since, a.until, series=None if a.all_series else cfg["series"])
     ts = [r[2] for r in rows]
     span = (f"{datetime.fromtimestamp(min(ts), timezone.utc):%Y-%m-%d} -> "
             f"{datetime.fromtimestamp(max(ts), timezone.utc):%Y-%m-%d}")
     clusters = len(set(ts))
     print(f"live config {cfg['version']} | {len(rows):,} rows | {clusters:,} clusters "
           f"| {span} | fills at ask+{a.slip:g}c | ${cfg['bet']:.0f}/trade")
-    print(f"  gates: ask [{cfg['min_ask']},{cfg['max_ask']}]c  secs [{cfg['min_secs']},"
+    band = (f"[{cfg['min_ask']},{cfg['max_ask']}]c"
+            if cfg["low_band_min"] == cfg["min_ask"] else
+            f"YES [{cfg['low_band_min']},{cfg['max_ask']}]c NO "
+            f"[{cfg['min_ask']},{cfg['max_ask']}]c")
+    print(f"  gates: ask {band}  secs [{cfg['min_secs']},"
           f"{cfg['max_secs']}]  prior>={cfg['prior_min']}x{cfg['lookback']}  "
-          f"yes_only={cfg['yes_only']}  max_conc={cfg['max_conc']}\n")
+          f"yes_only={cfg['yes_only']}  max_conc={cfg['max_conc']}")
+    print(f"  series: {len(cfg['series'])} live"
+          + ("" if not a.all_series else " + SHADOW (--all-series)") + "\n")
 
     if a.sweep:
         key, values = a.sweep[0], a.sweep[1:]

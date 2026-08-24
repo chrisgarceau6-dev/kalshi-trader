@@ -109,16 +109,33 @@ def main():
         st = state()
         P = [v for v in st["positions"].values()]
         S = [p for p in P if p.get("settled")]
+        SI = [(t, p) for t, p in st["positions"].items() if p.get("settled")]
         openp = [p for p in P if not p.get("settled")]
-        et = D.timezone(D.timedelta(hours=-4))
-        today = D.datetime.now(et).date()
+        # Bucket by the UTC day of CLOSE, which is how scripts/reconcile.py and the
+        # candle archive key a trade. This used opened_at at a hardcoded UTC-4: that is
+        # EDT (silently wrong from 2026-11-01), and it disagreed with the archive on
+        # 20.7% of trades — 2026-08-19 read +$60.29 by one key and -$161.68 by the
+        # other. docs/audit/claude/METRICS.md §6.
+        today = D.datetime.now(D.timezone.utc).date()
+
+        def close_day(ticker):
+            """KXBTC15M-26AUG211115-T1 -> date(2026,8,21). Ticker time is ET, so +4h."""
+            try:
+                naive = D.datetime.strptime(ticker.split("-")[1].upper(), "%y%b%d%H%M")
+            except (IndexError, ValueError):
+                return None
+            return (naive + D.timedelta(hours=4)).date()
 
         def rows_for(pred):
-            g = [p for p in S if pred(D.datetime.fromisoformat(p["opened_at"]))]
-            return [dict(cost=p["cost"], contracts=p["contracts"], won=p["pnl"] > 0,
-                         fee=p.get("fee_cost", 0.0), pnl=p["pnl"]) for p in g]
+            # A win is the settlement outcome, not the sign of P&L: a win that nets
+            # exactly $0.00 after fees is still a win, and `pnl > 0` scored it a loss.
+            g = [(t, p) for t, p in SI if pred(close_day(t))]
+            return [dict(cost=p["cost"], contracts=p["contracts"],
+                         won=(p.get("result") == p.get("side")
+                              if p.get("result") else p["pnl"] > 0),
+                         fee=p.get("fee_cost", 0.0), pnl=p["pnl"]) for _, p in g]
 
-        td = rows_for(lambda t: t.astimezone(et).date() == today)
+        td = rows_for(lambda d: d == today)
         if td:
             pnl = sum(r["pnl"] for r in td)
             wr = 100 * sum(r["won"] for r in td) / len(td)

@@ -630,8 +630,11 @@ def c_reconcile(ctx):
 
 
 # The slippage figure every "at measured fill quality" backtest is quoted at.
-# CLAUDE.md l.175 asserts 0.105c, measured 2026-08-17 on YES fills only.
-DOCUMENTED_SLIP_CENTS = 0.105
+# Was 0.105c (2026-08-17, YES fills only, against a stale 1-min candle). Re-measured
+# 2026-08-24 against book_at_entry on n=500 across both sides: +0.227c, t=+6.6.
+# docs/audit/claude/CLAIMS.md §1. If this check FAILS again, re-measure and move the
+# constant — do not widen the tolerance.
+DOCUMENTED_SLIP_CENTS = 0.227
 
 
 @check("slippage", needs=("state",))
