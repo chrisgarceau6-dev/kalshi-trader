@@ -523,21 +523,28 @@ def c_daykey(ctx):
 
 @check("harness", needs=("archive",))
 def c_harness(ctx):
-    """scripts/backtest.py scores every archived series, including SHADOW_SERIES."""
+    """scripts/backtest.py must score only the series the trader actually trades."""
     import backtest as B
-    cfg = B.live_config()
+    import inspect
     rows = ctx["archive"]
-    live = [r for r in rows if r[0] in SERIES]
     off = sorted({r[0] for r in rows} - SERIES)
     if not off:
         return "OK", "the archive holds only series the trader trades"
-    a = B.summary(rows, *B.simulate(rows, cfg, 0.105))
-    b = B.summary(live, *B.simulate(live, cfg, 0.105))
-    return "WARN", (f"backtest.py headline includes {', '.join(off)} "
-                    f"({len(rows) - len(live)} archive rows) which are SHADOW_SERIES: "
-                    f"{a['trades']}tr {a['per_trade']:+.3f}/tr as shipped vs "
-                    f"{b['trades']}tr {b['per_trade']:+.3f}/tr on live series only — "
-                    f"differ by {a['per_trade'] - b['per_trade']:+.3f}/tr")
+    cfg = B.live_config()
+    if cfg.get("series") != SERIES:
+        return "FAIL", (f"backtest.live_config() series {sorted(cfg.get('series') or [])} "
+                        f"!= the trader's SERIES_LIST {sorted(SERIES)}")
+    src = inspect.getsource(B.main)
+    if "cfg[\"series\"]" not in src and "cfg['series']" not in src:
+        a = B.summary(rows, *B.simulate(rows, cfg, DOCUMENTED_SLIP_CENTS))
+        live = [r for r in rows if r[0] in SERIES]
+        b = B.summary(live, *B.simulate(live, cfg, DOCUMENTED_SLIP_CENTS))
+        return "FAIL", (f"backtest.py scores {', '.join(off)} (SHADOW_SERIES): "
+                        f"{a['per_trade']:+.3f}/tr vs {b['per_trade']:+.3f}/tr on live "
+                        f"series — every capture figure inherits the wrong denominator")
+    return "OK", (f"backtest.py filters to the trader's {len(SERIES)} live series by "
+                  f"default; the archive's {', '.join(off)} are scored only under "
+                  f"--all-series")
 
 
 @check("archive", needs=("archive",))
