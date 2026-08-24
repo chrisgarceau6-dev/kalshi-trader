@@ -124,7 +124,7 @@ class OrderSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
              patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
              patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
-             patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("89")]), \
+             patch.object(trader, "_fresh_ask_cents", side_effect=[Decimal("91"), Decimal("87")]), \
              patch.object(trader, "_prior_k_candle_asks", return_value=[Decimal("80"), Decimal("80"), Decimal("80")]), \
              patch.object(trader, "_book_last_look", return_value=(Decimal("91"), None)), \
              patch.object(trader, "place_order", return_value=(201, {"order_id": "order-1"})) as place, \
@@ -596,8 +596,12 @@ class OrderSafetyTests(unittest.TestCase):
         self.assertEqual(place.call_args.kwargs["yes_price_cents"], Decimal("92"))
 
     def test_shallow_underfill_does_not_alert_but_a_crash_fill_does(self):
-        """89c on a 90c band is the book moving, not a crash-through. Only fills
-        deeper than CRASH_FILL_TOLERANCE are worth an email."""
+        """A cent under the floor is the book moving, not a crash-through. Only fills
+        deeper than CRASH_FILL_TOLERANCE are worth an email.
+
+        The probe price is taken from _band_min(side), not hardcoded: under v5.17 the
+        YES floor is 88c, so 89c is INSIDE the band and would not be underfilled at
+        all. Pinning 89c here asserted the pre-v5.17 symmetric band."""
         book = {"orderbook_fp": {"no_dollars": [["0.09", "500"]]}}   # YES offered at 91c
 
         def run(fill_price):
@@ -625,7 +629,8 @@ class OrderSafetyTests(unittest.TestCase):
                 trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
             return mail, state
 
-        mail, state = run(89.0)
+        shallow = float(trader._band_min("yes")) - 1      # 1c under, inside tolerance
+        mail, state = run(shallow)
         mail.assert_not_called()
         self.assertTrue(state["positions"]["KXETH15M-TEST"]["outside_safe_zone"])
 
@@ -723,6 +728,101 @@ class BandAsymmetryTests(unittest.TestCase):
     def test_none_ask_is_never_in_band(self):
         self.assertFalse(trader._in_band(None, "yes"))
         self.assertFalse(trader._in_band(None, "no"))
+
+
+class BandReachabilityTests(unittest.TestCase):
+    """Every cent the constants DECLARE must actually reach place_order.
+
+    The four tests above pin _band_min()/_in_band(). Those helpers were correct the
+    whole time — the deciding gate simply never called them. v5.17 shipped with the
+    88-89c YES band unreachable, the suite green, and a pre-registration whose clock
+    could never start, because nothing exercised the entry path end to end.
+
+    These drive the real try_trade with a book at each price and assert on whether an
+    order is actually placed. A future symmetric 'cleanup' of any band check now fails
+    here rather than silently going inert.
+    """
+
+    def _drive(self, side, price):
+        """Run try_trade against a book offering `side` at `price`. -> place_order mock."""
+        yes_ask = price if side == "yes" else 100 - price
+        book = {"orderbook_fp": {
+            "no_dollars":  [[f"{(100 - yes_ask) / 100:.4f}", "500"]],
+            "yes_dollars": [[f"{yes_ask / 100:.4f}", "500"]],
+        }}
+        market = {
+            "ticker": "KXETH15M-TEST", "event_ticker": "KXETH15M-TEST",
+            "yes_ask_dollars": f"{yes_ask / 100:.4f}",
+            "no_ask_dollars": f"{(100 - yes_ask) / 100:.4f}",
+            "_secs_left": 300,
+        }
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        priors = [Decimal("95"), Decimal("95"), Decimal("95")]
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(trader, "STATE_FILE", Path(td) / "state.json"), \
+             patch.object(trader, "LOG_FILE", Path(td) / "trader.log"), \
+             patch.object(trader, "_fresh_ask_cents", return_value=Decimal(str(price))), \
+             patch.object(trader, "_prior_k_candle_asks", return_value=priors), \
+             patch.object(trader, "kalshi_get", return_value=(200, book)), \
+             patch.object(trader, "place_order", return_value=(201, {"order_id": "o-1"})) as place, \
+             patch.object(trader, "cancel_order", return_value=(200, {})), \
+             patch.object(trader, "reconcile_terminal_order", return_value=(10.0, price * 10 / 100.0, 0.0)), \
+             patch.object(trader, "ORDER_MAX_ATTEMPTS", 1), \
+             patch.object(trader.time, "sleep"), \
+             patch.object(trader, "send_email"), \
+             patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
+            trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
+        return place, state
+
+    def test_every_declared_cent_reaches_an_order(self):
+        for side in ("yes", "no"):
+            lo, hi = int(trader._band_min(side)), int(trader.MAX_ASK_CENTS)
+            for price in range(lo, hi + 1):
+                with self.subTest(side=side, price=price):
+                    place, _ = self._drive(side, price)
+                    self.assertEqual(
+                        place.call_count, 1,
+                        f"{side.upper()} {price}c is inside the declared band "
+                        f"[{lo},{hi}] but no order was placed — a gate is using a "
+                        f"hardcoded bound instead of _band_min(side)")
+
+    def test_below_the_declared_floor_never_orders(self):
+        for side in ("yes", "no"):
+            price = int(trader._band_min(side)) - 1
+            with self.subTest(side=side, price=price):
+                place, _ = self._drive(side, price)
+                self.assertEqual(place.call_count, 0,
+                                 f"{side.upper()} {price}c is below the floor and must skip")
+
+    def test_no_side_never_reaches_the_yes_only_extension(self):
+        """The 88-89c extension is YES-only: NO there measures -$0.42/tr."""
+        for price in range(int(trader.LOW_BAND_MIN_CENTS), int(trader.MIN_ASK_CENTS)):
+            with self.subTest(price=price):
+                place, _ = self._drive("no", price)
+                self.assertEqual(place.call_count, 0,
+                                 f"NO must never order at {price}c")
+
+    def test_intended_low_band_fill_is_not_flagged_a_crash(self):
+        """An 88-89c YES fill is the INTENDED entry, not a crash through the floor."""
+        if trader.LOW_BAND_MIN_CENTS >= trader.MIN_ASK_CENTS:
+            self.skipTest("no side-asymmetric band configured")
+        _, state = self._drive("yes", int(trader.LOW_BAND_MIN_CENTS))
+        self.assertFalse(state["positions"]["KXETH15M-TEST"]["outside_safe_zone"],
+                         "a fill at the declared YES floor must not be flagged "
+                         "outside_safe_zone — that flag stops top-ups and corrupts "
+                         "any later crash-fill analysis")
+
+
+class TopUpDepthTests(unittest.TestCase):
+    """One order must not carry two depth thresholds."""
+
+    def test_top_up_uses_the_same_depth_requirement_as_the_first_attempt(self):
+        src = Path(trader.__file__).read_text()
+        top_up = src.split("TOP-UP STOP — thin book")[0][-400:]
+        self.assertIn("retry_depth < need_depth", top_up,
+                      "the top-up depth gate must use need_depth (the dynamic, "
+                      "order-sized requirement), not the legacy MIN_BOOK_DEPTH "
+                      "constant — a smaller order needs LESS depth, not more")
 
 
 if __name__ == "__main__":

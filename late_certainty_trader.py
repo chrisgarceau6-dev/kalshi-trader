@@ -1317,9 +1317,14 @@ def try_trade(
     # 2-4 gate calls since, so the book read is what decides, and it is the last
     # call before place_order. Aug 18: 12 fills landed below the band, two of them
     # deep (47c and 57c) on quotes of 92.5c and 92.8c.
-    if best_offer is not None and not (MIN_ASK_CENTS <= best_offer <= MAX_ASK_CENTS):
+    # Side-aware, like every other band check. This read MIN_ASK_CENTS until 2026-08-24,
+    # which silently made v5.17's 88-89c YES extension unreachable: entry_ask is always
+    # best_offer (the None path already failed closed at the depth gate above), so no
+    # order could be priced below 90c however the earlier gates were configured. The
+    # helpers were pinned by tests, this line was not. docs/audit/claude/DIFF.md §3.
+    if best_offer is not None and not (_band_min(side) <= best_offer <= MAX_ASK_CENTS):
         log(f"  SKIP {ticker} — last look: best {side} offer {best_offer}c is outside "
-            f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c while the quote still said {fresh_ask}c")
+            f"[{_band_min(side)},{MAX_ASK_CENTS}]c while the quote still said {fresh_ask}c")
         return
 
     # Price off the book when we have it — that is what we actually pay. Cap at
@@ -1364,9 +1369,9 @@ def try_trade(
             # Never leave a stale bid resting just to reach the target size.
             # Every top-up must independently remain inside the validated zone.
             fresh_ask = _fresh_ask_cents(ticker, side)
-            if fresh_ask is None or not (MIN_ASK_CENTS <= fresh_ask <= MAX_ASK_CENTS):
+            if fresh_ask is None or not (_band_min(side) <= fresh_ask <= MAX_ASK_CENTS):
                 log(f"    TOP-UP STOP — fresh {side} ask {fresh_ask}c is outside "
-                    f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c")
+                    f"[{_band_min(side)},{MAX_ASK_CENTS}]c")
                 break
             retry_priors = _prior_k_candle_asks(ticker, series, side, PRIOR_LOOKBACK)
             if retry_priors is None or any(pa < PRIOR_MIN_CENTS for pa in retry_priors):
@@ -1381,13 +1386,17 @@ def try_trade(
             # Same last look as the first attempt: a top-up sweeps the book too,
             # and the retry gates above cost another 1-2 calls of staleness.
             best_offer, retry_depth = _book_last_look(ticker, side)
-            if best_offer is not None and not (MIN_ASK_CENTS <= best_offer <= MAX_ASK_CENTS):
+            if best_offer is not None and not (_band_min(side) <= best_offer <= MAX_ASK_CENTS):
                 log(f"    TOP-UP STOP — last look: best {side} offer {best_offer}c is "
-                    f"outside [{MIN_ASK_CENTS},{MAX_ASK_CENTS}]c (quote said {fresh_ask}c)")
+                    f"outside [{_band_min(side)},{MAX_ASK_CENTS}]c (quote said {fresh_ask}c)")
                 break
-            if retry_depth is not None and retry_depth < MIN_BOOK_DEPTH:
+            # Same requirement as the first attempt. This used the legacy MIN_BOOK_DEPTH
+            # (60) while the first attempt moved to min_book_depth() (39 at a $25 bet),
+            # so one order carried two thresholds and top-ups were refused on books that
+            # would have filled them. Both auditors found it independently.
+            if retry_depth is not None and retry_depth < need_depth:
                 log(f"    TOP-UP STOP — thin book: {retry_depth:.0f} contracts "
-                    f"at <={MAX_ASK_CENTS}c (need {MIN_BOOK_DEPTH})")
+                    f"at <={MAX_ASK_CENTS}c (need {need_depth})")
                 break
             entry_ask = best_offer if best_offer is not None else fresh_ask
             last_look_ts = time.monotonic()
@@ -1508,18 +1517,22 @@ def try_trade(
                 save_state(state)
                 send_email(f"[Kalshi-C] EXECUTION HALT — {ticker}", reason)
                 raise RuntimeError(reason)
-            if avg_price_cents < MIN_ASK_CENTS:
+            # Side-aware for the same reason as the gates above: an 88-89c YES fill is
+            # the INTENDED entry under v5.17, not a crash through the floor. Reading
+            # MIN_ASK_CENTS here flagged every intended entry outside_safe_zone and hit
+            # the break below, so the order filled once instead of topping up.
+            if avg_price_cents < _band_min(side):
                 outside_safe_zone = True
-                shortfall = Decimal(MIN_ASK_CENTS) - avg_price_cents
+                shortfall = Decimal(_band_min(side)) - avg_price_cents
                 if shortfall > Decimal(CRASH_FILL_TOLERANCE):
                     log(f"    CRASH FILL — filled at {avg_price_cents}c, "
                         f"{shortfall:.2f}c below safe zone "
-                        f"[{MIN_ASK_CENTS},{MAX_ASK_CENTS}]; book said {entry_ask}c "
+                        f"[{_band_min(side)},{MAX_ASK_CENTS}]; book said {entry_ask}c "
                         f"{last_look_ms:.0f}ms earlier.")
                     send_email(
                         f"[Kalshi-C] CRASH FILL {avg_price_cents:.2f}c — {ticker}",
                         f"Filled {actual_contracts} {side.upper()} @ avg {avg_price_cents:.2f}c\n"
-                        f"Safe zone: [{MIN_ASK_CENTS}, {MAX_ASK_CENTS}]c\n"
+                        f"Safe zone: [{_band_min(side)}, {MAX_ASK_CENTS}]c\n"
                         f"Book best offer at last look: {entry_ask}c "
                         f"({last_look_ms:.0f}ms before the order)\n"
                         f"The book crashed inside the order's flight time. Position is "
