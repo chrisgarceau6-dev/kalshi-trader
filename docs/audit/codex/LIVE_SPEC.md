@@ -27,9 +27,13 @@ The GitHub workflow and production-log claims are reproducible with:
 ```bash
 gh run list --workflow late_certainty.yml --limit 20 \
   --json databaseId,event,status,conclusion,headSha,createdAt,updatedAt
-gh run view 32742473985 --log | rg 'KXSOL15M|outside|crashed'
-gh run view 32744023345 --log | rg 'KXETH15M|outside|crashed'
-gh run view 32739329589 --log | rg 'KXDOGE15M|outside|crashed|TRADE'
+git log -1 --format='%H %ad' --date=iso-strict 584d0a85
+for r in 32760434238 32758954186 32757489283 32756022508 \
+         32754550981 32753071584 32751618426; do
+  gh run view "$r" --log | grep -oE \
+    'last look: best yes offer 8[89]\.[0-9]+c is outside \[90,93\]c.*'
+done
+python3 docs/audit/claude/probe_fix.py
 ```
 
 ## Invoked program
@@ -150,15 +154,18 @@ rg -n 'open_markets_longshot|try_longshot_trade|SHADOW_SERIES|SURVIVOR_|MOMENTUM
 
 ## Flagged live bug: v5.17 extension is blocked downstream
 
-The initial side-aware checks correctly accept an `88–89¢` YES ask (`_band_min`, lines 164–170 and fresh quote, lines 1209–1217). The mandatory last book look then checks `MIN_ASK_CENTS <= best_offer`, not `_band_min(side)` (lines 1320–1323). The same hardcoded lower bound appears in the top-up quote and book checks (lines 1367–1369 and 1384–1386) and in fill classification (lines 1511–1514).
+The initial side-aware checks correctly accept an `88–89¢` YES ask (`_band_min`, lines 164–170 and fresh quote, lines 1209–1217). The mandatory last book look then checks `MIN_ASK_CENTS <= best_offer`, not `_band_min(side)` (lines 1320–1323). That site alone blocks the initial order. Three later sites do not block the first order but prevent the intended path from operating correctly after that check is repaired: the top-up quote and book checks retain the old lower bound (lines 1367–1369 and 1384–1386), and fill classification (lines 1511–1514) falsely marks every intended lower-band fill `outside_safe_zone`; its downstream `break` at line 1536 stops top-ups.
 
 Because an entirely unreadable book fails closed and an empty book has insufficient depth, every executable first attempt must have a known best offer; an `88–89¢` YES best offer is therefore rejected. The effective live band remains symmetric `90–93¢`. This is an active missed-opportunity defect, not evidence that the process submits negative-EV orders, so the read-only audit continued.
 
-Production logs independently reproduce the defect:
+Production logs created after commit `584d0a85` merged independently reproduce the blocking site:
 
-- run `32742473985`: SOL fresh YES `88¢` is logged as having crashed below `90¢`;
-- run `32744023345`: ETH fresh YES `89¢` is logged as having crashed below `90¢`;
-- run `32739329589`: DOGE fresh YES `91.6¢` reaches the book check, where best offer `89¢` is rejected as outside `[90,93]`.
+- run `32760434238`: best YES offer `89.0000¢` rejected outside `[90,93]` while the fresh quote remained `90.0000¢`;
+- run `32758954186`: two best YES offers at `89.0000¢` rejected outside `[90,93]`, against fresh quotes `90.9000¢` and `90.0000¢`.
+
+The three runs formerly cited here (`32739329589`, `32742473985`, and `32744023345`) predated the v5.17 merge and were invalid evidence: their `<90c` fresh-quote message proves `_band_min("yes")` was still 90. They showed v5.16 behaving correctly and have been removed from the proof.
+
+Claude's read-only scratchpad probe patches only the line-1320 comparison and drives the real `try_trade` through simulated fills. It establishes the distinct effects: `88¢` and `89¢` then place twenty-seven-contract orders and record positions, but both positions are falsely marked `outside_safe_zone=True` and top-ups stop. Therefore one line unblocks the band; all four side-insensitive sites must change for it to trade and record correctly. No trading-path file was changed by this audit.
 
 The safety suite only pins `_band_min()`/`_in_band()` asymmetry. It does not execute the complete entry path. The canonical `scripts/backtest.py` reads `MIN_ASK_CENTS` and `MAX_ASK_CENTS` but not `LOW_BAND_MIN_CENTS`; its `qualifies()` applies one symmetric band to both sides. Thus neither the tests nor the canonical harness would catch or reproduce this defect.
 

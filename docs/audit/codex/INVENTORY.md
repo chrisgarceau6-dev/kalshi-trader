@@ -1,6 +1,8 @@
 # Codex clean-room inventory
 
-Generated 2026-08-24. No content under `docs/audit/claude/` was opened or inventoried. Polymarket and Momentum Core are excluded by charter. `.git/`, `venv/`, bytecode/test caches, `hunt_logs/`, and the nested Ruflo cache under `research/perp_overlay/` are generated dependency/control data rather than project source or evidence and are excluded. Known Polymarket-named root files are excluded; three ambiguous files remain in the table as `UNKNOWN` rather than being silently binned.
+Generated 2026-08-24. No content under `docs/audit/claude/` was opened or inventoried during the independence hold. Polymarket and Momentum Core are excluded by charter. `.git/`, `venv/`, bytecode/test caches, `hunt_logs/`, and the nested Ruflo cache under `research/perp_overlay/` are generated dependency/control data rather than project source or evidence and are excluded. Known Polymarket-named root files are excluded; three ambiguous files remain in the table as `UNKNOWN` rather than being silently binned.
+
+**Session 2 completeness correction.** The Session 1 projection also excluded the untracked root glob `_tmp_*.csv` but failed to say so. At the snapshot it contains 3,538 temporary backtest exports totaling 257,690,396 bytes; none is tracked. They are excluded as mechanically generated scratch artifacts, not silently treated as audited evidence. The unfiltered scoped walk has 4,285 files; the table's 260 rows are the documented project/evidence projection, not the raw-walk denominator.
 
 ## Reproduction
 
@@ -10,6 +12,9 @@ Run from the repository root. The following commands reproduce the raw census an
 find . -path './.git' -prune -o -path './venv' -prune -o -path './docs/audit/claude' -prune -o -type f -print | LC_ALL=C sort
 git ls-files | LC_ALL=C sort
 find "$HOME/Downloads/Finance" -maxdepth 1 -type f   \( -iname '*kalshi*' -o -iname '*weather*' \) -print | LC_ALL=C sort
+find . -maxdepth 1 -type f -name '_tmp_*.csv' -print | wc -l
+find . -maxdepth 1 -type f -name '_tmp_*.csv' -exec stat -f '%z' {} + | awk '{s+=$1} END {print s}'
+git ls-files '_tmp_*.csv' | wc -l
 awk -F'|' '/^\| `/ {n++} END {print n}' docs/audit/codex/INVENTORY.md
 ```
 
