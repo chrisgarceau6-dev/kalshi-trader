@@ -7,6 +7,34 @@ otherwise, item by item.
 Codex's Tier C output is still landing; items from it will be appended rather than
 merged into these, so the numbering stays stable.
 
+> ## RESOLVED — 2026-08-24
+>
+> **Every item on this sheet has been decided and executed.** It is kept as the
+> record of what was proposed and what Chris chose, not as an open action list.
+> Read the outcome column, not the recommendation, for what is actually live.
+>
+> | item | decision | shipped in |
+> |---|---|---|
+> | A1 four-site last-look fix | **approved** | #189, verified live |
+> | A2 v5.17 pre-registration | **restart on original terms**, clock from 2026-08-24 | — |
+> | A3 top-up depth | **approved** | #189 |
+> | A4 `STOP_BALANCE` | **re-sized 650 -> 400** as an emergency brake | #195 |
+> | D1 daily loss limit | **re-sized to `bet x 20`** ($500 at $25) | #195 |
+> | B1-B5 measurement | **approved as a batch** | #190 |
+> | C1-C3 record | **approved as a batch** | #191 |
+> | C5 CLAUDE.md restructure | **approved** | #193 |
+> | Codex M01-M13, X01-X03 | **approved, executed** | 88e03a6a, refs #201 |
+>
+> A4 and D1 were originally written with NO recommended value, on the grounds that a
+> survival parameter does not follow from the archive. Chris's instruction was
+> "emergency only, not conservative, you pick", which is a design rule rather than a
+> number, and the values above were derived from it — see the measurement in D1 and
+> `docs/audit/claude/replay_loss_limit.py`.
+>
+> The text below is preserved UNEDITED as the state of knowledge at proposal time.
+> Where it says a constant is one thing and the code now says another, the code is
+> right and this document is a record.
+
 **How to use this:** each item has an ID. Reply with the IDs you approve
 (`A1 yes, A2 no, B1 yes…`). Anything you don't name stays frozen.
 
