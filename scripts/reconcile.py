@@ -52,7 +52,7 @@ def live_series():
     This must not be hardcoded. The archive also holds KXGOLD15M / KXSILVER15M /
     KXWTI15M, which are SHADOW_SERIES the bot deliberately does not trade. Counting
     them as model entries inflates the miss count and understates capture — the exact
-    bug research/capture/audit2.py was written to fix, and repeating it here would
+    bug archive/research/refuted/capture/audit2.py was written to fix, and repeating it here would
     make this tool agree with the wrong answer.
     """
     import ast
