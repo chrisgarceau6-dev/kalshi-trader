@@ -220,3 +220,72 @@ the point — it is measuring real disagreements, not style.
 | `win` WARN | **B4** |
 
 `rounding` should stay a WARN forever. The others should all clear.
+
+---
+
+# Group D — from Codex's Tier C audit, priced by Claude
+
+Appended 2026-08-24 after Codex Session 2. IDs above are unchanged.
+
+## D1 · The daily loss limit is near-inert at the current bet size — **R4**
+
+**Codex found:** the analysis behind `$300` no longer establishes it as optimal.
+**Priced here, and the problem is worse than "not optimal".**
+
+`compute_daily_loss_limit` returns `max(300, bet * 4)`. The `$300` floor was validated
+at a **$75** bet, where it takes ~4 net losses to trip. At the live **$25** bet the
+same dollar threshold takes ~12, so the *same constant is a different control*.
+
+Replayed over the archive at live config, live series, 0.227c slip
+(approximation stated: realized P&L is booked at cluster close, as CLAUDE.md's own
+sweep does):
+
+| bet | worst trailing-24h | limit | clusters halted | trades blocked |
+|---|---|---|---|---|
+| **$25 (live)** | **−$309.25** | $300 | **1** | **0** |
+| $50 | −$618.51 | $300 | — | — |
+| $75 (validated at) | −$927.76 | $300 | 567 | 729 |
+
+**At $25 the control fires once in 74 days and blocks nothing.** The worst trailing
+drawdown in the entire archive clears the threshold by $9. In practice there is no
+daily loss limit running.
+
+Threshold sweep at each size:
+
+| limit | $25 total | $75 total |
+|---|---|---|
+| $150 | **+$2,989** | +$7,354 |
+| $200 | +$2,894 | +$8,101 |
+| **$300 (live)** | **+$2,805** | +$8,410 |
+| $400 | +$2,805 | **+$9,186** |
+| none | +$2,805 | +$8,416 |
+
+Two things fall out, and they point in opposite directions:
+
+1. At $25, `$300` is indistinguishable from **no limit at all**. A `$150` limit would
+   have been worth **+$184** over 74 days, blocking 268 trades at 89.93% WR and
+   −$0.683/trade — genuinely bad trades, which is what the control is for.
+2. **Do not read that as "set it to $150".** It is a post-hoc optimum over 74 days
+   driven largely by one drawdown event (2026-07-14), it is in-sample, and the archive
+   is rounded before 2026-08-22. Invariant 8 applies squarely. Note also that at $75
+   the sweep optimum is `$400`, not the `$300` on file — so `$300` was not the best
+   value even at the size it was validated at.
+
+**The finding is not "the number is wrong". It is that the control's engagement scales
+with bet size while its threshold does not, so cutting the bet silently disarmed it.**
+That is the same class of defect as `MIN_BOOK_DEPTH` (A3), where a fixed contract count
+silently tightened as the bet fell — here a fixed dollar floor silently loosened.
+
+**No recommendation on the value.** Like A4 this is a survival parameter: it encodes
+how much you will lose in a day before stopping, which is not derivable from the
+archive. What I do recommend is a decision *of some kind*, because the current state is
+an unexamined default rather than a choice — the `max()` floor was added to stop bet
+scaling from creating an untested `$200`, and it has now created an untested "no limit"
+instead.
+
+Reproduce every figure in this item:
+
+```
+python3 docs/audit/claude/replay_loss_limit.py              # both bet sizes
+python3 docs/audit/claude/replay_loss_limit.py --bet 50     # the intermediate step
+```
