@@ -77,6 +77,7 @@ def get_balance():
 SETTLEMENT_FLOOR = "2026-07-25"
 
 def get_settlements():
+    live = live_series()
     def _f():
         # The date floor below is what should end pagination. This cap only exists so
         # a cursor bug cannot loop forever — at 20 it would have silently truncated
@@ -95,7 +96,12 @@ def get_settlements():
                 # dropping them made the reconstructed balance curve wrong by their
                 # total. They are flagged instead, and the UI keeps them out of the
                 # strategy stats while still counting them in the balance line.
-                is_strat = s.get("ticker", "").split("-")[0].endswith("15M")
+                series = s.get("ticker", "").split("-")[0]
+                # Strategy stats count ONLY the series the trader actually trades.
+                # Non-strategy rows are still emitted (they moved the balance) and the
+                # UI keeps them out of WR / trades / P&L via this flag.
+                is_strat = (series in live if live is not None
+                            else series.endswith("15M"))
                 rev  = int(s.get("revenue", 0)) / 100.0
                 yc   = float(s.get("yes_total_cost_dollars", 0) or 0)
                 nc   = float(s.get("no_total_cost_dollars",  0) or 0)
@@ -230,6 +236,40 @@ def get_positions():
                         "title":      mkt.get("title", "")})
         return out
     return cached("pos", 15, _f)
+
+def live_series():
+    """SERIES_LIST from the trader, by AST. Never hardcode a strategy constant here.
+
+    The strategy filter used to be `ticker.endswith("15M")`, which counts every 15M
+    series the account has ever touched — including KXHYPE15M, KXNEAR15M and
+    KXWTI15M, which are shadow/retired and which the bot places no orders in. That is
+    307 settlements and -$245.05 of P&L attributed to a strategy that did not make
+    those trades. scripts/reconcile.py has filtered on SERIES_LIST for exactly this
+    reason since it was written; the dashboard did not.
+
+    Falls back to None on any read failure, and the caller then keeps the old
+    endswith("15M") behaviour rather than silently showing an empty book.
+    """
+    def _f():
+        try:
+            tree = ast.parse(TRADER.read_text())
+        except Exception as e:
+            _last_err["series"] = f"parse: {str(e)[:80]}"
+            return None
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == "SERIES_LIST":
+                    try:
+                        return list(ast.literal_eval(node.value))
+                    except (ValueError, TypeError) as e:
+                        _last_err["series"] = f"literal_eval: {str(e)[:80]}"
+                        return None
+        _last_err["series"] = "SERIES_LIST not found"
+        return None
+    return cached("series", 300, _f)
+
 
 def live_blackout_hours():
     """Read BLACKOUT_HOURS out of the trader by AST — never imports it.
