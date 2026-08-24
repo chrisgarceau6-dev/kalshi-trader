@@ -1,20 +1,22 @@
 name: Late-Certainty Trader
 
 # ┌────────────────────────────────────────────────────────────────────┐
-# │  v5.16 — both sides trade; multi-scan polling.                    │
-# │                                                                     │
-# │  YES or NO 90-93c, 150-600s, prior two 1m asks >=75c.              │
-# │  Flat $75 principal-risk budget; max concurrent exposure = 2.       │
-# │                                                                     │
-# │  Live: BTC/ETH/SOL/DOGE/BNB/XRP 15m plus KXWTI15M.                 │
+# │  v5.17 — both sides trade; multi-scan polling.                     │
+# │                                                                    │
+# │  YES 88-93c, NO 90-93c, 150-600s, prior two 1m asks >=75c.         │
+# │  Flat $25 principal-risk budget; max concurrent exposure = 2.       │
+# │                                                                    │
+# │  Live: BTC/ETH/SOL/DOGE/BNB/XRP 15m. WTI is SHADOW-ONLY.           │
 # │  Exact fixed-point prices; size from worst-case limit price.        │
 # │  GTC orders have server expiry and are reconciled to terminal state.│
 # │  Position/order API ambiguity halts entries instead of failing open.│
 # │  Unit safety checks must pass before every trading cycle.           │
-# │                                                                     │
+# │                                                                    │
 # │  Strategy evidence is tracked separately from operational safety.   │
 # │  Kill switches remain active.                                       │
-# │                                                                     │
+# │                                                                    │
+# │  This banner said v5.16 / 90-93c / $75 / WTI-live until 2026-08-24. │
+# │  It is not read by anything — check the constants, not this box.    │
 # └────────────────────────────────────────────────────────────────────┘
 
 on:

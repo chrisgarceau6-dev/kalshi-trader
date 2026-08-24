@@ -61,6 +61,49 @@ figure with the harness, treat it as unverified no matter who wrote it down.
 
 ---
 
+# 1b. Audit findings that supersede this file (2026-08-24)
+
+Two agents audited this repo in parallel. Where anything below §1b disagrees with
+this section, **this section wins**. Full working in `docs/audit/claude/` and
+`docs/audit/codex/`; `python3 scripts/verify.py` re-derives every number and names any
+two sources that disagree.
+
+**"Lifetime P&L" is not a quotable number.** No source on this machine can produce
+one: `/portfolio/settlements` retains ~30 days, state caps at `MAX_POSITIONS_STATE=500`
+positions, and `stats` resets on every `STRATEGY_VERSION` bump — it currently reads
+**1 trade**. The **-$487** figure that circulated matches none of the three defensible
+scopes. Always quote a scope and a window:
+
+| scope | n | P&L |
+|---|---|---|
+| live series (6) | 1,946 | **-$320.91** |
+| + retired 15M — what the dashboard counts | 2,253 | **-$565.96** |
+| + non-15M (`KXMLBTOTAL` alone is **-$863.75 on 4 trades**) | 2,258 | **-$1,445.00** |
+
+**The archive is rounded before 2026-08-22, and it matters more than recorded.** The
+figures on file (18.4% of identities, 4.1% of rows) measure ROWS. Measured on the
+trades the simulator actually *picks*, by running the two exact-cent days both ways:
+**128 of 317 selections disagree (40.4%)**, volume **+13.5%**, $/trade **+0.023**, WR
+**+0.28pp** — always optimistic. 72 of 74 archived days carry it, and days before
+~2026-06-18 can no longer be re-archived. It compounds with the fill-quality error in
+§4 rather than cancelling. `scripts/verify.py --check rounding`.
+
+**v5.17 shipped inert and was fixed on 2026-08-24.** The 88-89c YES band could never
+place an order: the last look compared the book against `MIN_ASK_CENTS` instead of
+`_band_min(side)`, and three further sites mislabelled any such fill. Both auditors
+found it independently. The four `BandAsymmetryTests` that were cited as pinning it
+only ever exercised the helpers, which were correct — nothing drove the entry path.
+`BandReachabilityTests` now does. **The pre-registration clock starts 2026-08-24**, on
+its original terms (200 88-89c YES trades, revert below 88.5%, no early reads),
+because zero such trades had ever been placed.
+
+**Still open, deliberately not acted on:** `STOP_BALANCE=650` was set proportionally
+to a $100 stake and never revalidated at $25; Codex finds the $300 daily limit no
+longer establishes as optimal; the edge breaker's 50/0.84, `ORDER_TTL_SECONDS`,
+`ORDER_RECONCILE_SECONDS` and the 500-position cap have no value-specific evidence.
+The p3 signal inverts above 91c (p3<80 measures +0.315 vs +0.105) — the trader
+correctly does not gate there, the CI includes zero, and Invariant 8 applies.
+
 # 2. Invariants — these do not rot
 
 1. **You risk $50 to win ~$4.35.** Break-even is ~92% WR (90.6% at 90¢ → 93.5% at
@@ -119,7 +162,7 @@ figure with the harness, treat it as unverified no matter who wrote it down.
 
 ---
 
-# 3. Current strategy — v5.16 (2026-08-17)
+# 3. Current strategy — v5.17 (2026-08-24)
 
 Buy **either side** at ask [90,93]¢ with 150-600s left, provided the prior 2 same-side
 1-min candles are all ≥75¢. If ask ≤91¢, also requires a 3rd prior candle ≥80¢. Hold
@@ -133,7 +176,7 @@ to settlement.
 | `PRIOR_MIN_CENTS` / `PRIOR_LOOKBACK` | 75 / 2 | `--sweep prior_min 70 75 80 85` |
 | `YES_ONLY` | **False** | `--compare yes_only=1` |
 | `MAX_CONCURRENT_POSITIONS` | 2 | `--sweep max_conc 1 2 3 4 --slip 0.105` |
-| `MIN_BOOK_DEPTH` | 60 | not in harness (needs live book) |
+| book depth | **39** = `max(ceil(contracts x 1.5), 25)` at $25 | dynamic since #166; the legacy `MIN_BOOK_DEPTH=60` is no longer a gate. Not in harness (needs live book) |
 | `CRASH_FILL_TOLERANCE` | 3 | fills this far under the band are logged, not emailed |
 | `SURVIVOR_*` | shadow | logs 92-93¢→94-96¢ survivors; trades nothing |
 | `STOP_BALANCE` | 650 | — |
@@ -172,13 +215,23 @@ about five coin flips of luck, worth roughly the entire $210 P&L gap. Over the f
 include zero and the sign flips. `--compare yes_only=1` reproduces it; the Aug 13-17
 holdout independently confirms YES-only is worse (delta -$1,037, CI excludes zero).
 
-**Execution gap = +0.105¢ (measured 2026-08-17).** Actual contract-weighted fill
-91.968¢ vs backtest-predicted entry 91.863¢, over 1,486 fills / 19,245 contracts.
-Fills are essentially at the quote. **Method matters:** compare *distributions*, not
-each fill against a candle — per-fill comparison yields +0.85¢ that is pure artifact,
-because the 1-min reference is stale 47% of the time and produces textbook regression
-to the mean. Re-measure after NO accumulates settlements; we have **no NO-side fill
-data at all**, and thin NO books are the main live risk of v5.16.
+**Execution gap = +0.227¢ (re-measured 2026-08-24, n=500, both sides).** Live fills
+land **0.227¢ ABOVE the book's best offer** at the last look, SE 0.018 — YES +0.253¢
+(n=269), NO +0.196¢ (n=231), difference t=1.55 so **the two sides are
+indistinguishable**. Median +0.097¢; only 5.8% of fills are worse than the book by
+more than a cent, so this is a shifted centre, not a fat tail.
+
+~~+0.105¢ (measured 2026-08-17)~~ was **YES-only and measured against a 1-min candle**,
+which is stale 47% of the time. The correct comparison is against `book_at_entry`, the
+book read ~128ms before the order, over distributions. At **t=+6.6** the old constant
+is not stale-but-close; it is wrong by more than double, and every `--slip 0.105`
+figure ever written in this file is optimistic by ~10% of the stated edge. Re-run them
+at `--slip 0.227`. I re-ran every config sweep at both levels and **no ranking
+inverts**, so this corrects magnitudes and not decisions.
+
+This also closes the "we have **no NO-side fill data at all**" open question that was
+the main stated risk of v5.16: NO fills as well as YES. `python3 scripts/verify.py
+--check slippage` re-derives it; `docs/audit/claude/CLAIMS.md` §1 has the working.
 
 **`MAX_CONCURRENT_POSITIONS = 2`.** Caps a settlement cluster at $150 **regardless of
 side** — worst observed cluster is -$150 with or without NO. 3-4 backtest better at
