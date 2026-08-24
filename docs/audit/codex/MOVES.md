@@ -36,7 +36,7 @@ rg -n 'backtest_(ablation|acceleration|ask_floor|blackout_hours|breakout|btcd|cr
   .github/workflows render.yaml || true
 
 # Producer/output edges that must travel together.
-rg -n 'backtest_.*\.csv|kalshi_.*\.csv|features_cache|spot_.*\.json' \
+rg -n 'backtest_.*\.csv|kalshi_.*\.csv|xvenue_.*\.csv|features_cache|spot_.*\.json' \
   --glob '*.py' --glob '*.sh' .
 
 # Exact weather-script duplicate groups. A deletion is permitted only when the
@@ -75,7 +75,7 @@ All destinations are under `archive/` and preserve source material. Approval sho
 | M09 | `research/loss_cooldown/` | `archive/research/refuted/loss_cooldown/` | Cooldown and post-loss size-up are in the graveyard. Current emergency-brake evidence is independently retained in `docs/audit/claude/replay_loss_limit.py`. | R2 | PENDING |
 | M10 | `research/projection/` | `archive/research/legacy/projection/` | No current workflow, current experiment, or current documented command names these capacity/forward scripts. | R2 | PENDING |
 | M11 | `kalshi_weather_edge.py`, `backtest_trades.csv`, `kalshi_calib.csv`, `kalshi_calibration.csv`, `stale_bands.csv`, the unique Finance weather versions retained after X01–X03, and `~/Downloads/Finance/kalshi_optimizer.xlsx` | `archive/research/weather/` with `external-finance/` for former Downloads files | Weather is closed/not pursued. The root file is the oldest tracked implementation; the newer unique Finance versions are otherwise detached from git. Moving the whole provenance chain preserves rather than deletes the evidence. | R2 | PENDING |
-| M12 | `kalshi_promo_hedge.py`, `scripts/xlist_arb.py`, `band_arb_live.csv`, `band_arb_sets.csv`, `liquidity_reward_candidates.csv`, `rewards_universe.csv` | `archive/research/market-structure/` | Promo hedging is unrelated to the running strategy; cross-listing arb and reward farming are not currently pursued. No live or monitoring entrypoint imports these files. Update the graveyard rescan command if approved. | R2 | PENDING |
+| M12 | `kalshi_promo_hedge.py`, `scripts/xlist_arb.py`, `band_arb_live.csv`, `band_arb_sets.csv`, `liquidity_reward_candidates.csv`, `rewards_universe.csv`, `xvenue_candidates.csv`, `xvenue_side_by_side.csv` | `archive/research/market-structure/` | Promo hedging is unrelated to the running strategy; cross-listing arb and reward farming are not currently pursued. The two xvenue files are Kalshi/Polymarket cross-venue evidence produced by this thread and move with their producer. No live or monitoring entrypoint imports these files. Update the graveyard rescan command if approved. | R2 | PENDING |
 | M13 | `chatgpt_review_prompt.txt` | `archive/reviews/2026-08-legacy-second-opinion.txt` | Point-in-time review prompt describing retired WTI/multistrike settings; no program reads it. | R1 | PENDING |
 
 ### Explicit retain decisions

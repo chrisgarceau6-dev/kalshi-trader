@@ -2,7 +2,7 @@
 
 Generated 2026-08-24 and closed against current `main` after the independence hold. Polymarket and Momentum Core are excluded by charter. `.git/`, `venv/`, bytecode/test caches, `hunt_logs/`, and the nested Ruflo cache under `research/perp_overlay/` are generated dependency/control data rather than project source or evidence and are excluded. Audit work papers created under `docs/audit/claude/` and `docs/audit/codex/` after the starting census are also excluded from the audited subject to avoid a self-referential denominator; `docs/audit/CHARTER.md` remains an inventoried contract. `scripts/verify.py`, which moved from audit deliverable to current operational measurement, is included.
 
-**Corrected census.** The Session 1 projection silently omitted `_tmp_*.csv`. The glob is now an explicit grouped row. Its producers, `strategy_dissect.py` and `backtest_us_portfolio.py`, identify it as Polymarket wallet-screen output, so the row is charter-excluded rather than counted as Kalshi evidence. The table also adds the previously omitted tracked Ruflo `current.json` and current `scripts/verify.py`. `COMPLETENESS.md` supplies the generated zero-`unaudited` gate and reconciles the grouped row to the underlying files.
+**Corrected census.** The Session 1 projection silently omitted `_tmp_*.csv`; the glob is now an explicit grouped row and its producers identify it as excluded Polymarket wallet-screen output. A tracked-file reconciliation then found further omissions. The table now also carries grouped rows for every tracked Polymarket file and for post-census audit work papers, adds the previously omitted Ruflo `current.json` and current `scripts/verify.py`, and gives the two Kalshi cross-venue outputs individual evidence rows. `COMPLETENESS.md` contains the exact exclusion manifest and a `comm` gate that starts from `git ls-files`, so a curated table can no longer conceal a tracked omission.
 
 ## Reproduction
 
@@ -210,6 +210,7 @@ rg -n 'python |^(from|import) |STATE_FILE|certainty_state.json'   .github/workfl
 | `data/gatelog/2026-08-24.csv` | 583 | 2026-08-24T00:28:51-04:00 | 5c229a21 2026-08-24 data: gate-log cache through 2026-08-23 | no | E | audited-retain-artifact |
 | `data/gatelog/_runs.json` | 3510 | 2026-08-24T00:28:51-04:00 | 5c229a21 2026-08-24 data: gate-log cache through 2026-08-23 | no | E | audited-retain-artifact |
 | `docs/audit/CHARTER.md` | 8271 | 2026-08-24T13:45:36-04:00 | ee5cadd4 2026-08-24 docs: audit autonomy, depth calibration, and the rounding finding | no | E | audited-retain-artifact |
+| `docs/audit/{claude,codex}/** (grouped audit work papers)` | DYNAMIC | current audit | post-census audit commits | no | E | excluded-audit-work-product |
 | `docs/websocket_spec.md` | 46226 | 2026-08-22T15:46:07-04:00 | 5f1b4f82 2026-08-22 docs: correct the record — the WS delta path is validated, my test was broken (#169) | no | E | audited-retain-artifact |
 | `expand_candles.log` | 2013 | 2026-08-01T14:21:59-04:00 | UNTRACKED | no | E | audited-move M04 |
 | `heartbeat.sh` | 913 | 2026-08-06T18:20:03-04:00 | UNTRACKED | no | D | audited-move M05 |
@@ -277,6 +278,7 @@ rg -n 'python |^(from|import) |STATE_FILE|certainty_state.json'   .github/workfl
 | `research/top5/critique_check.py` | 7272 | 2026-08-21T00:37:03-04:00 | a261d77e 2026-08-21 docs: add §10 running state, record the night's findings, keep this file current (#144) | no | B | audited-retain-producer |
 | `research/top5/probe.py` | 7147 | 2026-08-21T00:37:03-04:00 | a261d77e 2026-08-21 docs: add §10 running state, record the night's findings, keep this file current (#144) | no | B | audited-retain-producer |
 | `research/top5/sizing_validate.py` | 5417 | 2026-08-21T00:37:03-04:00 | a261d77e 2026-08-21 docs: add §10 running state, record the night's findings, keep this file current (#144) | no | B | audited-retain-producer |
+| `tracked Polymarket files (grouped charter exclusion)` | 8580477 | 2026-07-20T17:43:36-04:00 through 2026-08-02T17:21:03-04:00 | tracked; exact paths in `COMPLETENESS.md` | no | E | excluded-polymarket-tracked |
 | `rewards_universe.csv` | 71961 | 2026-07-24T01:13:27-04:00 | 6a5447ee 2026-07-31 Complete end-to-end audit: 6 fixes to late-certainty + hard halt on old strat | no | E | audited-move M12 |
 | `scripts/archive_candles.py` | 11016 | 2026-08-24T00:27:56-04:00 | a7bf1b36 2026-08-22 archive: store exact cents — rounding was manufacturing false candidates (#163) | no | B | audited-retain-producer |
 | `scripts/backtest.py` | 12671 | 2026-08-22T14:41:42-04:00 | a7bf1b36 2026-08-22 archive: store exact cents — rounding was manufacturing false candidates (#163) | no | B | audited-retain-producer |
@@ -295,6 +297,8 @@ rg -n 'python |^(from|import) |STATE_FILE|certainty_state.json'   .github/workfl
 | `stale_bands.csv` | 14995 | 2026-07-23T13:25:31-04:00 | 6a5447ee 2026-07-31 Complete end-to-end audit: 6 fixes to late-certainty + hard halt on old strat | no | E | audited-move M11 |
 | `test_order_safety.py` | 37715 | 2026-08-24T12:22:34-04:00 | 584d0a85 2026-08-24 v5.17: extend the entry band to 88-89c on the YES side only (#183) | yes | A | audited-retain-live |
 | `trade_history.py` | 6876 | 2026-08-21T11:32:29-04:00 | UNTRACKED | no | B | audited-move M04 |
+| `xvenue_candidates.csv` | 8870251 | 2026-07-23T13:13:27-04:00 | 6a5447ee 2026-07-31 Complete end-to-end audit: 6 fixes to late-certainty + hard halt on old strat | no | E | audited-move M12 |
+| `xvenue_side_by_side.csv` | 8390 | 2026-07-23T13:18:49-04:00 | 6a5447ee 2026-07-31 Complete end-to-end audit: 6 fixes to late-certainty + hard halt on old strat | no | E | audited-move M12 |
 | `/Users/chrisgarceau/Downloads/Finance/Kalshi (1).txt` | 1675 | 2026-07-26T16:03:13-04:00 | N/A (outside Git) | no | E | audited-sensitive-retain |
 | `/Users/chrisgarceau/Downloads/Finance/Kalshi Printer.txt` | 1679 | 2026-07-26T00:40:53-04:00 | N/A (outside Git) | no | E | audited-sensitive-retain |
 | `/Users/chrisgarceau/Downloads/Finance/kalshi (2).txt` | 1675 | 2026-07-26T16:03:24-04:00 | N/A (outside Git) | no | E | audited-sensitive-retain |
