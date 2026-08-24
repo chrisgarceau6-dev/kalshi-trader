@@ -307,14 +307,24 @@ def c_margin(ctx):
 
 @check("win")
 def c_win(ctx):
-    """kstat calls a win `pnl > 0`; everyone else uses `market_result == side`."""
-    bad = [r for r in ctx["set_live"] if (r["pnl"] > 0) != r["won"]]
-    if bad:
-        return "WARN", (f"{len(bad)}/{len(ctx['set_live'])} rows where kstat's "
-                        f"win (pnl>0) differs from market_result==side, e.g. "
-                        f"{bad[0]['ticker']} pnl=${bad[0]['pnl']:+.2f} won={bad[0]['won']}")
-    return "OK", (f"kstat's `pnl>0` and `market_result==side` agree on all "
-                  f"{len(ctx['set_live'])} rows (latent: needs a fill >= 100-fee/ct)")
+    """A win is the settlement outcome, not the sign of P&L.
+
+    kstat used `pnl > 0`, which scores a win netting exactly $0.00 after fees as a
+    loss. Rare but not theoretical — one such row exists. Tests the CODE, because the
+    data condition is permanent and a check that can only report it is decoration.
+    """
+    rows = [r for r in ctx["set_live"] if (r["pnl"] > 0) != r["won"]]
+    src = (BASE / "scripts/kstat.py").read_text()
+    fixed = 'p.get("result") == p.get("side")' in src
+    if not fixed:
+        return "FAIL", (f"scripts/kstat.py still infers a win from `pnl > 0`; "
+                        f"{len(rows)} settlement(s) in the API window disagree with "
+                        f"market_result, e.g. "
+                        + (rows[0]["ticker"] if rows else "none right now")
+                        + ". Read the outcome, do not infer it from P&L.")
+    return "OK", (f"kstat reads the settlement outcome, not the sign of P&L "
+                  f"({len(rows)} row(s) in the window where the two differ — the case "
+                  f"this protects against)")
 
 
 @check("bet")
@@ -504,26 +514,35 @@ def c_series(ctx):
 
 @check("daykey")
 def c_daykey(ctx):
-    """reconcile and the archive key on the UTC close day; kstat and the dashboard
-    key on the ET day. Every close after 20:00 ET lands on a different date."""
+    """One definition of "what day did this trade happen".
+
+    reconcile.py, the candle archive and (since 2026-08-24) kstat.py all key on the
+    UTC day of CLOSE. The dashboard still buckets by settled_time in BROWSER-LOCAL
+    time, so its "today" can differ from every other tool for any close after 20:00 ET.
+    """
     rows = [r for r in ctx["set_live"] if r["day"] and r["etday"]]
-    dis = [r for r in rows if r["day"] != r["etday"]]
     if not rows:
         return "SKIP", "no rows"
+    dis = [r for r in rows if r["day"] != r["etday"]]
     worst, wd = None, 0.0
     for d in sorted({r["day"] for r in rows}):
         a = sum(r["pnl"] for r in rows if r["etday"] == d)
         b = sum(r["pnl"] for r in rows if r["day"] == d)
         if abs(a - b) > wd:
             worst, wd = (d, a, b), abs(a - b)
-    if dis:
-        d, a, b = worst
-        return "WARN", (f"{len(dis)}/{len(rows)} trades ({100 * len(dis) / len(rows):.1f}%) "
-                        f"fall on a different date under the ET key (kstat, dashboard) "
-                        f"than the UTC key (reconcile, archive). Worst: {d} reads "
-                        f"${a:+.2f} by ET day vs ${b:+.2f} by UTC day — "
-                        f"differ by ${a - b:+.2f}")
-    return "OK", "ET and UTC close-day keys agree on every trade"
+    kstat_fixed = "def close_day(ticker)" in (BASE / "scripts/kstat.py").read_text()
+    if not kstat_fixed:
+        return "FAIL", ("scripts/kstat.py does not key on the UTC close day; it "
+                        "disagrees with reconcile.py and the archive on "
+                        f"{len(dis)}/{len(rows)} trades")
+    if not dis:
+        return "OK", "ET and UTC close-day keys agree on every trade"
+    d, a, b = worst
+    return "WARN", (f"kstat, reconcile and the archive now agree (UTC close day). "
+                    f"kalshi_dashboard.py still buckets by settled_time in "
+                    f"browser-local time, which differs on {len(dis)}/{len(rows)} "
+                    f"trades ({100 * len(dis) / len(rows):.1f}%) — worst {d}: "
+                    f"${a:+.2f} by ET day vs ${b:+.2f} by UTC day, a ${a - b:+.2f} gap")
 
 
 @check("harness", needs=("archive",))
