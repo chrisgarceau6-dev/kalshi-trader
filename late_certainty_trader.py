@@ -217,26 +217,6 @@ GATELOG_SECS  = (150, 900) # union of every secs band
 # job falling, which is the signal to look at API pressure rather than raise it again.
 GATELOG_MAX_FETCHES = 180
 
-# ── CANDLE-ALIGNED SCAN PHASE (2026-08-22) ──────────────────────────────────
-# The entry criteria are defined on 1-min candle CLOSES — every secs_left in
-# data/candles is a multiple of 60. The daemon used to free-run at --interval, so
-# only ~1 look in 4 landed where the signal is actually defined, and the other three
-# sampled the live book mid-candle where a fleeting quote can sit in [90,93]c without
-# being a sustained signal.
-#
-# Measured over Aug 18-21: trades the model also wanted filled within 10s of a candle
-# boundary 43.8% of the time; trades the model rejected did so only 20.9% of the time.
-# Same defect on both sides — a phase error, not a coverage error (duty cycle is
-# already 94.4%, median blind gap 13s).
-#
-# This changes only the PHASE of the scan grid, never its frequency: the same number
-# of scans per job, repositioned so one lands just after each minute boundary.
-#
-# +1s, not -1s or 0: at T+1 the live ask still reflects candle T's close, and
-# _prior_k_candle_asks (end_ts = now-20 = T-19) then returns candles T-1, T-2, T-3 —
-# exactly the priors the model evaluates for an entry on candle T. Reading before the
-# boundary would match the ask but shift the priors by one.
-SCAN_PHASE_OFFSET = 1
 
 # A daemon that fails every cycle must not exit 0. Thresholds are deliberately loose:
 # the job runs ~61 scans, so isolated API blips are expected and cheap, and only a
@@ -1042,13 +1022,12 @@ def shadow_gate_inputs(market, series):
         # lives ~450s, which is 8 candle closes, so keying on the minute captures every
         # decision point the model evaluates.
         #
-        # Restricted to candle-aligned scans. The criteria are defined at candle
-        # CLOSES, so a mid-candle row is not a decision point the model would ever
-        # take, and logging all four scans per minute would burn the fetch budget on
-        # rows that cannot be scored.
+        # #164 restricted this to candle-aligned scans, which only worked while the
+        # daemon was phase-locked by #152. #152 was reverted on 2026-08-24 (it failed
+        # its own pre-registered test), so that filter would now drop nearly every row
+        # and silently kill the gate log — the instrument the depth work depends on.
+        # The per-minute dedupe below already delivers #164's one-row-per-candle.
         minute = int(time.time()) // 60
-        if (int(time.time()) % 60) > SCAN_PHASE_OFFSET + 2:
-            continue                        # mid-candle scan; not a model decision point
         if (ticker, side, minute) in _GATELOG_SEEN:
             continue
         if len(_GATELOG_SEEN) >= GATELOG_MAX_FETCHES:
@@ -1967,25 +1946,6 @@ def run_once(dry_run=False):
     log(f"=== done ===")
 
 
-def next_scan_time(interval, now=None):
-    """Next instant on the candle-aligned scan grid.
-
-    Grid is anchored to the minute so that SCAN_PHASE_OFFSET seconds after every
-    candle close is always a scan slot. Requires interval to divide 60; anything else
-    would drift off the boundary within a few minutes, so it falls back to a plain
-    fixed delay rather than silently sampling the wrong phase.
-    """
-    now = time.time() if now is None else now
-    if interval <= 0 or 60 % interval:
-        return now + interval
-    minute = math.floor(now / 60) * 60
-    for k in range(0, 60, interval):
-        t = minute + k + SCAN_PHASE_OFFSET
-        if t > now:
-            return t
-    return minute + 60 + SCAN_PHASE_OFFSET
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--once",    action="store_true")
@@ -2022,7 +1982,7 @@ def main():
         # consecutive failures and a high overall failure share are treated as systemic,
         # because a daemon that fails every other cycle never trips a consecutive
         # counter but is just as broken.
-        cycles = aligned = failures = consec_fail = 0
+        cycles = failures = consec_fail = 0
         worst_consec = 0
         while True:
             try:
@@ -2043,11 +2003,10 @@ def main():
                     raise
             # Stop before sleeping past the deadline so the job ends predictably
             # and the next dispatch is not delayed.
-            nxt = next_scan_time(a.interval)
-            if deadline and nxt >= deadline:
+            if deadline and time.time() + a.interval >= deadline:
                 attempts = cycles + failures
                 log(f"=== DAEMON done — {cycles} scans in {a.duration}s "
-                    f"({aligned} candle-aligned, {failures} failed, "
+                    f"({failures} failed, "
                     f"worst streak {worst_consec}) ===")
                 if attempts and failures / attempts > DAEMON_MAX_FAILURE_SHARE:
                     raise RuntimeError(
@@ -2056,9 +2015,7 @@ def main():
                         f"{DAEMON_MAX_FAILURE_SHARE:.0%} threshold; failing the job "
                         f"rather than reporting a broken run as green")
                 break
-            if int(nxt) % 60 == SCAN_PHASE_OFFSET:
-                aligned += 1
-            time.sleep(max(0.0, nxt - time.time()))
+            time.sleep(a.interval)
         return
     try:
         run_once(dry_run=a.dry_run)
