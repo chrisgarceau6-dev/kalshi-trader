@@ -41,6 +41,44 @@ recurring.
 6. **Anything you cannot classify gets `UNKNOWN` and is surfaced.** Never silently
    bin something.
 
+## Autonomy
+
+**You have full autonomy over METHOD.** The deliverables below describe intent, not
+a script to follow. If you find a better way to reach the goal — a different tool, a
+different decomposition, a different order, an artifact nobody asked for that turns
+out to matter — do it. Do not stop to ask permission for read-only analysis, and do
+not follow an instruction you can see is wrong; say so and do the right thing
+instead.
+
+The HARD RULES are not method. They are constraints, and they hold absolutely:
+read-only on the trading path, flag-don't-fix on live bugs, stay in your own
+directory, don't read the other agent's work before the diff. Everything else is
+yours to judge.
+
+## What "audit it" means here — calibrate to this depth
+
+Both agents must dig to the same depth or the cross-check is meaningless. The rule
+is: **identify everything that exists, then everything within that, recursively,
+until there is nothing deeper — then check every node.** Not "does a justification
+exist" but "does the justification survive being taken apart."
+
+Worked example, run 2026-08-24, which found a real defect at level 8:
+
+```
+L1  "the entry criteria"
+L2    -> the prior gate is one of its parts
+L3      -> PRIOR_MIN_CENTS = 75 is a part of that
+L4        -> why 75? comment cites "filter audit Aug 10, same WR +38% volume"
+L5          -> is that audit sound? what data did it run on?
+L6            -> the candle archive
+L7              -> is the archive correct?
+L8                -> NO. Every day before 2026-08-22 stores ROUNDED integer cents.
+```
+
+Most reviews stop at L4 — a comment exists, therefore justified. The thing that is
+actually wrong is at L8. **Stop only when you reach something externally verifiable
+(an API response, a settlement record) or something that turns out to be wrong.**
+
 ## Scope
 
 IN: all of `~/pm`; Kalshi-related files anywhere else on the machine (notably
