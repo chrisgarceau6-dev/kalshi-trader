@@ -13,6 +13,9 @@ certainty_state.json is always empty — the trader persists through
 actions/cache and never writes to the working tree.
 """
 import argparse, datetime as D, json, os, shutil, subprocess, sys, tempfile
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")   # rule 12: report ET, never make Chris convert
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -111,20 +114,29 @@ def main():
         S = [p for p in P if p.get("settled")]
         SI = [(t, p) for t, p in st["positions"].items() if p.get("settled")]
         openp = [p for p in P if not p.get("settled")]
-        # Bucket by the UTC day of CLOSE, which is how scripts/reconcile.py and the
-        # candle archive key a trade. This used opened_at at a hardcoded UTC-4: that is
-        # EDT (silently wrong from 2026-11-01), and it disagreed with the archive on
-        # 20.7% of trades — 2026-08-19 read +$60.29 by one key and -$161.68 by the
-        # other. docs/audit/claude/METRICS.md §6.
-        today = D.datetime.now(D.timezone.utc).date()
+        # Bucket by the ET day of CLOSE.
+        #
+        # ET because this is a Chris-facing tool and CLAUDE.md rule 12 is explicit:
+        # report ET, never make him convert UTC. The archive and scripts/backtest.py
+        # key on the UTC day because that is how the files are named — that split is
+        # deliberate, not a defect, and scripts/verify.py --check daykey prices what
+        # it is worth (20.5% of trades land on a different date).
+        #
+        # By CLOSE, not opened_at, because close is when the P&L is realised. Entries
+        # sit 150-600s before close, so the two almost always agree anyway.
+        #
+        # ZoneInfo, not a hardcoded -4: that offset is EDT and would have gone
+        # silently wrong on 2026-11-01, reporting the wrong day for an hour every day
+        # thereafter.
+        today = D.datetime.now(ET).date()
 
         def close_day(ticker):
-            """KXBTC15M-26AUG211115-T1 -> date(2026,8,21). Ticker time is ET, so +4h."""
+            """KXBTC15M-26AUG211115-T1 -> date(2026,8,21). The ticker time is ET."""
             try:
                 naive = D.datetime.strptime(ticker.split("-")[1].upper(), "%y%b%d%H%M")
             except (IndexError, ValueError):
                 return None
-            return (naive + D.timedelta(hours=4)).date()
+            return naive.date()
 
         def rows_for(pred):
             # A win is the settlement outcome, not the sign of P&L: a win that nets

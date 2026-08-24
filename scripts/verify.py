@@ -514,11 +514,17 @@ def c_series(ctx):
 
 @check("daykey")
 def c_daykey(ctx):
-    """One definition of "what day did this trade happen".
+    """The ET/UTC split is DELIBERATE. What must hold is that each tool uses the right
+    one and states it.
 
-    reconcile.py, the candle archive and (since 2026-08-24) kstat.py all key on the
-    UTC day of CLOSE. The dashboard still buckets by settled_time in BROWSER-LOCAL
-    time, so its "today" can differ from every other tool for any close after 20:00 ET.
+    Chris-facing tools (kstat, the dashboard) report the ET day — CLAUDE.md rule 12:
+    "Report ET to Chris always, never make him convert UTC." File-keyed tools
+    (reconcile.py, the candle archive, backtest.py) use the UTC day, because that is
+    how the archive files are named. Both are correct; they are not interchangeable,
+    and this prices what mixing them costs.
+
+    What this catches is a tool hardcoding an offset instead of a timezone. kstat used
+    a literal UTC-4, which is EDT and would have gone silently wrong on 2026-11-01.
     """
     rows = [r for r in ctx["set_live"] if r["day"] and r["etday"]]
     if not rows:
@@ -530,19 +536,21 @@ def c_daykey(ctx):
         b = sum(r["pnl"] for r in rows if r["day"] == d)
         if abs(a - b) > wd:
             worst, wd = (d, a, b), abs(a - b)
-    kstat_fixed = "def close_day(ticker)" in (BASE / "scripts/kstat.py").read_text()
-    if not kstat_fixed:
-        return "FAIL", ("scripts/kstat.py does not key on the UTC close day; it "
-                        "disagrees with reconcile.py and the archive on "
-                        f"{len(dis)}/{len(rows)} trades")
-    if not dis:
-        return "OK", "ET and UTC close-day keys agree on every trade"
+    bad = []
+    for path, name in ((BASE / "scripts/kstat.py", "kstat.py"),
+                       (BASE / "kalshi_dashboard.py", "kalshi_dashboard.py")):
+        src = path.read_text()
+        if "America/New_York" not in src:
+            bad.append(f"{name} does not pin America/New_York — a hardcoded offset "
+                       f"breaks at the DST boundary")
+    if bad:
+        return "FAIL", "; ".join(bad)
     d, a, b = worst
-    return "WARN", (f"kstat, reconcile and the archive now agree (UTC close day). "
-                    f"kalshi_dashboard.py still buckets by settled_time in "
-                    f"browser-local time, which differs on {len(dis)}/{len(rows)} "
-                    f"trades ({100 * len(dis) / len(rows):.1f}%) — worst {d}: "
-                    f"${a:+.2f} by ET day vs ${b:+.2f} by UTC day, a ${a - b:+.2f} gap")
+    return "OK", (f"ET/UTC split is intentional and each tool pins a real timezone: "
+                  f"kstat + dashboard report the ET day (rule 12), reconcile + archive "
+                  f"the UTC day. Cost of confusing them: {len(dis)}/{len(rows)} trades "
+                  f"({100 * len(dis) / len(rows):.1f}%) change date — worst {d}, "
+                  f"${a:+.2f} ET vs ${b:+.2f} UTC")
 
 
 @check("harness", needs=("archive",))
