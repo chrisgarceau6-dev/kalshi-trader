@@ -1070,9 +1070,16 @@ def shadow_gate_inputs(market, series):
         best_offer, depth = _book_last_look(ticker, side)
         d = "None" if depth is None else f"{depth:.0f}"
         bo = "None" if best_offer is None else f"{best_offer}"
+        # Log the depth the LIVE gate requires, not the legacy constant. This wrote
+        # MIN_BOOK_DEPTH (60) while try_trade needs min_book_depth() (39 at a $25 bet),
+        # so any replay reconstructing "would depth have blocked this?" from the logged
+        # field over-counted blocks. That is the field the 2026-08-23 depth conclusion
+        # was argued from, and it is a threshold the trader stopped using when the bet
+        # was cut.
         log(f"  [SHADOW:GATE] {ticker} {side.upper()} ask={ask}c "
             f"secs={secs_left:.0f} p1={int(priors[0])} p2={int(priors[1])} "
-            f"p3={int(priors[2])} depth={d} best={bo} min_depth={MIN_BOOK_DEPTH} "
+            f"p3={int(priors[2])} depth={d} best={bo} "
+            f"min_depth={min_book_depth(limit_cents=MAX_ASK_CENTS)} "
             f"series={series}")
 
 
