@@ -46,6 +46,21 @@ UNIVERSE = HERE / "universe.json"
 FIELDS = ["series", "ticker", "close_ts", "ts", "secs_left", "side",
           "bid", "ask", "volume", "open_interest", "won", "strike"]
 
+# How far back to pull, and at what resolution, BY SETTLEMENT FREQUENCY.
+#
+# A fixed 2-hour window is right for a 15-minute market and useless for a daily one:
+# by T-2h a daily weather market's temperature is effectively known, so 100% of its
+# quotes sit at 1-9c or 97-99c and the entire 90-93c transit — the part any entry
+# strategy would live in — happens hours earlier and outside the window. Measured on
+# KXHIGHLAX: 11,438 rows, every single one at an extreme.
+WINDOW = {                      # frequency -> (lookback seconds, period_interval min)
+    "fifteen_min": (1800,   1),
+    "hourly":      (7200,   1),
+    "daily":       (86400,  1),     # ~1,000 one-minute candles, confirmed available
+    "weekly":      (604800, 60),    # hourly resolution over 7 days
+}
+DEFAULT_WINDOW = (7200, 1)
+
 
 def _dotenv():
     f = BASE / ".env"
@@ -88,15 +103,16 @@ def settled_markets(api, series, max_pages=40):
     return out
 
 
-def market_rows(api, series, m, lookback):
-    """Full 1-minute price path for one market, both sides, no band filter."""
+def market_rows(api, series, m, window):
+    """Full price path for one market, both sides, no band filter."""
+    lookback, interval = window
     cts = close_ts(m)
     result = m.get("result")
     if cts is None or result not in ("yes", "no"):
         return []
     code, r = api.get(f"/series/{series}/markets/{m['ticker']}/candlesticks",
                       {"start_ts": cts - lookback, "end_ts": cts,
-                       "period_interval": 1})
+                       "period_interval": interval})
     if code != 200:
         return []
     strike = m.get("floor_strike")
@@ -124,12 +140,12 @@ def market_rows(api, series, m, lookback):
     return rows
 
 
-def pull_series(api, series, lookback, max_markets):
+def pull_series(api, series, window, max_markets):
     mk = settled_markets(api, series)
     mk = [m for m in mk if m.get("result") in ("yes", "no")][:max_markets]
     rows = []
     for i, m in enumerate(mk, 1):
-        rows += market_rows(api, series, m, lookback)
+        rows += market_rows(api, series, m, window)
         if i % 100 == 0:
             print(f"      {i}/{len(mk)} markets, {len(rows):,} rows", flush=True)
         time.sleep(0.03)
@@ -140,8 +156,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", type=int, default=8)
     ap.add_argument("--series", nargs="+")
-    ap.add_argument("--lookback", type=int, default=7200,
-                    help="seconds of price path before close (default 2h)")
+    ap.add_argument("--lookback", type=int, default=0,
+                    help="override the frequency-aware lookback, in seconds")
     ap.add_argument("--max-markets", type=int, default=600,
                     help="cap markets per series so one dense ladder cannot eat the run")
     ap.add_argument("--list", action="store_true")
@@ -175,7 +191,13 @@ def main():
             continue
         print(f"[{n}/{len(targets)}] {s}: pulling...", flush=True)
         try:
-            mk, rows = pull_series(K, s, a.lookback, a.max_markets)
+            freq = {u["ticker"]: u.get("freq") for u in uni}.get(s)
+            win = WINDOW.get(freq, DEFAULT_WINDOW)
+            if a.lookback:
+                win = (a.lookback, win[1])
+            print(f"    freq={freq} lookback={win[0]/3600:.0f}h interval={win[1]}m",
+                  flush=True)
+            mk, rows = pull_series(K, s, win, a.max_markets)
         except Exception as exc:
             print(f"    FAILED {s}: {type(exc).__name__}: {exc}")
             continue
