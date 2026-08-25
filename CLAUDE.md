@@ -951,12 +951,17 @@ legs, 3.4x, for an edge that is smaller by construction. Eleven for eleven was
 arithmetic, not a losing streak. **Compute the fee at the target price before
 building anything.**
 
-**MAKER FILLS ARE FREE.** Verified on real fills: 998 maker contracts at **$0.00**
-against 0.5493c/contract taker. Every strategy that died to fees died paying TAKER
-fees. A resting order pays nothing. This is the single largest unexploited fact found
-in the search and it is why `yes_ask + no_ask = ~102c` matters: a taker pays that ~2c
-spread whichever side they choose, which is why BOTH sides of every market scan
-negative. A maker collects it instead. Untested.
+**MAKER FILLS ARE FREE — and it is not enough. TESTED 2026-08-25, REFUTED.**
+Re-verified at 15x the evidence: **15,159 maker contracts at $0.00** against
+0.5983c/ct taker (n=74,575), `/portfolio/fills` 07-24..08-25. ~~998 contracts at
+0.5493c~~ was the earlier, smaller measurement. The FACT is true and `yes_ask +
+no_ask = ~102c` still explains why both sides of every market scan negative as a
+taker. The STRATEGY is not: resting a bid on the favourite side of a 15M market and
+holding to settlement measures **+0.10c/contract, CI [-0.47, +0.65], P(>0)=0.630**
+across all twelve 15M series, 68 days, 109,278 modelled fills — **8 series positive,
+4 negative**, and dropping KXBNB15M alone takes the pooled figure to **-0.23c**. The
+~2c a maker collects is exactly the size of the adverse selection it buys. Write-up
+and the two doors that could reopen it: `research/search2/results/MAKER.md`.
 
 **The searchable universe is 118 series, and the liquidity is not in crypto.**
 `python3 research/search2/universe.py` — Climate and Weather 78.4M, Commodities
@@ -965,12 +970,25 @@ proving anything is observations inside the ~67-day retention window, which is
 `events/day x strikes/event` — a daily series with 29 strikes beats an hourly one
 with a single strike.
 
+**The 15M half of the step-3 archive is ~8 DAYS DEEP, not 67.** `pull.py` caps at 600
+markets and a 15M series runs 96 markets/day. Every 15M figure in the scan output rests
+on about eight days; the 14.2M observations are carried by the weather ladders, which
+do reach back 67 days. Not a small correction — the maker rule measured **+6.4c on 7
+days and +0.10c on 68**. Check the date span of any 15M pull before believing it.
+`pull_ohlc.py` defaults to 8,000 markets and threads the fetch (6 workers,
+~12 min/series).
+
 **What the scan found: nothing that survived.** 14.2M observations, 60 series, every
 slice ranked by `(won - ask) - fee`. Nine cells cleared a 95% CI in-sample; **zero**
 survived the holdout. A `97-99c / prior>=90` pattern appeared in 10 unrelated markets
 and looked structural — it was not: **22 series positive, 21 negative**, a coin flip.
 That error came from reading a leads list that only PRINTS positives and treating it
 as a sample. **Always check the denominator before calling something replication.**
+**And checking the denominator is not sufficient if you also chose the order the
+numerator arrived in.** The 2026-08-25 maker test read **6 positive / 0 negative of 6
+series**, stable in and out of sample — because the pull was ordered by which series I
+expected to work. At the full twelve it was 8 / 4 and the pooled estimate was zero.
+**Pull in a fixed or random order, and do not read the table until it is full.**
 
 **The scan is only trustworthy WITH path features.** Its first version sliced on
 price/secs/side/spread — all snapshots — and rated the live 90-93c band at **-1.69c**,
@@ -1040,6 +1058,28 @@ acceleration · stuck-market breakout · per-series WR kill switch · early-wind
 (600-800s) · spot-Kalshi dislocation scalp · oracle-lag final 0-150s ·
 KXETH15M exclusion (would have **cost $978** — ETH is the best series; do not re-raise
 on a losing streak).
+
+*Maker / spread collection (2026-08-25):* **refuted — and it is the general answer for
+passive strategies here, not a one-off.** `scan.py` scores `(won - ask) - fee`, i.e. a
+TAKER, so the resting side had never been evaluated at all. `pull_ohlc.py` re-pulled
+with OHLC — candles carry `price.low`, which is what makes a fill modellable, a resting
+bid at B being filled iff someone traded at or below B — and `maker_eval.py` scored it.
+Pooled **+0.10c, CI [-0.47, +0.65]** over 12 series / 68 days / 109,278 fills. Three
+things worth keeping: (1) **adverse selection is exactly the size of the prize** —
+fills split by how far the market traded through the bid, gentle 0-3c fills earn +7 to
++10c and the **45% that are swept 6c+ earn -7c**, blending to zero; this will kill the
+next passive idea too. (2) **Size must never scale with liquidity** — fill size follows
+the minute's volume and the biggest minutes ARE the sweeps, so the same rule measures
+**-5.05c** uncapped and **+4.80c** capped at <=100 contracts: a parameter that inverts
+the sign rather than shrinking the edge. (3) **Population closes weather and the
+commodity dailies for any maker strategy** — 60-89% of weather minutes and 84-90% of
+commodity-daily minutes contain NO trade at all, against 0.0% for the 15M series, so
+there is nothing to be filled by. Also settled here: the mid's favourite-longshot bias
+is real (+1.25c at 55-74c, cluster-bootstrapped) and harvestable by neither side; the
+fee-parabola "widest moat at 50c" mechanism is **falsified** (45-54c is the one dead
+band); and **resting orders do not improve late-certainty** — only 13% of live signals
+can host a `bid+1` order at all, because the 90-93c spread is 1c, and those that can
+net +1.33c against the taker's +1.51c. `research/search2/results/MAKER.md`
 
 *Direction-neutral structures (Aug 15-17, all negative after fees):* complete-set
 accumulator · matched-pair maker · cross-crypto relative value · market-neutral pairs ·
