@@ -83,18 +83,45 @@ def post(path, body):
     return r.status_code, _parse(r)
 
 
-def delete(path):
+def delete(path, params=None):
+    # Sign the bare path, never the query string — same as get(), which has always
+    # passed params separately and authenticates fine.
     hdrs = signed_headers("DELETE", path)
-    r = requests.delete(KALSHI + path, headers=hdrs, timeout=20)
+    r = requests.delete(KALSHI + path, headers=hdrs, params=params, timeout=20)
     return r.status_code, _parse(r)
 
 
-def cancel_order(order_id):
-    """Cancel an open GTC order by order_id. Returns (status_code, response)."""
-    return delete(f"/portfolio/events/orders/{order_id}")
+def cancel_order(order_id, ticker=None):
+    """Cancel an open GTC order by order_id. Returns (status_code, response).
+
+    `ticker` routes the cancel to the right exchange shard. It is optional only for
+    back-compat: without it Kalshi falls back to shard 0, and a shard 2 crypto order
+    then 404s. The caller treats 404 as 'already gone', so an unroutable cancel would
+    silently leave a live GTC order resting. Always pass the ticker.
+    """
+    params = {"exchange_index": AUTO_ROUTE_EXCHANGE}
+    if ticker:
+        params["market_ticker"] = ticker
+    return delete(f"/portfolio/events/orders/{order_id}", params)
 
 
 # ---------------------------------------------------------------- orders
+
+# Kalshi sharded the exchange on 2026-08-24 12:00 ET: new crypto events are created
+# on shard 2 (tennis and baseball on shard 3), everything else stays on shard 0.
+#
+# `exchange_index` defaults to 0 SERVER-SIDE when the field is absent, and shard 0
+# does not know about a shard 2 ticker — so every order for a post-cutover crypto
+# market came back HTTP 404. That is exactly what happened: 162 consecutive order
+# attempts were rejected between 00:05 ET and 10:40 ET on 2026-08-25, while every
+# GET kept working (reads auto-route, writes do not).
+#
+# -1 means "route by the ticker" — correct for any series on any shard, and it stays
+# correct if Kalshi re-shards again. It costs one extra routing hop; at a 15s poll
+# cadence against a 150-600s entry window that is not a meaningful latency budget,
+# and a late fill beats a 404.
+AUTO_ROUTE_EXCHANGE = -1
+
 
 def get_balance():
     return get("/portfolio/balance")
@@ -102,13 +129,16 @@ def get_balance():
 
 def place_order(ticker, side, count, yes_price_cents=None, no_price_cents=None,
                 order_type="limit", action="buy", time_in_force="good_till_canceled",
-                expiration_time=None, client_order_id=None):
+                expiration_time=None, client_order_id=None,
+                exchange_index=AUTO_ROUTE_EXCHANGE):
     """Place an order on Kalshi using the V2 endpoint.
     - ticker: market ticker, e.g. 'KXETH15M-26JUL271100-T3491.25'
     - side: 'yes' or 'no' (which token to buy)
     - count: number of contracts
     - yes_price_cents: 1-99 limit price in cents when side=yes
     - no_price_cents: 1-99 limit price in cents when side=no
+    - exchange_index: which exchange shard to route the order to. See
+      AUTO_ROUTE_EXCHANGE — omitting it is NOT the same as -1.
     """
     # V2 always quotes from the YES side: bid=buy YES, ask=sell YES (= buy NO)
     v2_side = "bid" if side == "yes" else "ask"
@@ -150,6 +180,7 @@ def place_order(ticker, side, count, yes_price_cents=None, no_price_cents=None,
         "self_trade_prevention_type": "taker_at_cross",
         "client_order_id":           client_order_id,
         "cancel_order_on_pause":     True,
+        "exchange_index":            int(exchange_index),
     }
     if expiration_time is not None:
         body["expiration_time"] = int(expiration_time)

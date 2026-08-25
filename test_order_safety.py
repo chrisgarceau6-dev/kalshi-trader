@@ -12,8 +12,35 @@ import late_certainty_trader as trader
 class OrderSafetyTests(unittest.TestCase):
     def test_v2_cancel_uses_v2_endpoint(self):
         with patch.object(kalshi_auth, "delete", return_value=(200, {})) as delete:
-            kalshi_auth.cancel_order("order-123")
-        delete.assert_called_once_with("/portfolio/events/orders/order-123")
+            kalshi_auth.cancel_order("order-123", "KXETH15M-TEST")
+        delete.assert_called_once_with(
+            "/portfolio/events/orders/order-123",
+            {"exchange_index": -1, "market_ticker": "KXETH15M-TEST"},
+        )
+
+    def test_cancel_routes_to_the_ticker_shard(self):
+        """A cancel that lands on the wrong shard 404s, and the caller reads 404 as
+        'already gone' — so an unrouted cancel silently leaks a resting GTC order."""
+        with patch.object(kalshi_auth, "delete", return_value=(200, {})) as delete:
+            kalshi_auth.cancel_order("order-123", "KXBTC15M-26AUG251200-00")
+        params = delete.call_args[0][1]
+        self.assertEqual(params["exchange_index"], -1)
+        self.assertEqual(params["market_ticker"], "KXBTC15M-26AUG251200-00")
+
+    def test_place_order_routes_by_ticker_not_shard_zero(self):
+        """Kalshi defaults exchange_index to 0 when the field is absent; crypto lives
+        on shard 2 since 2026-08-24, so an absent field means HTTP 404 on every order."""
+        captured = {}
+
+        def fake_post(path, body):
+            captured.update({"path": path, "body": body})
+            return 201, {"order_id": "order-123"}
+
+        with patch.object(kalshi_auth, "post", side_effect=fake_post):
+            kalshi_auth.place_order(
+                "KXBTC15M-26AUG251200-00", "yes", 10, yes_price_cents=Decimal("92"))
+        self.assertIn("exchange_index", captured["body"])
+        self.assertEqual(captured["body"]["exchange_index"], -1)
 
     def test_place_order_respects_time_in_force_and_expiration(self):
         captured = {}
@@ -66,7 +93,7 @@ class OrderSafetyTests(unittest.TestCase):
              patch.dict(os.environ, {"KALSHI_API_KEY_ID": "test"}):
             trader.try_trade(market, state, False, balance=1000, live_position_tickers=set())
 
-        cancel.assert_called_once_with("order-123")
+        cancel.assert_called_once_with("order-123", "KXETH15M-TEST")
 
     def test_partial_fill_is_topped_up_without_exceeding_budget(self):
         state = {

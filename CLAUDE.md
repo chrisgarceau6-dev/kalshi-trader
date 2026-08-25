@@ -82,7 +82,7 @@ is outside `[MIN_ASK, MAX_ASK]`. Orders log `book_age=Xms` — the residual race
 | `scripts/archive_candles.py` | Nightly archival (§6) |
 | `data/candles/YYYY-MM-DD.csv.gz` | Canonical dataset, ~13 KB/day, from 2026-06-11 |
 | `daily_summary.py` | Ground-truth P&L from settlements API (never trust state P&L) |
-| `kalshi_auth.py` | RSA-PSS-SHA256 auth + `cancel_order()` |
+| `kalshi_auth.py` | RSA-PSS-SHA256 auth + `cancel_order()` + shard routing (`AUTO_ROUTE_EXCHANGE`) |
 | `kalshi_dashboard.py` | Render dashboard entrypoint |
 | `test_order_safety.py` | Order-safety + NO-path regression tests |
 | `scripts/missed_pnl.py` | Prices what a halt cost — replays live gates on public candles |
@@ -301,6 +301,30 @@ no blackout hours. Six crypto 15M series; WTI/GOLD/SILVER are shadow-only. Jobs 
 2026-08-24 and was fixed the same day (PART II, audit findings). Its pre-registration
 clock starts from that date: 200 88-89c YES trades, revert if that subset wins below
 88.5%, no early reads.
+
+### Exchange sharding — every order needs `exchange_index` (2026-08-25)
+
+Kalshi sharded the exchange on **2026-08-24 12:00 ET**: new crypto events are created
+on **shard 2**, tennis/baseball on shard 3, everything else stays on shard 0.
+`exchange_index` defaults to **0 server-side when the field is absent**, so once the
+pre-cutover events aged out, every order hit the wrong shard and came back **HTTP 404**.
+
+**The outage: 00:05-10:40 ET on 2026-08-25, 162 order attempts, 162 rejected, 0 filled.**
+Reads never broke — GETs auto-route, writes do not — so `balance`, `/markets` and
+candlesticks all looked healthy and the gates kept selecting normally. The only symptom
+was `order attempt 1 did not confirm (HTTP 404)` followed by `confirmed absent`.
+
+`place_order()` and `cancel_order()` now send `exchange_index=-1` (route by ticker),
+which stays correct on any shard and through any future re-shard. **Cancel matters as
+much as create**: `cancel_order` is a DELETE with no body, takes `exchange_index` and
+`market_ticker` as QUERY params, and the caller treats 404 as "already gone" — so an
+unrouted cancel would silently leave a live GTC order resting.
+
+**Second requirement, not solved by the code:** collateral is per-shard. Kalshi
+returns `400 user_not_found` for an order on a shard the account has no funds on —
+"programmatic traders must preallocate collateral on a given exchange shard before
+order placement" (`POST /portfolio/intra_exchange_instance_transfer`, amount in
+**centicents**). The bot cannot trade crypto until funds sit on shard 2.
 
 ### Account P&L — quote a scope, never "lifetime"
 
