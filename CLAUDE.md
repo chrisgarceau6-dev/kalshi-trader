@@ -320,11 +320,25 @@ much as create**: `cancel_order` is a DELETE with no body, takes `exchange_index
 `market_ticker` as QUERY params, and the caller treats 404 as "already gone" — so an
 unrouted cancel would silently leave a live GTC order resting.
 
-**Second requirement, not solved by the code:** collateral is per-shard. Kalshi
-returns `400 user_not_found` for an order on a shard the account has no funds on —
-"programmatic traders must preallocate collateral on a given exchange shard before
-order placement" (`POST /portfolio/intra_exchange_instance_transfer`, amount in
-**centicents**). The bot cannot trade crypto until funds sit on shard 2.
+**Second requirement — collateral is per-shard.** Kalshi returns `400 user_not_found`
+for an order on a shard the account has no funds on: "programmatic traders must
+preallocate collateral on a given exchange shard before order placement"
+(`POST /portfolio/intra_exchange_instance_transfer`; amount in **centicents**,
+measured at **10,000 per dollar**, not the 100 one doc page implies). **$400 was moved
+to shard 2 on 2026-08-25**; the account total is unchanged and the funds are
+recoverable by swapping the shard indexes.
+
+Caught live inside run 32864270828: 11:20:25 and 11:21:00 returned `400`, the transfer
+landed, and 11:21:54 and 11:24:34 were accepted — same code, same run.
+
+**`fetch_balance()` returns `(total, shard)` and the two are not interchangeable.**
+`STOP_BALANCE` is an account-destruction brake calibrated against the whole account,
+so it reads the TOTAL — pointing it at the shard balance would halt the bot instantly
+whenever the shard holds exactly `STOP_BALANCE` ($400 <= $400). Order collateral is
+per-shard, so `check_halts` gets a separate, NON-sticky guard at
+`MIN_SHARD_COLLATERAL_BETS x bet`. Without it a drained shard does not halt — orders
+are simply rejected, which moves no metric except the fill count. A missing
+`balance_breakdown` (subaccount-restricted key) fails OPEN to the total.
 
 ### Account P&L — quote a scope, never "lifetime"
 

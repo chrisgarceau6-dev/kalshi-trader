@@ -95,6 +95,47 @@ class OrderSafetyTests(unittest.TestCase):
 
         cancel.assert_called_once_with("order-123", "KXETH15M-TEST")
 
+    def test_stop_balance_reads_the_account_total_not_the_shard(self):
+        """STOP_BALANCE is calibrated against the whole account. If the stop read the
+        shard balance instead, funding the shard to exactly $400 would halt the bot on
+        the spot (400 <= 400)."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        halted, reason = trader.check_halts(
+            state, balance=1201.19, shard_balance=float(trader.STOP_BALANCE))
+        self.assertFalse(halted, f"healthy account halted: {reason}")
+
+    def test_drained_shard_halts_instead_of_firing_rejected_orders(self):
+        """A shard that cannot fund the book must halt loudly. Left unchecked it fails
+        the way 2026-08-25 failed: gates pass, orders bounce, logs look like a drought."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        halted, reason = trader.check_halts(state, balance=1201.19, shard_balance=10.0)
+        self.assertTrue(halted)
+        self.assertIn("collateral", reason)
+
+    def test_shard_collateral_halt_is_not_sticky(self):
+        """It must clear itself when funds land — a brake, not a latch needing a human."""
+        state = {"positions": {}, "stats": {"trades": 0, "wins": 0, "pnl": 0.0}}
+        self.assertTrue(trader.check_halts(state, 1201.19, 10.0)[0])
+        self.assertFalse(trader.check_halts(state, 1201.19, 400.0)[0])
+
+    def test_missing_breakdown_fails_open_to_the_total(self):
+        """A subaccount-restricted key omits balance_breakdown. An unknown shard
+        balance must never be able to halt a healthy bot."""
+        resp = {"balance_dollars": "1201.1910"}
+        with patch.object(trader, "kalshi_get", return_value=(200, resp)):
+            total, shard = trader.fetch_balance()
+        self.assertAlmostEqual(total, 1201.191)
+        self.assertAlmostEqual(shard, 1201.191)
+
+    def test_fetch_balance_picks_the_trading_shard(self):
+        resp = {"balance_dollars": "1201.1910", "balance_breakdown": [
+            {"exchange_index": 0, "balance": "801.1910"},
+            {"exchange_index": 2, "balance": "400.0000"}]}
+        with patch.object(trader, "kalshi_get", return_value=(200, resp)):
+            total, shard = trader.fetch_balance()
+        self.assertAlmostEqual(total, 1201.191)
+        self.assertAlmostEqual(shard, 400.0)
+
     def test_partial_fill_is_topped_up_without_exceeding_budget(self):
         state = {
             "positions": {},
