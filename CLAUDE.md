@@ -378,6 +378,14 @@ Bet sizing history, which any per-trade figure must respect: **$75 through Aug 1
 $50 Aug 19-21, transition Aug 22, $25 from Aug 23.** A $/trade number spanning
 2026-08-22 is averaged across two bet sizes and is not an edge.
 
+`kstat` prints this automatically as of 2026-08-25 — the `strategy` row is the six
+live series from the settlements API, stamped with its own date span. It previously
+printed `state["stats"]` under the label **lifetime**, which is the counter that resets
+on a version bump: on 2026-08-25 it read `61 tr · +42.20` against a real record of
+2,036 trades at -$212.37. The state counter is still shown when it disagrees, but only
+ever labelled `since reset`. The row is computed outside the artifact-download block,
+so it survives a GitHub blob failure that takes out the rest of the tool.
+
 Raise the bet only on the ratio rule in PART II, never on a good week.
 
 ### Risk controls — emergency brakes, deliberately not tight

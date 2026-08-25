@@ -24,6 +24,15 @@ CACHE = Path(tempfile.gettempdir()) / "kstat-state.json"
 CACHE_TTL = 60          # seconds; a scan cycle is 15 min, so this is never stale
 CYCLE_MIN = 15.3        # observed cadence, used only to flag drift
 
+# The six series the late-certainty trader actually trades. The settlements API is
+# ACCOUNT-wide, so without this filter the number picks up every other experiment
+# that ever touched this account — including a single KXMLBTOTAL position that lost
+# $863.75 on 4 trades and has nothing to do with this strategy.
+LC_SERIES = {"KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP15M"}
+
+SETTLE_CACHE = Path(tempfile.gettempdir()) / "kstat-settlements.json"
+SETTLE_TTL = 900        # one scan cycle; a full pull is ~3.5s, cached it is instant
+
 C = dict(g="\033[32m", y="\033[33m", r="\033[31m", d="\033[2m", b="\033[1m", x="\033[0m")
 def paint(s, c):
     return s if not sys.stdout.isatty() else C[c] + s + C["x"]
@@ -55,6 +64,93 @@ def state():
 def ago(mins):
     return f"{mins:.0f}m ago" if mins < 60 else f"{mins/60:.1f}h ago"
 
+
+def _parse_ts(ts):
+    """Kalshi returns variable sub-second precision ('...:06.99874+00:00'), which
+    datetime.fromisoformat rejects on 3.9. Pad the fraction to exactly 6 digits."""
+    import re
+    ts = ts.replace("Z", "+00:00")
+    return D.datetime.fromisoformat(
+        re.sub(r"\.(\d{1,6})\d*", lambda m: "." + m.group(1).ljust(6, "0"), ts))
+
+
+def strategy_pnl():
+    """Real P&L for this strategy, from the settlements API. None if unavailable.
+
+    `state["stats"]` is NOT this number. It is a counter that resets, and on
+    2026-08-25 it read "61 tr · +42.20" while the strategy's actual record was
+    2,032 trades at -$221.59 — which is why this function exists. CLAUDE.md is
+    explicit that P&L must carry a scope and never be called "lifetime", so the
+    caller prints the date range alongside it.
+
+    Deliberately a plain TTL cache with a full recompute rather than an incremental
+    one. Settlements are immutable and newest-first, so incremental would be faster
+    and is tempting — but the whole point of this function is that kstat was showing
+    a wrong number, and a cache that can silently drift is a bad trade for 3 seconds.
+    """
+    if SETTLE_CACHE.exists() and (D.datetime.now().timestamp()
+                                  - SETTLE_CACHE.stat().st_mtime) < SETTLE_TTL:
+        try:
+            return json.loads(SETTLE_CACHE.read_text())
+        except Exception:
+            pass
+    sys.path.insert(0, str(REPO))
+    try:
+        from kalshi_auth import get as kget
+    except Exception:
+        return None
+    rows, cursor, pages = [], None, 0
+    while pages < 60:
+        p = {"limit": 200}
+        if cursor:
+            p["cursor"] = cursor
+        try:
+            code, r = kget("/portfolio/settlements", p)
+        except Exception:
+            return None
+        if code != 200:
+            return None
+        batch = r.get("settlements", [])
+        if not batch:
+            break
+        rows += batch
+        pages += 1
+        cursor = r.get("cursor")
+        if not cursor:
+            break
+    n = wins = 0
+    pnl = 0.0
+    first = last = None
+    for s in rows:
+        if s.get("ticker", "").split("-")[0] not in LC_SERIES:
+            continue
+        yc = float(s.get("yes_total_cost_dollars", 0) or 0)
+        nc = float(s.get("no_total_cost_dollars", 0) or 0)
+        cost = yc + nc
+        if cost <= 0.001:          # not a real position
+            continue
+        rev = int(s.get("revenue", 0)) / 100.0
+        pnl += rev - cost - float(s.get("fee_cost", 0) or 0)
+        n += 1
+        wins += rev > 0.01
+        ts = s.get("settled_time", "")
+        if ts:
+            try:
+                d = _parse_ts(ts).astimezone(ET).date().isoformat()
+            except Exception:
+                continue
+            first = d if first is None or d < first else first
+            last = d if last is None or d > last else last
+    if not n:
+        return None
+    res = dict(trades=n, wins=wins, wr=round(100 * wins / n, 2),
+               pnl=round(pnl, 2), first=first, last=last)
+    try:
+        SETTLE_CACHE.write_text(json.dumps(res))
+    except Exception:
+        pass
+    return res
+
 def margin(rows):
     """Dollar-weighted WR vs its own break-even. See kalshi_dashboard.py for why a
     trade-weighted rate against a flat 92% is the wrong comparison."""
@@ -79,6 +175,7 @@ def main():
     a = ap.parse_args()
 
     out, rows_out = {}, []
+    state_counter_row = None
     now = D.datetime.now(D.timezone.utc)
 
     # ── health ────────────────────────────────────────────────────────────
@@ -165,13 +262,18 @@ def main():
         else:
             rows_out.append(("today", paint("no settled trades yet", "d")))
 
+        # The state counter RESETS. Printing it under the word "lifetime" is how a
+        # -$221 strategy read as +$42 all morning. It is never shown unlabelled, and
+        # the real record is emitted separately below — it comes from the Kalshi API
+        # and must not be lost when the GitHub artifact download fails.
         s = st.get("stats", {})
         if s:
-            lp = s.get("pnl", 0)
-            rows_out.append(("lifetime", f"{s.get('trades',0)} tr · "
-                             + paint(f"{lp:+.2f}", "g" if lp >= 0 else "r")
-                             + f" · {st.get('strategy_version','?')}"))
-            out["lifetime"] = dict(trades=s.get("trades"), pnl=lp)
+            out["state_counter"] = dict(trades=s.get("trades"), pnl=s.get("pnl", 0))
+            state_counter_row = paint(
+                f"{s.get('trades',0)} tr · {s.get('pnl',0):+.2f} · "
+                f"{st.get('strategy_version','?')}  (state counter, resets)", "d")
+        else:
+            state_counter_row = None
 
         risk = sum(p["cost"] for p in openp)
         rows_out.append(("open", f"{len(openp)} positions"
@@ -184,7 +286,29 @@ def main():
             if v:
                 rows_out.append((label, paint(str(v), "y")))
     except Exception as e:
-        rows_out.append(("trades", paint(f"state unavailable — {e}", "r")))
+        rows_out.append(("trades", paint(f"state unavailable — {str(e)[:90]}", "r")))
+
+    # ── the real record ───────────────────────────────────────────────────
+    # Outside the block above on purpose: this comes from the Kalshi settlements API,
+    # not the GitHub artifact, so a failed artifact download must not take it down.
+    # It is the number the whole tool exists to report honestly.
+    try:
+        sp = strategy_pnl()
+        if sp:
+            span = f"{sp['first'][5:]}..{sp['last'][5:]}" if sp["first"] else "?"
+            rows_out.append(("strategy", f"{sp['trades']:,} tr · {sp['wr']:.2f}% · "
+                             + paint(f"{sp['pnl']:+.2f}", "g" if sp["pnl"] >= 0 else "r")
+                             + f" · {span}"))
+            out["strategy"] = sp
+            if state_counter_row and out.get("state_counter", {}).get("trades") != sp["trades"]:
+                rows_out.append(("since reset", state_counter_row))
+        elif state_counter_row:
+            rows_out.append(("since reset", state_counter_row
+                             + paint("  ⚠ settlements unavailable", "y")))
+    except Exception as e:
+        if state_counter_row:
+            rows_out.append(("since reset", state_counter_row))
+        rows_out.append(("strategy", paint(f"settlements unavailable — {str(e)[:70]}", "y")))
 
     # ── next scheduled measurement (archive cron, 03:30 UTC) ──────────────
     nxt = now.replace(hour=3, minute=30, second=0, microsecond=0)
