@@ -462,15 +462,22 @@ def rows_for_market(m, series):
 def archive_day(date_str, force=False):
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(OUT_DIR, f"{date_str}.csv.gz")
-    if os.path.exists(path) and not force:
-        print(f"{date_str}: already archived, skipping")
-        return True
-
     day = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     start, end = int(day.timestamp()), int((day + timedelta(days=1)).timestamp())
     if end > time.time():
         print(f"{date_str}: day not finished yet, refusing to archive a partial day")
         return False
+
+    # The two archives are checked INDEPENDENTLY. Returning early on the narrow file
+    # alone would mean the wide archive could only ever collect forward, never
+    # backfill — and Kalshi still holds ~65 days that are reachable today and gone
+    # for good after that. `--backfill N` on an existing range now fills in the wide
+    # side without re-fetching the narrow one.
+    if os.path.exists(path) and not force:
+        print(f"{date_str}: already archived, skipping")
+        if not os.environ.get("SKIP_WIDE_ARCHIVE"):
+            archive_day_wide(date_str, start, end, force)
+        return True
 
     all_rows, failures, markets_seen = [], 0, 0
     for series in SERIES_LIST:
