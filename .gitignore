@@ -29,3 +29,4 @@ archive/research/refuted/kalshi_incentives/*.json
 archive/research/refuted/kalshi_incentives/.claude-flow/
 research/search2/data/
 research/search2/universe.json
+research/search2/data_ohlc/
