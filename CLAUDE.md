@@ -474,6 +474,60 @@ was priced and refuted.*
 5. Standing leads, unchanged and NOT proposals: `MIN_ASK=89`, the p3 inversion above
    91c, time-weighted sizing (exploratory, needs 4-9 months).
 
+## Strategy-search criteria — rewritten 2026-08-25
+
+*The old criteria were never written down; they were inherited from late-certainty's
+shape and they made the search look exhaustive when it was narrow. Two searches ended
+in "nothing survived" while testing one mechanism many ways. These replace them.*
+
+**The criterion nobody had stated, and the one that was actually binding:**
+
+> **A candidate must be KNOWABLE inside ~8 weeks.** Not profitable — knowable.
+
+Late-certainty needs 2,418 trades / 27 days to resolve 1.5pp. The maker idea needed
+75 days. The calm cell needs 10 weeks. Retention is 67 days. **A strategy that needs
+longer than the data window to confirm can never be confirmed**, however good it
+looks, so this is a screen to apply BEFORE testing, not a result to discover after.
+It selects for many independent close clusters and low per-trade variance, and it
+rules out long-dated markets on arithmetic — a daily series yields ONE independent
+observation per day regardless of how many strike-minutes it contains (KXEURUSD: 46
+clusters in 64 days).
+
+| | rule |
+|---|---|
+| **Target** | **$75-100/week floor**, not $250. A verified small edge can be sized up; an unverified large one cannot. $250 was killing candidates for the wrong reason. |
+| **Capital** | Separate account, ~$1,000. Capital has never been the constraint — the maker sim peaked at **$66** of a $2,000 ceiling. Slots and variance bind, not cash. |
+| **Correlation** | Must be genuinely uncorrelated with late-certainty (daily P&L |r| < ~0.3). Otherwise a second account buys bookkeeping, not diversification. |
+| **Must not compete** | No quoting into the same series/band/window the live bot is working, or the two race each other for the same fills. |
+| **Mechanism first** | State the mechanism in ONE sentence before testing. The 2026-08-25 deep scan produced a survivor out of 836 cells that still has no explanation; that is how the 22-vs-21 coin flip happened. |
+
+**Dropped — these bound the last search and none of them was ever a real requirement:**
+
+- ~~Order-book-only.~~ Every strategy tested through 2026-08-25 reads nothing but
+  price/bid/ask/path. **The entire external-information space is unsearched.** This is
+  the single largest unexplored axis and it is not a corner, it is most of the map.
+- ~~Short-deadline only.~~ Horizon is unconstrained. Almost nothing but 15-minute and
+  hourly markets has been tested — though note this trades directly against the
+  8-week knowability rule above, and knowability wins.
+- ~~Minute-level flow required.~~ That screen is correct for a RESTING order and
+  irrelevant for a taker. It silently excluded 84 series from taker consideration.
+- ~~Buy-the-favourite only.~~ No structure has been tested where the payoff is
+  anything other than "this side wins".
+- ~~The $2,000 shared ceiling.~~ See capital, above.
+
+**Kept, non-negotiable** — these are not obstacles, they are what keeps the account
+solvent, and relaxing any of them manufactures confidence rather than finding edge:
+cluster resampling (invariant 3) · pre-registration with a decision rule and horizon
+fixed BEFORE money moves · the denominator checked, with a **fixed or random pull
+order** (see §Strategy-2, the 6-of-6 that was really 8-of-12) · no live-path change
+without Chris's explicit sign-off.
+
+**Archive first, search second.** The nightly archive was nine series, ask 88-96c,
+100-800s — shaped entirely around late-certainty, so it accumulated validation
+capacity for one strategy and destroyed it for every other. `data/candles/wide/` now
+runs alongside it (see §Data archival). This is the only constraint here that can
+actually be defeated, and only slowly, so it has to be started before it is needed.
+
 ## Open threads and loose ends
 
 - **Time-weighted sizing** — +15.6% OOS but CIs include zero, the seven weight
@@ -724,6 +778,32 @@ deliberately wider than the live gates). Backfilled to 2026-06-11, no gaps.
 already exists, so a new series captures nothing historical without it. The workflow
 takes a `force` input: `gh workflow run archive_candles.yml -f backfill=N -f force=true`.
 Costs ~3 min/day of runtime. Used 2026-08-19 to capture Gold/Silver back to Aug 1.
+
+**The WIDE archive — `data/candles/wide/`, added 2026-08-25.** The narrow archive
+above is filtered by late-certainty's own entry gates, so a search for a different
+mechanism cannot be run on it at all. The wide file keeps the FULL price path — no
+band filter, no entry window (0-100c, 0-86400s) — for 24 series including all twelve
+15M, plus entertainment and economics series that resolve on scheduled public data and
+have never been deep-tested. **~291 KB/day, ~106 MB/year, and it is tracked** — flag
+if that becomes a problem. Runs ~6 min after the narrow archive and is FAIL-SOFT: any
+error is caught and logged, because the narrow file is what the live research depends
+on and must never be blocked by this. `scripts/backtest.py` globs
+`data/candles/*.csv.gz` NON-recursively so it cannot see these files, and the
+workflow's `git add data/candles` picks the subdirectory up with **no change to
+`.github/workflows/`**.
+
+Three things learned building it, all of which cost real time:
+- **`period_interval` accepts only 1 and 60.** Anything else returns HTTP 400, which
+  reads exactly like "this market has no data" — the first working version silently
+  archived nothing but the 15M series.
+- **Retry only 429s and network exceptions.** Retrying every non-200 through an
+  exponential backoff costs ~32s per market with no data; one entertainment series
+  took **15 minutes to return zero rows**.
+- **`/markets` accepts `min_close_ts` / `max_close_ts`.** Walking the settled cursor
+  instead took **15 minutes to find 27 markets** for one day; the filter returns the
+  same day in **0.2s and one page**. `fetch_markets()` (narrow path) still walks the
+  cursor — retrofitting it is worth doing, on its own, with both compared on the same
+  days, and NOT as a side effect of a research change.
 
 **Every archived day is untouched out-of-sample data for every hypothesis formed after
 it.** Backfill with `--backfill N`. Never delete this directory. If the workflow has
