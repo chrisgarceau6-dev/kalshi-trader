@@ -932,6 +932,53 @@ to be depth exclusions or the concurrency cap, a streaming feed fixes nothing.
 categories — concurrency cap, book depth, already-holding — are the risk policy working
 and must never go to zero. Only observation misses and fetch failures are defects.
 
+## Strategy-2 search — 2026-08-25, what was tried and what it cost
+
+A systematic search for a SECOND strategy. Tooling in `research/search2/`; results in
+`research/search2/results/`. Recorded so none of it is repeated.
+
+**Read this before proposing a second strategy.** Two of the three ideas I generated
+on 2026-08-25 were already in this file as tested — WTI ran LIVE for days and was
+paused on 2026-08-19, GOLD/SILVER have measured per-trade numbers, and cross-strike
+arb is in the GRAVEYARD. Proposing them wasted an afternoon. Search this file first.
+
+**The fee is a parabola, and it is the strongest filter available.**
+`fee = 0.07 x P x (1-P)` per contract, maximised at 50c: **1.750c at 50c, 0.515c at
+92c.** Verified via `/series` that all 78 high-frequency series are
+`quadratic / multiplier 1`. This kills every direction-neutral structure in the
+GRAVEYARD at once — a market-neutral pair trades near 50c and pays the fee on BOTH
+legs, 3.4x, for an edge that is smaller by construction. Eleven for eleven was
+arithmetic, not a losing streak. **Compute the fee at the target price before
+building anything.**
+
+**MAKER FILLS ARE FREE.** Verified on real fills: 998 maker contracts at **$0.00**
+against 0.5493c/contract taker. Every strategy that died to fees died paying TAKER
+fees. A resting order pays nothing. This is the single largest unexploited fact found
+in the search and it is why `yes_ask + no_ask = ~102c` matters: a taker pays that ~2c
+spread whichever side they choose, which is why BOTH sides of every market scan
+negative. A maker collects it instead. Untested.
+
+**The searchable universe is 118 series, and the liquidity is not in crypto.**
+`python3 research/search2/universe.py` — Climate and Weather 78.4M, Commodities
+66.1M, Entertainment 17.0M, **Crypto fifth at 9.8M**. The binding constraint on
+proving anything is observations inside the ~67-day retention window, which is
+`events/day x strikes/event` — a daily series with 29 strikes beats an hourly one
+with a single strike.
+
+**What the scan found: nothing that survived.** 14.2M observations, 60 series, every
+slice ranked by `(won - ask) - fee`. Nine cells cleared a 95% CI in-sample; **zero**
+survived the holdout. A `97-99c / prior>=90` pattern appeared in 10 unrelated markets
+and looked structural — it was not: **22 series positive, 21 negative**, a coin flip.
+That error came from reading a leads list that only PRINTS positives and treating it
+as a sample. **Always check the denominator before calling something replication.**
+
+**The scan is only trustworthy WITH path features.** Its first version sliced on
+price/secs/side/spread — all snapshots — and rated the live 90-93c band at **-1.69c**,
+i.e. losing. Late-certainty is a PATH strategy, so the scan could not have found it.
+Adding prior-price features flipped the same band to **+1.71c** and made it monotone
+in priors. Any future scan that cannot rediscover late-certainty unprompted is
+broken; do not act on its output.
+
 # PART III — GRAVEYARD
 
 *Refuted, closed, or not worth re-opening. **This section exists so nothing gets
