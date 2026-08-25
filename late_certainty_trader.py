@@ -1524,7 +1524,7 @@ def try_trade(
         log(f"    order accepted attempt {attempt} (id={order_id}) "
             f"book_age={last_look_ms:.0f}ms")
         time.sleep(ORDER_FILL_WAIT_SECONDS)
-        c_code, _ = cancel_order(order_id)
+        c_code, _ = cancel_order(order_id, ticker)
         log(f"    cancel GTC order {order_id} (HTTP {c_code})")
         if c_code not in (200, 204, 404):
             log(f"    WARNING — cancel returned HTTP {c_code}; waiting for server expiry")
@@ -1728,7 +1728,7 @@ def try_longshot_trade(market, state, dry_run):
             raise RuntimeError(reason)
         log(f"    order accepted (id={order_id})")
         time.sleep(3)
-        c_code, _ = cancel_order(order_id)
+        c_code, _ = cancel_order(order_id, ticker)
         log(f"    cancel GTC order {order_id} (HTTP {c_code})")
         try:
             actual_contracts, actual_cost, actual_fee = reconcile_terminal_order(order_id, ticker, side)
