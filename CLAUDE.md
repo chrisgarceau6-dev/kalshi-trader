@@ -978,6 +978,21 @@ days and +0.10c on 68**. Check the date span of any 15M pull before believing it
 `pull_ohlc.py` defaults to 8,000 markets and threads the fetch (6 workers,
 ~12 min/series).
 
+**RE-RUN ON 10x THE HISTORY, 2026-08-25 — still nothing.** `deep_scan.py` over
+`data_ohlc/` (60,342 markets, 68 days, twelve 15M series, OHLC not closes): 836 cells
+in-sample, **4** cleared a 95% CI, **1** survived the holdout —
+`90-93c / prior75-89 / calm(rv3<=8)`, OOS +2.26c [+0.70, +3.71], full window +2.14c
+[+1.11, +3.10], **11 of 12 series positive**. It is a slice of the LIVE band, and it is
+**not actionable**: the non-calm entries it would exclude are **81.5% of volume and
+$1,690 of the $2,764** total over 68 days, so filtering to calm COSTS $1,690 (and on
+holdout, $972 -> $610). Identical arithmetic to the dispersion filter; invariant 7
+again. As a SIZING tilt rather than an exclusion it is not worthless (calm 2x / other
+0.5x, normalised to the same average bet, is +$56.78/day against flat's +$40.81) — but
+that is a live-trader change, it belongs with the time-weighted-sizing thread that
+already needs 122-279 days, and the filter framing is the honest one because
+late-certainty is slot-bound (`MAX_CONCURRENT=2`), not capital-bound.
+`research/search2/results/DEEP_SCAN.md`
+
 **What the scan found: nothing that survived.** 14.2M observations, 60 series, every
 slice ranked by `(won - ask) - fee`. Nine cells cleared a 95% CI in-sample; **zero**
 survived the holdout. A `97-99c / prior>=90` pattern appeared in 10 unrelated markets
@@ -1086,7 +1101,28 @@ accumulator · matched-pair maker · cross-crypto relative value · market-neutr
 vertical/cross-strike arb · all-taker catalog scan · maker-then-hedge · WTI ladder
 maker · liquidity-reward farming · hourly range-pin · one-touch barriers.
 
-*Other markets:* new 15M series (HYPE -$1.76/tr, NEAR, Gold, Silver) · weather
+*15M series that are NOT live — all measured 2026-08-25 on live geometry, 56-68 days
+(`research/search2/results/DEEP_SCAN.md`):* **KXNEAR15M -4.55c/ct [-6.19, -2.96]** and
+**KXZEC15M -2.85c/ct [-4.36, -1.40]** are RELIABLY NEGATIVE — CIs exclude zero, first
+per-trade numbers either has ever had; do not add them. HYPE -0.80c, GOLD -1.35c, both
+CI-inclusive of zero. WTI +0.42c and SILVER +0.26c over their shorter windows, both
+CI-inclusive of zero (Silver stays a late-September calendar item, not a finding).
+Pooled, the six non-live series are **-2.22c, CI [-3.01, -1.42], P(>0)=0.000** against
+the live six at +0.53c [-0.14, +1.18]. **The live series selection is correct, and that
+is now measured rather than assumed.**
+
+*FX / index — the "one genuinely untested corner" of the archetype filter, CLOSED
+2026-08-25:* **KXINXU** (hourly, 40 strikes) PASSES the weather population screen —
+10.5% of quotes in 88-96c, ~212 in-window/day vs 171-178 for BTC/ETH — and then
+produces nothing: 90-93c is **-2.46c** at 150-600s and +0.12c at 10-30m, every CI
+spanning zero, and the cells nearest live geometry are the negative ones. **KXEURUSD**
+(daily) is -6c to -18c through 88-93c, winning 71-86% at prices implying 88-93%. The
+structural reason is invariant 2: **median spread 3.0c on KXINXU and 4.0c on KXEURUSD
+against 1.0c on crypto 15M** — two to three extra cents is the whole edge before any
+question of edge arises. Cluster arithmetic also forbids a quick answer: KXINXU gives
+126 close clusters in 25 days, KXEURUSD 46 in 64.
+
+*Other markets:* new 15M series (HYPE, NEAR, Gold, Silver — numbers above) · weather
 crossed-strike · cross-venue sports arb (**account is US-only** — this kills most
 venue arb) · Kalshi vs sportsbook · sports-futures dominance · Fed complete set.
 
