@@ -370,6 +370,14 @@ def daily_pnl(state, now_ts=None):
 STOP_BALANCE            = 400
 CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
 MAX_CONCURRENT_POSITIONS = 2  # 2×$75=$150=10.9% of balance; matches old $90=10.5% exposure ratio
+
+# Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
+# bot trades lives there, and collateral does not cross shards.
+TRADING_EXCHANGE_SHARD  = 2
+# Refuse to trade a shard that cannot fund a full concurrent book. Below this the
+# failure is not a clean halt — orders are simply rejected, which shows up in no
+# metric except the fill count. See fetch_balance().
+MIN_SHARD_COLLATERAL_BETS = MAX_CONCURRENT_POSITIONS
 EDGE_DEGRADE_WINDOW     = 50  # rolling trade window for WR degradation check
 EDGE_DEGRADE_THRESHOLD  = 0.84  # halt if rolling WR drops below this; 88% fired on 2-sigma variance
 EDGE_DEGRADE_COOLDOWN   = 7200  # 2h: auto-clear edge degrade if consec_losses < 3 (prevents deadlock)
@@ -500,14 +508,41 @@ def log(msg):
 
 
 def fetch_balance():
+    """Returns (total_dollars, shard_dollars) — or (None, None) on error.
+
+    The two are NOT interchangeable, and using one for the other's job is a live
+    hazard in both directions:
+
+    - STOP_BALANCE is an account-destruction brake, calibrated against the whole
+      account, so it must read the TOTAL. Pointing it at the shard balance would
+      halt instantly whenever the shard is funded to exactly STOP_BALANCE.
+    - Order collateral is PER-SHARD. Cash on shard 0 cannot back an order on
+      shard 2; Kalshi rejects the order rather than halting, so a drained shard
+      fails the way 2026-08-25 failed — every gate passes, every order bounces,
+      and the log reads like a signal drought.
+
+    `/portfolio/balance` with no exchange_index returns the all-shard total plus a
+    per-shard `balance_breakdown`, so both come from one call.
+    """
     code, resp = kalshi_get("/portfolio/balance")
     if code != 200:
         log(f"  fetch_balance: HTTP {code} resp={str(resp)[:120]}")
-        return None
+        return None, None
     try:
-        return float(resp.get("balance_dollars", 0))
+        total = float(resp.get("balance_dollars", 0))
     except Exception:
-        return None
+        return None, None
+    # Omitted only for subaccount-restricted API keys. Fail OPEN to the total: an
+    # unknown shard balance must not be able to halt a healthy bot.
+    shard = total
+    for row in resp.get("balance_breakdown") or []:
+        try:
+            if int(row.get("exchange_index", -1)) == TRADING_EXCHANGE_SHARD:
+                shard = float(row.get("balance", 0))
+                break
+        except (TypeError, ValueError):
+            continue
+    return total, shard
 
 
 def send_email(subject, body):
@@ -653,13 +688,24 @@ def open_markets_longshot(series):
 
 # ── kill switches ──────────────────────────────────────────────────────────────
 
-def check_halts(state, balance):
+def check_halts(state, balance, shard_balance=None):
     """Returns (halt: bool, reason: str). Daily loss limit is dynamic based on bet size."""
     if state.get("execution_halt_reason"):
         return True, f"execution safety halt: {state['execution_halt_reason']}"
     if balance is not None and balance <= STOP_BALANCE:
         return True, f"balance ${balance:.2f} <= stop ${STOP_BALANCE}"
     bet_dollars = compute_bet_dollars(balance)
+    # Per-shard collateral. Deliberately NOT sticky: it clears itself the moment a
+    # transfer lands or an open position settles back onto the shard, so it stays a
+    # brake rather than something that needs a human to unlatch.
+    if shard_balance is not None:
+        floor = bet_dollars * MIN_SHARD_COLLATERAL_BETS
+        if shard_balance < floor:
+            return True, (f"shard {TRADING_EXCHANGE_SHARD} collateral "
+                          f"${shard_balance:.2f} < ${floor:.2f} "
+                          f"({MIN_SHARD_COLLATERAL_BETS} x ${bet_dollars} bet) — "
+                          f"fund it with an intra-exchange transfer; orders would "
+                          f"be REJECTED, not halted")
     daily_loss_limit = compute_daily_loss_limit(bet_dollars)
     d_pnl = daily_pnl(state)
     if d_pnl <= -daily_loss_limit:
@@ -1857,11 +1903,12 @@ def run_once(dry_run=False):
     now_et = datetime.now(ET)
     log(f"=== CERTAINTY @ {now_et.strftime('%Y-%m-%d %H:%M:%S')} ET ===")
 
-    balance = fetch_balance()
+    balance, shard_balance = fetch_balance()
     if balance is None:
         log("  WARNING: cannot fetch balance — skipping this cycle")
         return
-    log(f"  balance=${balance:.2f}")
+    log(f"  balance=${balance:.2f}  "
+        f"shard{TRADING_EXCHANGE_SHARD}=${shard_balance:.2f} (tradeable)")
 
     check_outcomes(state, balance)
 
@@ -1874,7 +1921,7 @@ def run_once(dry_run=False):
         state["high_water_balance"] = equity
         log(f"  high-water mark: ${equity:.2f} (cash ${balance:.2f} + open ${open_cost:.2f})")
 
-    halted, reason = check_halts(state, balance)
+    halted, reason = check_halts(state, balance, shard_balance)
     if halted:
         log(f"  HALTED — {reason}")
         save_state(state)  # persist edge_degrade_halted_at so 2h cooldown actually counts down
