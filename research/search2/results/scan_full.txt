@@ -1,0 +1,181 @@
+14,266,870 observations | 1,752 close clusters | 60 series
+NET = (won - ask) - fee(ask), in cents per contract. Positive means buying at that ask was
+profitable AFTER the exchange fee. CIs resample close clusters, never observations.
+
+SERIES  (38 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  KXHIGHLAX                                     463,341     68    39.7c     -1.49       [-1.52, -1.44]  <-- reliably NEGATIVE
+  KXHIGHCHI                                     485,597     68    44.6c     -1.65       [-1.71, -1.61]  <-- reliably NEGATIVE
+  KXHIGHNY                                      466,556     68    42.7c     -1.67       [-1.72, -1.63]  <-- reliably NEGATIVE
+  KXHIGHMIA                                     427,355     68    42.7c     -1.68       [-1.73, -1.65]  <-- reliably NEGATIVE
+  KXGOLD15M                                      16,653    600    49.1c     -1.80       [-1.84, -1.76]  <-- reliably NEGATIVE
+  KXHIGHAUS                                     433,444     68    44.3c     -1.80       [-1.88, -1.74]  <-- reliably NEGATIVE
+  KXHYPE15M                                      15,347    600    50.5c     -1.85       [-1.92, -1.79]  <-- reliably NEGATIVE
+  KXHIGHDEN                                     433,972     68    45.8c     -1.87       [-1.94, -1.81]  <-- reliably NEGATIVE
+  KXHIGHTPHX                                    454,369     68    45.1c     -1.87       [-1.96, -1.79]  <-- reliably NEGATIVE
+  KXSILVER15M                                    16,781    600    49.2c     -1.88       [-1.92, -1.84]  <-- reliably NEGATIVE
+  KXHIGHTBOS                                    386,547     68    45.1c     -1.90       [-2.00, -1.82]  <-- reliably NEGATIVE
+  KXHIGHPHIL                                    414,449     68    45.2c     -1.92       [-2.01, -1.83]  <-- reliably NEGATIVE
+  KXHIGHTATL                                    438,259     68    46.0c     -1.94       [-2.01, -1.88]  <-- reliably NEGATIVE
+  KXHIGHTSFO                                    469,288     68    46.0c     -1.95       [-2.04, -1.86]  <-- reliably NEGATIVE
+  KXHIGHTSEA                                    477,573     68    45.8c     -2.00       [-2.09, -1.91]  <-- reliably NEGATIVE
+  KXWTI15M                                       16,780    600    49.3c     -2.03       [-2.09, -1.97]  <-- reliably NEGATIVE
+  KXHIGHTDAL                                    407,520     68    43.9c     -2.04       [-2.13, -1.96]  <-- reliably NEGATIVE
+  KXHIGHTOKC                                    384,010     68    45.5c     -2.07       [-2.17, -1.97]  <-- reliably NEGATIVE
+  KXHIGHTSATX                                   365,612     67    44.9c     -2.07       [-2.18, -1.97]  <-- reliably NEGATIVE
+  KXHIGHTLV                                     373,937     68    43.7c     -2.09       [-2.20, -1.97]  <-- reliably NEGATIVE
+  ....................................................................................................
+  KXLOWTOKC                                     177,799     67    47.1c     -4.80       [-5.38, -4.28]  <-- reliably NEGATIVE
+  KXYTVIEWSW                                     31,428     35    49.0c     -9.39      [-15.95, -2.70]  <-- reliably NEGATIVE
+  KXCS2MAP                                      281,203    287    68.3c    -19.71     [-20.99, -18.33]  <-- reliably NEGATIVE
+
+PRICE  (10 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  97-99c                                      1,419,176  1,729    98.2c     -0.91       [-1.36, -0.48]  <-- reliably NEGATIVE
+  85-89c                                        542,160  1,696    87.1c     -1.00       [-2.24, +0.09]
+  01-09c                                      3,929,359  1,741     3.1c     -1.67       [-1.90, -1.41]  <-- reliably NEGATIVE
+  90-93c                                        583,238  1,688    91.6c     -1.69       [-2.68, -0.74]  <-- reliably NEGATIVE
+  75-84c                                        915,820  1,722    79.6c     -2.38       [-3.67, -1.07]  <-- reliably NEGATIVE
+  94-96c                                        679,713  1,717    95.1c     -3.01       [-3.81, -2.23]  <-- reliably NEGATIVE
+  60-74c                                      1,397,696  1,715    66.9c     -3.59       [-4.90, -2.35]  <-- reliably NEGATIVE
+  40-59c                                      1,931,916  1,707    49.6c     -3.95       [-4.29, -3.63]  <-- reliably NEGATIVE
+  10-24c                                      1,533,548  1,675    16.4c     -4.29       [-5.30, -3.27]  <-- reliably NEGATIVE
+  25-39c                                      1,334,244  1,699    32.1c     -4.30       [-5.67, -3.02]  <-- reliably NEGATIVE
+
+SECS  (5 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  0-5m                                           54,692  1,622    35.7c     -2.63       [-2.81, -2.46]  <-- reliably NEGATIVE
+  60m+                                        13,906,439  1,045    45.6c     -2.69       [-2.79, -2.60]  <-- reliably NEGATIVE
+  5-15m                                         103,974  1,605    43.9c     -3.18       [-3.32, -3.04]  <-- reliably NEGATIVE
+  30-60m                                        138,934  1,011    32.5c     -3.63       [-4.00, -3.32]  <-- reliably NEGATIVE
+  15-30m                                         62,831    916    34.5c     -3.79       [-4.23, -3.41]  <-- reliably NEGATIVE
+
+SERIES X PRICE  (373 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  KXHIGHTLV / 60-74c                             37,390     68    67.3c     +9.38      [+0.49, +17.10]  <-- CI excludes 0
+  KXHIGHTLV / 75-84c                             26,263     68    79.4c     +6.96      [+0.68, +12.41]  <-- CI excludes 0
+  KXHIGHCHI / 25-39c                             46,975     68    32.1c     +5.15      [-1.79, +12.66]
+  KXHIGHTBOS / 75-84c                            24,703     67    79.6c     +4.94      [-1.14, +10.11]
+  KXHIGHTSATX / 75-84c                           19,579     67    79.2c     +4.89      [-1.73, +10.77]
+  KXHIGHNY / 25-39c                              42,251     63    32.5c     +4.61      [-3.96, +12.92]
+  KXHIGHDEN / 25-39c                             40,284     68    32.8c     +4.30      [-3.32, +12.04]
+  KXHIGHPHIL / 85-89c                            13,769     68    87.0c     +4.28       [+0.05, +7.88]  <-- CI excludes 0
+  KXINXDUD / 85-89c                               2,854     44    86.9c     +3.65      [-7.39, +10.52]
+  KXHIGHTNOLA / 90-93c                           10,969     67    91.7c     +3.61       [+0.58, +6.06]  <-- CI excludes 0
+  KXHIGHAUS / 60-74c                             42,106     68    66.4c     +3.24      [-5.74, +11.78]
+  KXHIGHTLV / 85-89c                             13,004     68    87.0c     +2.94       [-2.61, +7.69]
+  KXLOWTCHI / 25-39c                             25,037     67    32.1c     +2.89      [-6.25, +12.33]
+  KXHIGHMIA / 85-89c                             12,797     67    87.0c     +2.83       [-2.85, +7.48]
+  KXHIGHMIA / 90-93c                             15,768     67    91.7c     +2.76       [-1.54, +5.86]
+  KXHIGHTNOLA / 85-89c                            9,462     67    87.2c     +2.73       [-3.38, +7.99]
+  KXAAAGASD / 90-93c                             15,626     34    91.6c     +2.71       [-0.55, +5.36]
+  KXHIGHTSATX / 90-93c                           10,220     67    91.6c     +2.60       [-2.56, +6.68]
+  KXLOWTLAX / 75-84c                              9,231     63    80.2c     +2.60       [-5.71, +9.60]
+  KXHIGHMIA / 25-39c                             41,739     68    32.5c     +2.55      [-7.74, +13.39]
+  ....................................................................................................
+  KXCS2MAP / 90-93c                              18,676    268    91.6c    -36.42     [-42.37, -30.75]  <-- reliably NEGATIVE
+  KXCS2MAP / 94-96c                              39,388    287    95.2c    -40.89     [-43.71, -38.20]  <-- reliably NEGATIVE
+  KXCS2MAP / 97-99c                              12,578    285    97.1c    -42.69     [-46.69, -38.77]  <-- reliably NEGATIVE
+
+PRICE X SECS  (50 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  94-96c / 0-5m                                   2,689    865    95.4c     -0.04       [-1.08, +0.96]
+  97-99c / 0-5m                                   6,012  1,066    98.3c     -0.32       [-0.98, +0.22]
+  85-89c / 0-5m                                   1,665    707    87.2c     -0.37       [-2.47, +1.66]
+  90-93c / 15-30m                                 1,965    300    91.5c     -0.39       [-3.40, +2.25]
+  90-93c / 5-15m                                  3,602    896    91.5c     -0.50       [-2.28, +1.11]
+  90-93c / 0-5m                                   2,153    776    91.7c     -0.65       [-2.44, +1.03]
+  97-99c / 60m+                               1,389,884  1,020    98.2c     -0.87       [-1.32, -0.44]  <-- reliably NEGATIVE
+  85-89c / 60m+                                 531,329    967    87.1c     -0.97       [-2.11, +0.10]
+  85-89c / 5-15m                                  3,780    947    87.1c     -1.08       [-3.17, +0.77]
+  97-99c / 5-15m                                  4,684    741    98.1c     -1.23       [-2.41, -0.23]  <-- reliably NEGATIVE
+  75-84c / 5-15m                                  7,858  1,035    79.5c     -1.49       [-3.18, +0.32]
+  75-84c / 0-5m                                   2,325    771    79.7c     -1.58       [-3.80, +0.59]
+  60-74c / 5-15m                                 13,180    992    66.7c     -1.58       [-2.98, -0.11]  <-- reliably NEGATIVE
+  01-09c / 30-60m                                71,856    755     1.9c     -1.65       [-1.89, -1.39]  <-- reliably NEGATIVE
+  01-09c / 60m+                               3,777,544    761     3.1c     -1.66       [-1.92, -1.40]  <-- reliably NEGATIVE
+  90-93c / 60m+                                 572,084    979    91.6c     -1.69       [-2.72, -0.77]  <-- reliably NEGATIVE
+  01-09c / 0-5m                                  25,857  1,606     2.4c     -1.75       [-1.93, -1.55]  <-- reliably NEGATIVE
+  01-09c / 15-30m                                29,988    692     2.0c     -1.91       [-2.10, -1.69]  <-- reliably NEGATIVE
+  01-09c / 5-15m                                 24,114  1,296     2.5c     -1.92       [-2.17, -1.68]  <-- reliably NEGATIVE
+  85-89c / 15-30m                                 1,887    306    87.1c     -2.31       [-6.78, +1.67]
+  ....................................................................................................
+  40-59c / 15-30m                                 4,601    311    49.4c     -8.50      [-11.18, -6.05]  <-- reliably NEGATIVE
+  10-24c / 15-30m                                 5,171    377    16.4c     -8.66      [-11.18, -6.00]  <-- reliably NEGATIVE
+  94-96c / 30-60m                                 5,734    448    95.2c     -9.66      [-12.64, -7.05]  <-- reliably NEGATIVE
+
+SERIES X SIDE  (76 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  KXINXDUD / no                                  36,937     45    45.7c     +5.68      [-6.39, +17.35]
+  KXRAIN / no                                   283,040    118    68.0c     +5.49       [+2.73, +8.28]  <-- CI excludes 0
+  KXHYPE15M / yes                                 7,667    600    51.6c     +0.77       [-2.39, +3.68]
+  KXAAAGASD / no                                149,316     34    45.0c     +0.32       [-4.28, +4.36]
+  KXSILVER15M / no                                8,384    600    48.9c     -0.32       [-2.98, +2.42]
+  KXHIGHLAX / no                                195,574     68    66.0c     -0.94       [-1.20, -0.56]  <-- reliably NEGATIVE
+  KXGOLD15M / no                                  8,327    600    48.0c     -1.23       [-3.93, +1.63]
+  KXHIGHNY / no                                 205,779     68    67.8c     -1.36       [-1.57, -1.13]  <-- reliably NEGATIVE
+  KXHIGHTPHX / no                               207,468     68    71.4c     -1.48       [-1.86, -0.99]  <-- reliably NEGATIVE
+  KXHIGHCHI / no                                219,255     68    72.6c     -1.53       [-1.78, -1.27]  <-- reliably NEGATIVE
+  KXHIGHTLV / no                                164,816     68    67.4c     -1.57       [-2.16, -0.82]  <-- reliably NEGATIVE
+  KXHIGHTSFO / no                               217,913     68    75.3c     -1.59       [-1.94, -1.23]  <-- reliably NEGATIVE
+  KXNEAR15M / yes                                 7,886    600    54.2c     -1.60       [-4.38, +1.19]
+  KXHIGHDEN / no                                201,069     68    72.5c     -1.62       [-2.02, -1.14]  <-- reliably NEGATIVE
+  KXHIGHMIA / no                                188,451     68    68.4c     -1.68       [-1.91, -1.46]  <-- reliably NEGATIVE
+  KXHIGHTSATX / yes                             201,445     67    23.2c     -1.68       [-2.06, -1.34]  <-- reliably NEGATIVE
+  KXHIGHMIA / yes                               238,904     68    22.5c     -1.68       [-1.85, -1.53]  <-- reliably NEGATIVE
+  KXHIGHTBOS / yes                              210,337     68    22.7c     -1.70       [-2.12, -1.30]  <-- reliably NEGATIVE
+  KXHIGHAUS / no                                193,419     68    71.9c     -1.75       [-2.05, -1.48]  <-- reliably NEGATIVE
+  KXHIGHCHI / yes                               266,342     68    21.6c     -1.76       [-1.94, -1.56]  <-- reliably NEGATIVE
+  ....................................................................................................
+  KXYTVIEWSW / yes                               15,002     35    55.9c    -12.46     [-28.34, +10.33]
+  KXCS2MAP / yes                                140,520    287    65.7c    -15.92     [-17.46, -14.34]  <-- reliably NEGATIVE
+  KXCS2MAP / no                                 140,683    287    70.9c    -23.51     [-25.33, -21.54]  <-- reliably NEGATIVE
+
+PRICE X SPREAD  (30 cells with n>=400 and >=30 clusters)
+  cell                                                n   clus  avg ask  NET c/ct               95% CI
+  ----------------------------------------------------------------------------------------------------
+  85-89c / tight<=1c                            237,650  1,351    87.1c     +0.96       [-0.36, +2.28]
+  90-93c / tight<=1c                            280,581  1,401    91.6c     +0.64       [-0.48, +1.67]
+  94-96c / tight<=1c                            351,536  1,373    95.1c     +0.24       [-0.55, +0.99]
+  97-99c / tight<=1c                            886,686  1,457    98.3c     +0.23       [-0.13, +0.56]
+  75-84c / tight<=1c                            370,460  1,500    79.6c     -0.09       [-1.61, +1.42]
+  94-96c / mid 1-3c                             168,930  1,188    95.1c     -0.16       [-1.00, +0.64]
+  85-89c / mid 1-3c                             153,103  1,364    87.1c     -0.19       [-1.67, +1.32]
+  90-93c / mid 1-3c                             153,501  1,279    91.6c     -0.44       [-1.65, +0.78]
+  97-99c / mid 1-3c                             348,518  1,208    98.1c     -0.59       [-1.14, -0.04]  <-- reliably NEGATIVE
+  75-84c / mid 1-3c                             261,467  1,500    79.6c     -1.07       [-2.87, +0.61]
+  01-09c / tight<=1c                          3,015,223  1,726     2.5c     -1.37       [-1.56, -1.17]  <-- reliably NEGATIVE
+  60-74c / tight<=1c                            535,796  1,548    66.8c     -1.61       [-3.15, +0.04]
+  60-74c / mid 1-3c                             410,606  1,543    67.0c     -1.96       [-3.67, -0.26]  <-- reliably NEGATIVE
+  01-09c / mid 1-3c                             705,671  1,464     4.7c     -2.24       [-2.76, -1.65]  <-- reliably NEGATIVE
+  40-59c / tight<=1c                            803,620  1,488    49.5c     -2.29       [-2.53, -2.06]  <-- reliably NEGATIVE
+  25-39c / tight<=1c                            531,220  1,551    32.0c     -2.71       [-4.34, -1.06]  <-- reliably NEGATIVE
+  10-24c / tight<=1c                            654,876  1,552    16.1c     -3.14       [-4.32, -1.90]  <-- reliably NEGATIVE
+  40-59c / mid 1-3c                             558,217  1,510    49.6c     -3.21       [-3.53, -2.92]  <-- reliably NEGATIVE
+  25-39c / mid 1-3c                             404,396  1,552    32.2c     -3.50       [-5.19, -1.80]  <-- reliably NEGATIVE
+  10-24c / mid 1-3c                             453,043  1,554    16.4c     -3.55       [-4.85, -2.26]  <-- reliably NEGATIVE
+  ....................................................................................................
+  90-93c / wide>3c                              149,156  1,374    91.6c     -7.36       [-9.06, -5.68]  <-- reliably NEGATIVE
+  60-74c / wide>3c                              451,294  1,584    67.1c     -7.44       [-8.80, -6.11]  <-- reliably NEGATIVE
+  94-96c / wide>3c                              159,247  1,395    95.1c    -13.19     [-15.12, -11.21]  <-- reliably NEGATIVE
+
+======================================================================================================
+CELLS WHOSE 95% CI EXCLUDES ZERO: 9
+These are LEADS, not findings. This scan tested hundreds of slices, so ~5% of pure noise
+clears a 95% CI by construction. Every one must survive step 5 (fee/population/depth/
+capacity) and then be pre-registered with an out-of-sample window before it means anything.
+  KXHIGHTLV / 60-74c                              n= 37,390  net=+9.38c  CI[+0.49,+17.10]
+  KXHIGHTLV / 75-84c                              n= 26,263  net=+6.96c  CI[+0.68,+12.41]
+  KXRAIN / no                                     n=283,040  net=+5.49c  CI[+2.73,+8.28]
+  KXHIGHPHIL / 85-89c                             n= 13,769  net=+4.28c  CI[+0.05,+7.88]
+  KXHIGHTNOLA / 90-93c                            n= 10,969  net=+3.61c  CI[+0.58,+6.06]
+  KXHIGHMIA / 97-99c                              n= 39,631  net=+1.46c  CI[+1.26,+1.63]
+  KXHIGHAUS / 97-99c                              n= 50,956  net=+1.40c  CI[+1.24,+1.51]
+  KXLOWTLAX / 97-99c                              n= 22,482  net=+1.32c  CI[+0.60,+1.84]
+  KXRAIN / 97-99c                                 n= 52,717  net=+0.82c  CI[+0.13,+1.37]
