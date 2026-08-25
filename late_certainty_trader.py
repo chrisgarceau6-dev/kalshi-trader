@@ -545,6 +545,97 @@ def fetch_balance():
     return total, shard
 
 
+# Every risk halt used to be a log line and nothing else — send_email fired only for
+# order-safety EXECUTION HALTs inside try_trade. That is how 2026-08-25 ran 10.5 hours
+# unnoticed. These two alerts close it.
+#
+# Dedup is the whole design problem: the daemon runs ~54 scans per 900s job and a job
+# lands every ~15 min, so a naive alert on a persisting halt is ~96 emails an hour and
+# gets muted within a day. Alert on the TRANSITION, then re-send only on this cadence
+# so a halt that is still standing hours later cannot be forgotten either.
+HALT_ALERT_REPEAT_SECONDS = 6 * 3600
+
+# A halt is not the only way to stop trading, and notably NOT the way 2026-08-25 broke:
+# orders were rejected, not halted, so no halt alert would have fired. The heartbeat is
+# the backstop that catches "healthy, selecting, filling nothing" regardless of cause.
+#
+# Threshold from data, not taste: over 500 fills (2026-08-20..24) the median gap between
+# fills is 11.9 min, p99 is 59.9 min, and the largest gap ever observed is 105.1 min.
+# 3h is ~1.7x the worst real quiet spell, so a false alarm is very unlikely, and it
+# would have caught 2026-08-25 in 3 hours instead of 10.5. Crypto 15M runs continuously,
+# so no market-hours gating is needed.
+NO_FILL_ALERT_SECONDS = 3 * 3600
+
+# Ordered most-specific first; first substring match wins. The key, not the full text,
+# is what dedup compares — reasons embed live numbers ("cooldown 43min") that change
+# every cycle and would otherwise defeat it.
+HALT_KEYS = (
+    ("execution safety halt", "execution"),
+    ("collateral",            "shard_collateral"),
+    ("<= stop $",             "stop_balance"),
+    ("today's P&L",           "daily_loss"),
+    ("consec losses",         "consec_losses"),
+    ("edge degrade",          "edge_degrade"),
+)
+
+
+def halt_key(reason):
+    for needle, key in HALT_KEYS:
+        if needle in reason:
+            return key
+    return "other"
+
+
+def alert_halt(state, reason):
+    """Email on a halt transition, and re-send every HALT_ALERT_REPEAT_SECONDS."""
+    key = halt_key(reason)
+    now_ts = datetime.now(ET).timestamp()
+    prev = state.get("halt_alert") or {}
+    same = prev.get("key") == key
+    if same and (now_ts - float(prev.get("ts", 0))) < HALT_ALERT_REPEAT_SECONDS:
+        return
+    state["halt_alert"] = {"key": key, "ts": now_ts}
+    since = ""
+    if same and prev.get("ts"):
+        since = f"\n\nStill halted — first seen {(now_ts - float(prev['ts']))/3600:.1f}h ago."
+    send_email(f"[Kalshi-C] HALT — {key}",
+               f"The trader is halted and is placing no orders.\n\n{reason}{since}\n\n"
+               f"Run `kstat` for live health, P&L and margin.")
+    log(f"  ALERT SENT — halt/{key}")
+
+
+def clear_halt_alert(state):
+    """Trading resumed — arm the next transition so a recurrence alerts immediately."""
+    if state.pop("halt_alert", None):
+        log("  halt cleared — alerting re-armed")
+
+
+def alert_if_no_fills(state):
+    """Backstop for a bot that is healthy, selecting normally, and filling nothing."""
+    now_ts = datetime.now(ET).timestamp()
+    last = float(state.get("last_fill_ts") or 0)
+    if not last:
+        state["last_fill_ts"] = now_ts       # first run after deploy — start the clock
+        return
+    quiet = now_ts - last
+    if quiet < NO_FILL_ALERT_SECONDS:
+        return
+    prev = float(state.get("no_fill_alert_ts") or 0)
+    if now_ts - prev < NO_FILL_ALERT_SECONDS:
+        return
+    state["no_fill_alert_ts"] = now_ts
+    send_email("[Kalshi-C] NO FILLS — nothing has traded in "
+               f"{quiet/3600:.1f}h",
+               f"No order has filled in {quiet/3600:.1f}h, and the bot is NOT halted — "
+               f"it is scanning and selecting normally.\n\n"
+               f"The largest gap between fills ever observed is 1.8h, so this is "
+               f"outside anything normal.\n\n"
+               f"This is the shape of the 2026-08-25 outage: every gate passes, orders "
+               f"are rejected downstream, and no metric moves except the fill count. "
+               f"Check the workflow log for the HTTP code on an order attempt.")
+    log(f"  ALERT SENT — no fills in {quiet/3600:.1f}h")
+
+
 def send_email(subject, body):
     to_addr   = os.environ.get("COPY_EMAIL_TO", "")
     from_addr = os.environ.get("COPY_EMAIL_FROM", "")
@@ -1692,6 +1783,7 @@ def try_trade(
             "settled":     False,
     }
     state["stats"]["trades"] += 1
+    state["last_fill_ts"] = datetime.now(ET).timestamp()   # feeds the no-fill heartbeat
     today = datetime.now(ET).date().isoformat()
     daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
     if daily.get("date") != today:
@@ -1804,6 +1896,7 @@ def try_longshot_trade(market, state, dry_run):
         }
         ls = state.setdefault("longshot_stats", {"trades": 0, "wins": 0, "pnl": 0.0})
         ls["trades"] += 1
+        state["last_fill_ts"] = datetime.now(ET).timestamp()   # feeds the no-fill heartbeat
         today = datetime.now(ET).date().isoformat()
         daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
         if daily.get("date") != today:
@@ -1924,8 +2017,11 @@ def run_once(dry_run=False):
     halted, reason = check_halts(state, balance, shard_balance)
     if halted:
         log(f"  HALTED — {reason}")
+        alert_halt(state, reason)
         save_state(state)  # persist edge_degrade_halted_at so 2h cooldown actually counts down
         return
+    clear_halt_alert(state)
+    alert_if_no_fills(state)
 
     bet = compute_bet_dollars(balance)
     dll = compute_daily_loss_limit(bet)
