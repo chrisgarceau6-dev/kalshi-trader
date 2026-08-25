@@ -136,6 +136,74 @@ class OrderSafetyTests(unittest.TestCase):
         self.assertAlmostEqual(total, 1201.191)
         self.assertAlmostEqual(shard, 400.0)
 
+    def test_halt_alerts_once_per_transition_not_once_per_scan(self):
+        """~54 scans per job, a job every ~15 min. Alerting every cycle is ~96 emails
+        an hour and gets muted inside a day, which is worse than no alert."""
+        state = {}
+        with patch.object(trader, "send_email") as mail:
+            for _ in range(50):
+                trader.alert_halt(state, "shard 2 collateral $10.00 < $50.00")
+        self.assertEqual(mail.call_count, 1)
+
+    def test_dedup_survives_live_numbers_in_the_reason(self):
+        """Reasons embed counters that change every cycle ('cooldown 43min'). Dedup
+        compares the KEY, so a changing number must not re-alert."""
+        state = {}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_halt(state, "9 consec losses, cooldown 59min")
+            trader.alert_halt(state, "9 consec losses, cooldown 58min")
+            trader.alert_halt(state, "9 consec losses, cooldown 12min")
+        self.assertEqual(mail.call_count, 1)
+
+    def test_a_different_halt_reason_alerts_immediately(self):
+        state = {}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_halt(state, "9 consec losses, cooldown 59min")
+            trader.alert_halt(state, "balance $390.00 <= stop $400")
+        self.assertEqual(mail.call_count, 2)
+
+    def test_recovery_rearms_so_a_recurrence_alerts_again(self):
+        state = {}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_halt(state, "shard 2 collateral $10.00 < $50.00")
+            trader.clear_halt_alert(state)
+            trader.alert_halt(state, "shard 2 collateral $10.00 < $50.00")
+        self.assertEqual(mail.call_count, 2)
+
+    def test_standing_halt_re_alerts_after_the_repeat_window(self):
+        """A halt still standing hours later must not be forgotten."""
+        state = {}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_halt(state, "shard 2 collateral $10.00 < $50.00")
+            state["halt_alert"]["ts"] -= trader.HALT_ALERT_REPEAT_SECONDS + 1
+            trader.alert_halt(state, "shard 2 collateral $10.00 < $50.00")
+        self.assertEqual(mail.call_count, 2)
+
+    def test_no_fill_heartbeat_catches_the_2026_08_25_failure_shape(self):
+        """Rejected orders produce NO halt, so halt alerting alone would have missed
+        the outage entirely. The heartbeat is what actually catches it."""
+        now = trader.datetime.now(trader.ET).timestamp()
+        state = {"last_fill_ts": now - (trader.NO_FILL_ALERT_SECONDS + 60)}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_if_no_fills(state)
+        self.assertEqual(mail.call_count, 1)
+
+    def test_no_fill_heartbeat_stays_quiet_inside_a_normal_gap(self):
+        """Largest gap ever observed is 105 min; that must never page."""
+        now = trader.datetime.now(trader.ET).timestamp()
+        state = {"last_fill_ts": now - 105 * 60}
+        with patch.object(trader, "send_email") as mail:
+            trader.alert_if_no_fills(state)
+        self.assertEqual(mail.call_count, 0)
+
+    def test_no_fill_heartbeat_does_not_spam_while_still_quiet(self):
+        now = trader.datetime.now(trader.ET).timestamp()
+        state = {"last_fill_ts": now - (trader.NO_FILL_ALERT_SECONDS + 60)}
+        with patch.object(trader, "send_email") as mail:
+            for _ in range(50):
+                trader.alert_if_no_fills(state)
+        self.assertEqual(mail.call_count, 1)
+
     def test_partial_fill_is_topped_up_without_exceeding_budget(self):
         state = {
             "positions": {},

@@ -340,6 +340,29 @@ per-shard, so `check_halts` gets a separate, NON-sticky guard at
 are simply rejected, which moves no metric except the fill count. A missing
 `balance_breakdown` (subaccount-restricted key) fails OPEN to the total.
 
+### Alerting — halts and a no-fill heartbeat (2026-08-25)
+
+Risk halts used to be a log line and nothing else: `send_email` fired only for
+order-safety EXECUTION HALTs inside `try_trade`, so a `check_halts` stop, a drained
+shard, an edge-degrade halt or a consec-loss cooldown was invisible until someone ran
+`kstat`. Both alerts go to `COPY_EMAIL_TO`, already wired into the trader step.
+
+**Halt alert.** Fires on the halt TRANSITION, keyed by category, and re-sends every
+`HALT_ALERT_REPEAT_SECONDS` (6h) while it stands. Dedup compares the KEY, never the
+reason text — reasons embed live counters ("cooldown 43min") that change every cycle.
+This matters: ~54 scans per job and a job every ~15 min means a naive per-cycle alert
+is ~96 emails an hour, which gets muted within a day and is worse than no alert.
+Recovery clears the key, so a recurrence pages immediately.
+
+**No-fill heartbeat.** `NO_FILL_ALERT_SECONDS` = 3h. **This is the one that would have
+caught 2026-08-25** — that outage produced NO halt at all, because orders were rejected
+downstream, so halt alerting alone would have missed it entirely. The threshold is
+measured, not chosen: across 500 fills (08-20..24) the median gap is 11.9 min, p99 is
+59.9 min, and the largest gap ever observed is **105.1 min**. 3h is ~1.7x the worst real
+quiet spell. Crypto 15M runs continuously, so no market-hours gating is needed.
+
+`state["last_fill_ts"]` is stamped on both fill paths (main and longshot).
+
 ### Account P&L — quote a scope, never "lifetime"
 
 No source here can produce a lifetime figure (settlements retain ~30 days, state caps
