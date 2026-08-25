@@ -27,3 +27,5 @@ data/.btc_spot_cache.json
 # regenerated API dumps — 69MB of them, rebuild with fetch_programs.py
 archive/research/refuted/kalshi_incentives/*.json
 archive/research/refuted/kalshi_incentives/.claude-flow/
+research/search2/data/
+research/search2/universe.json
