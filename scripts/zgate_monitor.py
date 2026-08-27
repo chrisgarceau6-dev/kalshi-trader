@@ -31,7 +31,7 @@ RATE_LO, RATE_HI = 0.08, 0.35   # expected ~0.20; outside this for 3 days = dist
 FEE_PP           = 0.539   # fee load in pp of break-even (CLAUDE.md)
 
 SKIP = re.compile(r"\[ZGATE-SKIP\]\s+(\S+)\s+(YES|NO)\s+([\d.]+)c\s+(\d+)s\s+z=([-+\d.]+)")
-PASS = re.compile(r"\[ZGATE-PASS\]\s+(\S+)\s+(YES|NO)\s+z=([-+\d.]+)")
+PASS = re.compile(r"\[ZGATE-PASS\]\s+(\S+)\s+(YES|NO)\s+([\d.]+)c\s+(\d+)s\s+z=([-+\d.]+)")
 
 def sh(*a):
     return subprocess.run(a, cwd=ROOT, capture_output=True, text=True, timeout=600).stdout
@@ -49,8 +49,9 @@ def harvest(days):
             k = (tk, side.lower())
             if k not in skips: skips[k] = dict(ask=float(ask), secs=int(secs), z=float(z))
         for m in PASS.finditer(log):
-            tk, side, z = m.groups()
-            passes.setdefault((tk, side.lower()), dict(z=float(z)))
+            tk, side, ask, secs, z = m.groups()
+            passes.setdefault((tk, side.lower()),
+                              dict(ask=float(ask), secs=int(secs), z=float(z)))
         if i % 25 == 0:
             print(f"  ...{i}/{len(runs)} runs, {len(skips)} skips", file=sys.stderr)
     return skips, passes
@@ -94,8 +95,9 @@ def main():
                          f"on n={n_r} (>= {MIN_N_REJECTED}). The gate is discarding winners. REVERT.")
     if n_k:
         wrk = sum(w for _, _, w in kep) / n_k * 100
-        bek = sum(v.get("ask", 92.0) for _, v, _ in kep) / n_k + FEE_PP if kep and "ask" in kep[0][1] else 92.0 + FEE_PP
-        lines.append(f"  KEPT       WR {wrk:.2f}%")
+        bek = sum(v["ask"] for _, v, _ in kep) / n_k + FEE_PP
+        lines.append(f"  KEPT       WR {wrk:.2f}%  vs break-even {bek:.2f}%  "
+                     f"edge {wrk-bek:+.2f}pp   (want POSITIVE)")
 
     if tot >= 50 and not (RATE_LO <= rate <= RATE_HI):
         trips.append(f"DISTRIBUTION SHIFT: rejection rate {rate*100:.1f}% is outside "

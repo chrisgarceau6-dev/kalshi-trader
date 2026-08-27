@@ -1558,7 +1558,12 @@ def try_trade(
             f"z={_z_val:+.3f} < {Z_GATE_MIN}")
         return
     if _z_val is not None:
-        log(f"  [ZGATE-PASS] {ticker}  {side.upper()}  z={_z_val:+.3f}")
+        # ask + secs are logged on BOTH sides of the gate so the monitor can compute a
+        # real break-even for the KEPT group, not a hardcoded 92c. Changing this format
+        # once data has accumulated would split the dataset — fixed the same hour the
+        # gate shipped, before that could happen.
+        log(f"  [ZGATE-PASS] {ticker}  {side.upper()}  {fresh_ask}c  "
+            f"{secs_left:.0f}s  z={_z_val:+.3f}")
 
     # C5 SHADOW-ONLY: prior1>=95c + prior3>=95c (54 OOS trades, not yet blockable)
     if int(prior_asks[0]) >= 95:
