@@ -30,3 +30,6 @@ archive/research/refuted/kalshi_incentives/.claude-flow/
 research/search2/data/
 research/search2/universe.json
 research/search2/data_ohlc/
+
+# Kalshi settlement values, rebuild with scripts/fetch_brti.py
+data/.brti_cache/
