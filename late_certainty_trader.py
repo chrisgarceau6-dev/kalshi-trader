@@ -1046,6 +1046,7 @@ def _prior_k_candle_asks(ticker, series, side, k):
 
 _SURVIVOR_SEEN = set()
 _MOMENTUM_SEEN = set()
+_Z_SEEN = set()
 _MOMENTUM_CACHE = {}
 _GATELOG_SEEN = set()
 
@@ -1116,7 +1117,7 @@ def shadow_survivor(market, series):
 
 
 def _spot_momentum(series):
-    """(vol-normalised 3-min spot move, sigma) for a series, or None on any error.
+    """(vol-normalised 3-min spot move, sigma, latest spot) or None on any error.
 
     One Coinbase call covers both the 3-minute move and the 60-minute vol. Cached per
     wall-clock minute: a 240s job polls ~16 times but crosses only ~4 minute boundaries.
@@ -1158,7 +1159,7 @@ def _spot_momentum(series):
     if sigma <= 0 or back not in px or px[back] <= 0:
         return None
     out = (math.log(px[mins[-1]] / px[back]) / (sigma * math.sqrt(MOMENTUM_LOOKBACK)),
-           sigma)
+           sigma, px[mins[-1]])
     if len(_MOMENTUM_CACHE) < 64:      # short-lived process; keep the dict bounded
         _MOMENTUM_CACHE[key] = out
     return out
@@ -1185,12 +1186,64 @@ def shadow_momentum(market, series):
     got = _spot_momentum(series)
     if got is None:
         return                          # retried next poll; nothing marked seen
-    mom, sigma = got
+    mom, sigma, _spot = got
     for side, ask in pending:
         _MOMENTUM_SEEN.add((ticker, side))
         adverse = -mom if side == "yes" else mom
         log(f"  [SHADOW:MOM3] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  "
             f"m3={adverse:+.2f}  sigma={sigma * 1e4:.2f}bp")
+
+
+def shadow_z(market, series):
+    """Log vol-normalised distance to strike for markets in the live entry band.
+
+    PHASE 1 of the z-gate pre-registration (2026-08-27, PART II dated observations).
+    Trades nothing and gates nothing — it exists to prove the LIVE Coinbase feed
+    reproduces the backtested z against BRTI settlement before any gate is proposed.
+
+        z = (spot - floor_strike)/spot / (sigma * sqrt(secs_left/60))
+
+    signed toward the position, so positive means the position is already ahead.
+
+    Costs no extra network: `_spot_momentum` is cached per wall-clock minute and
+    shadow_momentum has already populated it for this series this minute. `sigma` is
+    the trader's existing mean-centred sample sd, NOT the backtest's RMS — measured
+    equivalent (corr 0.9998, z shifts <1% worst case), and the live definition is
+    canonical so the two cannot drift apart.
+    """
+    ticker    = market.get("ticker", "")
+    secs_left = market.get("_secs_left", 0)
+    if not (MIN_SECS_LEFT <= secs_left <= MAX_SECS_LEFT):
+        return
+    try:
+        strike = float(market.get("floor_strike") or 0)
+    except (TypeError, ValueError):
+        return
+    if strike <= 0:
+        return
+    pending = []
+    for side in ("yes", "no"):
+        ask = price_cents(market.get(f"{side}_ask_dollars"))
+        if _in_band(ask, side) and (ticker, side) not in _Z_SEEN:
+            pending.append((side, ask))
+    if not pending:
+        return
+    got = _spot_momentum(series)
+    if got is None:
+        return                          # retried next poll; nothing marked seen
+    _mom, sigma, spot = got
+    if sigma <= 0 or spot <= 0 or secs_left <= 0:
+        return
+    denom = sigma * math.sqrt(secs_left / 60.0)
+    if denom <= 0:
+        return
+    for side, ask in pending:
+        _Z_SEEN.add((ticker, side))
+        sgn = 1.0 if side == "yes" else -1.0
+        z = sgn * (spot - strike) / spot / denom
+        log(f"  [SHADOW:Z] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  "
+            f"z={z:+.3f}  spot={spot:.6g}  strike={strike:.6g}  "
+            f"sigma={sigma * 1e4:.2f}bp")
 
 
 def shadow_gate_inputs(market, series):
@@ -2127,6 +2180,10 @@ def run_once(dry_run=False):
             shadow_momentum(m, series)
         except Exception as exc:
             log(f"  [SHADOW:MOM3] skipped {m.get('ticker','')}: {exc}")
+        try:
+            shadow_z(m, series)
+        except Exception as exc:
+            log(f"  [SHADOW:Z] skipped {m.get('ticker','')}: {exc}")
         try:
             shadow_gate_inputs(m, series)
         except Exception as exc:
