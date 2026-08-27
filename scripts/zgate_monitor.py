@@ -117,17 +117,21 @@ def main():
     print(body)
     if a.email and trips:
         try:
-            from daily_summary import _ensure_key
             import smtplib
             from email.mime.text import MIMEText
-            to = os.environ.get("COPY_EMAIL_TO", "")
-            usr = os.environ.get("GMAIL_USER", ""); pwd = os.environ.get("GMAIL_APP_PASSWORD", "")
-            if to and usr and pwd:
-                msg = MIMEText(body); msg["Subject"] = "[Kalshi] z-GATE REVERT CONDITION TRIPPED"
-                msg["From"] = usr; msg["To"] = to
+            # Secret names must match daily_summary.yml — COPY_EMAIL_*, not GMAIL_*.
+            frm = os.environ.get("COPY_EMAIL_FROM", "")
+            to  = os.environ.get("COPY_EMAIL_TO", "")
+            pwd = os.environ.get("COPY_EMAIL_PASSWORD", "")
+            if frm and to and pwd:
+                msg = MIMEText(body)
+                msg["Subject"] = "[Kalshi] z-GATE REVERT CONDITION TRIPPED"
+                msg["From"], msg["To"] = frm, to
                 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as sv:
-                    sv.login(usr, pwd); sv.send_message(msg)
+                    sv.login(frm, pwd); sv.send_message(msg)
                 print("\n  alert emailed")
+            else:
+                print("\n  email not configured (COPY_EMAIL_FROM/TO/PASSWORD)")
         except Exception as exc:
             print(f"\n  email failed: {exc}")
     sys.exit(2 if trips else 0)
