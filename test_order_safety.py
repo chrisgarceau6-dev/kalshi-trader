@@ -1017,3 +1017,36 @@ class TopUpDepthTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import inspect
+
+
+class ShadowZTests(unittest.TestCase):
+    """Pin PHASE 1 of the z-gate (pre-registered 2026-08-27) as SHADOW-ONLY.
+
+    shadow_z must never place, price, or block an order. These tests exist so a future
+    'cleanup' cannot quietly turn a logging probe into a live filter.
+    """
+
+    def test_shadow_z_places_no_orders(self):
+        src = inspect.getsource(trader.shadow_z)
+        for forbidden in ("place_order", "kalshi_post", "create_order", "cancel_order"):
+            self.assertNotIn(forbidden, src,
+                             f"shadow_z must not call {forbidden} — it is shadow-only")
+
+    def test_shadow_z_returns_none_without_strike(self):
+        m = {"ticker": "KXBTC15M-X", "_secs_left": 300,
+             "yes_ask_dollars": 0.92, "no_ask_dollars": 0.08}
+        self.assertIsNone(trader.shadow_z(m, "KXBTC15M"))   # no floor_strike -> no log
+
+    def test_spot_momentum_returns_triple(self):
+        """z reads spot off the momentum call. If that arity changes, z breaks."""
+        src = inspect.getsource(trader._spot_momentum)
+        self.assertIn("sigma, px[mins[-1]]", src,
+                      "_spot_momentum must return (mom, sigma, spot) — shadow_z needs the level")
+
+    def test_z_sign_convention(self):
+        """Positive z must mean the position is AHEAD, for both sides."""
+        src = inspect.getsource(trader.shadow_z)
+        self.assertIn('sgn = 1.0 if side == "yes" else -1.0', src)
