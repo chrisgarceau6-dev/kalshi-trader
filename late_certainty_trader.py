@@ -224,6 +224,18 @@ MOMENTUM_LOOKBACK   = 3    # minutes of spot move
 MOMENTUM_VOL_WINDOW = 60   # trailing 1-min returns for the vol normaliser
 SURVIVOR_LOOKBACK = (480, 600)
 
+# LIVE GATE — vol-normalised distance to strike (2026-08-27).
+# Skip a signal whose cushion is small relative to how far the underlying can still
+# move before settlement. z = (spot-strike)/spot / (sigma*sqrt(secs_left/60)), signed
+# toward the position. FAILS OPEN: an uncomputable z never blocks.
+# Walk-forward over all 76 days of archive: +$39.85/day -> +$76.63/day, 11/11 weeks
+# positive, stratified permutation p=0.002 (0/500), max drawdown -$526 -> -$211.
+# SHIPPED AGAINST REVIEW ADVICE — the hypothesis was chosen on the same data it is
+# measured on, which no statistic here repairs. Revert rule is pre-registered in
+# CLAUDE.md and enforced by scripts/zgate_monitor.py. To disable: Z_GATE_ENABLED=False.
+Z_GATE_ENABLED  = True
+Z_GATE_MIN      = 0.761    # walk-forward cut; stable at 0.746-0.776 across all 11 weeks
+
 # SHADOW ONLY — poll-level gate inputs (2026-08-21). data/candles/*.csv.gz lets any
 # past or future version be replayed against every archived day, but the archive is a
 # 1-min sample: it sees candles, while the bot sees the ask at poll instants. 70% of
@@ -1194,6 +1206,62 @@ def shadow_momentum(market, series):
             f"m3={adverse:+.2f}  sigma={sigma * 1e4:.2f}bp")
 
 
+def z_value(market, series, side, secs_left):
+    """Vol-normalised distance to strike for one side, or None if it cannot be computed.
+
+    THE single definition. The shadow log and the live gate both call this, so a logged
+    z is literally the number that gated (or did not gate) the trade — without that the
+    monitoring in scripts/zgate_monitor.py would be scoring a different quantity.
+
+        z = (spot - floor_strike)/spot / (sigma * sqrt(secs_left/60))
+
+    signed toward the position: positive means the position is already ahead. Returns
+    None on ANY missing input, and every caller treats None as "do not gate".
+
+    Costs no extra network — `_spot_momentum` is cached per wall-clock minute.
+    """
+    try:
+        strike = float(market.get("floor_strike") or 0)
+    except (TypeError, ValueError):
+        return None
+    if strike <= 0 or secs_left <= 0:
+        return None
+    got = _spot_momentum(series)
+    if got is None:
+        return None
+    _mom, sigma, spot = got
+    if sigma <= 0 or spot <= 0:
+        return None
+    denom = sigma * math.sqrt(secs_left / 60.0)
+    if denom <= 0:
+        return None
+    sgn = 1.0 if side == "yes" else -1.0
+    return sgn * (spot - strike) / spot / denom
+
+
+def z_gate_blocks(market, series, side, secs_left):
+    """(blocked, z) for the live z-gate. FAILS OPEN — an uncomputable z never blocks.
+
+    Deployed 2026-08-27 at Chris's explicit direction, against the reviewer
+    recommendation to validate prospectively first. Pre-registration, revert rule and
+    monitoring: CLAUDE.md dated observations + scripts/zgate_monitor.py.
+
+    Fail-open is deliberate and matches the backtest, which kept every unscoreable
+    signal. It also means a Coinbase outage degrades to today's behaviour rather than
+    halting the book. ~13% of signals are unscoreable (BNB is 71% minute coverage) and
+    they trade EXACTLY as before.
+    """
+    if not Z_GATE_ENABLED:
+        return False, None
+    try:
+        z = z_value(market, series, side, secs_left)
+    except Exception:
+        return False, None              # never let the gate break a trading cycle
+    if z is None:
+        return False, None
+    return (z < Z_GATE_MIN), z
+
+
 def shadow_z(market, series):
     """Log vol-normalised distance to strike for markets in the live entry band.
 
@@ -1234,16 +1302,14 @@ def shadow_z(market, series):
     _mom, sigma, spot = got
     if sigma <= 0 or spot <= 0 or secs_left <= 0:
         return
-    denom = sigma * math.sqrt(secs_left / 60.0)
-    if denom <= 0:
-        return
     for side, ask in pending:
         _Z_SEEN.add((ticker, side))
-        sgn = 1.0 if side == "yes" else -1.0
-        z = sgn * (spot - strike) / spot / denom
+        z = z_value(market, series, side, secs_left)
+        if z is None:
+            continue
         log(f"  [SHADOW:Z] {ticker}  {side.upper()}  {ask}c  {secs_left:.0f}s  "
             f"z={z:+.3f}  spot={spot:.6g}  strike={strike:.6g}  "
-            f"sigma={sigma * 1e4:.2f}bp")
+            f"sigma={sigma * 1e4:.2f}bp  gate={'BLOCK' if z < Z_GATE_MIN else 'pass'}")
 
 
 def shadow_gate_inputs(market, series):
@@ -1483,6 +1549,16 @@ def try_trade(
         log(f"[SHADOW:C1-SOL-LOW-P2] {ticker} — SOL prior2={int(prior_asks[1])}c "
             f"(quarantine; ask={fresh_ask}c secs={secs_left})")
         return
+
+    # Z-GATE (2026-08-27). Sits AFTER every price/prior gate and BEFORE the book last
+    # look, because the book read must remain the final call before the order.
+    _z_blocked, _z_val = z_gate_blocks(market, series, side, secs_left)
+    if _z_blocked:
+        log(f"  [ZGATE-SKIP] {ticker}  {side.upper()}  {fresh_ask}c  {secs_left:.0f}s  "
+            f"z={_z_val:+.3f} < {Z_GATE_MIN}")
+        return
+    if _z_val is not None:
+        log(f"  [ZGATE-PASS] {ticker}  {side.upper()}  z={_z_val:+.3f}")
 
     # C5 SHADOW-ONLY: prior1>=95c + prior3>=95c (54 OOS trades, not yet blockable)
     if int(prior_asks[0]) >= 95:

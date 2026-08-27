@@ -1048,5 +1048,80 @@ class ShadowZTests(unittest.TestCase):
 
     def test_z_sign_convention(self):
         """Positive z must mean the position is AHEAD, for both sides."""
-        src = inspect.getsource(trader.shadow_z)
+        src = inspect.getsource(trader.z_value)
         self.assertIn('sgn = 1.0 if side == "yes" else -1.0', src)
+
+    def test_shadow_and_gate_share_one_z(self):
+        """The logged z must BE the gating z. If these diverge, the monitor is
+        scoring a different quantity from the one that blocked the trade."""
+        self.assertIn("z_value(", inspect.getsource(trader.shadow_z))
+        self.assertIn("z_value(", inspect.getsource(trader.z_gate_blocks))
+
+
+class ZGateTests(unittest.TestCase):
+    """The live z-gate. Every test here is about FAILING OPEN — the gate may only ever
+    remove trades it can positively score, and must never halt or crash the book."""
+
+    def _mkt(self, strike=100.0):
+        return {"ticker": "KXBTC15M-X", "floor_strike": strike, "_secs_left": 300}
+
+    def test_fails_open_when_z_uncomputable(self):
+        """No spot, no strike, no Coinbase — the gate must let the trade through."""
+        for m in ({}, {"floor_strike": 0}, {"floor_strike": None}):
+            blocked, z = trader.z_gate_blocks(m, "KXBTC15M", "yes", 300)
+            self.assertFalse(blocked)
+            self.assertIsNone(z)
+
+    def test_fails_open_on_zero_or_negative_secs(self):
+        blocked, z = trader.z_gate_blocks(self._mkt(), "KXBTC15M", "yes", 0)
+        self.assertFalse(blocked)
+
+    def test_fails_open_on_unknown_series(self):
+        """A series with no Coinbase pair must trade exactly as before."""
+        blocked, z = trader.z_gate_blocks(self._mkt(), "KXNOTREAL", "yes", 300)
+        self.assertFalse(blocked)
+
+    def test_disable_switch_is_honoured(self):
+        old = trader.Z_GATE_ENABLED
+        try:
+            trader.Z_GATE_ENABLED = False
+            blocked, z = trader.z_gate_blocks(self._mkt(), "KXBTC15M", "yes", 300)
+            self.assertFalse(blocked)
+            self.assertIsNone(z)
+        finally:
+            trader.Z_GATE_ENABLED = old
+
+    def test_never_raises(self):
+        """Garbage in must not propagate an exception into the trading cycle."""
+        for m in ({"floor_strike": "abc"}, {"floor_strike": float("nan")}, None or {}):
+            try:
+                trader.z_gate_blocks(m, "KXBTC15M", "yes", 300)
+            except Exception as exc:
+                self.fail(f"z_gate_blocks raised {exc!r}")
+
+    def test_threshold_direction(self):
+        """Below the threshold blocks, at or above passes — checked on the real code
+        path with _spot_momentum stubbed, so the comparison itself is exercised."""
+        old = trader._spot_momentum
+        try:
+            # sigma 100bp/min, spot 100, strike 100 -> z = 0 -> must BLOCK
+            trader._spot_momentum = lambda s: (0.0, 0.01, 100.0)
+            blocked, z = trader.z_gate_blocks(self._mkt(100.0), "KXBTC15M", "yes", 300)
+            self.assertTrue(blocked)
+            self.assertAlmostEqual(z, 0.0, places=6)
+            # spot well above strike -> large positive z -> must PASS
+            trader._spot_momentum = lambda s: (0.0, 0.0001, 100.0)
+            blocked, z = trader.z_gate_blocks(self._mkt(99.0), "KXBTC15M", "yes", 300)
+            self.assertFalse(blocked)
+            self.assertGreater(z, trader.Z_GATE_MIN)
+            # NO side is signed the other way: same spot/strike must now BLOCK
+            blocked, z = trader.z_gate_blocks(self._mkt(99.0), "KXBTC15M", "no", 300)
+            self.assertTrue(blocked)
+        finally:
+            trader._spot_momentum = old
+
+    def test_gate_runs_before_the_book_read(self):
+        """The book last look must stay the final call before place_order."""
+        src = inspect.getsource(trader.try_trade)
+        self.assertLess(src.index("z_gate_blocks"), src.index("_book_depth_at_max_ask"),
+                        "z-gate must not sit between the book read and the order")
