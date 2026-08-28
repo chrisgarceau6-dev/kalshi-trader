@@ -636,15 +636,30 @@ def alert_if_no_fills(state):
     if now_ts - prev < NO_FILL_ALERT_SECONDS:
         return
     state["no_fill_alert_ts"] = now_ts
+    stuck    = awaiting_settlement_tickers(state)
+    open_cnt = sum(1 for t, p in state.get("positions", {}).items()
+                   if not p.get("settled") and t not in stuck)
+    if stuck:
+        stuck_note = (f"\n{len(stuck)} position(s) sit in markets that have CLOSED but "
+                      f"that Kalshi has not settled:\n"
+                      + "".join(f"  {t}\n" for t in sorted(stuck))
+                      + "These are discounted from the cap, so they are NOT blocking "
+                        "entries.\n")
+    else:
+        stuck_note = "\nNo position is stuck awaiting settlement.\n"
     send_email("[Kalshi-C] NO FILLS — nothing has traded in "
                f"{quiet/3600:.1f}h",
                f"No order has filled in {quiet/3600:.1f}h, and the bot is NOT halted — "
                f"it is scanning and selecting normally.\n\n"
                f"The largest gap between fills ever observed is 1.8h, so this is "
-               f"outside anything normal.\n\n"
-               f"This is the shape of the 2026-08-25 outage: every gate passes, orders "
-               f"are rejected downstream, and no metric moves except the fill count. "
-               f"Check the workflow log for the HTTP code on an order attempt.")
+               f"outside anything normal.\n"
+               f"{stuck_note}\n"
+               f"Concurrency: {open_cnt}/{MAX_CONCURRENT_POSITIONS} slots in use.\n\n"
+               f"If the slots are full, entries are capped and that is the cause. "
+               f"Otherwise this is the shape of the 2026-08-25 outage: every gate "
+               f"passes, orders are rejected downstream, and no metric moves except "
+               f"the fill count — check the workflow log for the HTTP code on an "
+               f"order attempt.")
     log(f"  ALERT SENT — no fills in {quiet/3600:.1f}h")
 
 
@@ -1484,10 +1499,16 @@ def try_trade(
     }
     # Kalshi positions are aggregated by ticker, while every resting order is
     # separate potential exposure and must consume its own concurrency slot.
-    open_cnt = len(state_open | live_position_tickers) + len(resting_order_tickers)
+    # A position whose market has closed is only awaiting Kalshi's settlement report
+    # and no longer competes for a slot — see awaiting_settlement_tickers.
+    awaiting = awaiting_settlement_tickers(state)
+    open_cnt = (len((state_open | live_position_tickers) - awaiting)
+                + len(resting_order_tickers))
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         log(f"  SKIP {ticker} — heat check: {open_cnt} open positions "
-            f"(limit {MAX_CONCURRENT_POSITIONS})")
+            f"(limit {MAX_CONCURRENT_POSITIONS})"
+            + (f", {len(awaiting)} awaiting settlement (discounted)"
+               if awaiting else ""))
         return
 
     # PREFLIGHT RECHECK — the scan happened seconds ago. Refetch the ask right
@@ -1933,7 +1954,9 @@ def try_longshot_trade(market, state, dry_run):
     series = market.get("event_ticker", "").split("-")[0] or ticker.split("-")[0]
     if ticker in state.get("positions", {}):
         return
-    open_cnt = sum(1 for p in state.get("positions", {}).values() if not p.get("settled"))
+    awaiting = awaiting_settlement_tickers(state)
+    open_cnt = sum(1 for t, p in state.get("positions", {}).items()
+                   if not p.get("settled") and t not in awaiting)
     if open_cnt >= MAX_CONCURRENT_POSITIONS:
         return
 
@@ -2045,6 +2068,39 @@ def try_longshot_trade(market, state, dry_run):
 
 # ── outcome tracking ───────────────────────────────────────────────────────────
 
+def awaiting_settlement_tickers(state):
+    """Tickers we hold in markets that have closed but that Kalshi has not settled.
+
+    These consume no concurrency slot. MAX_CONCURRENT_POSITIONS caps the tail of a
+    single settlement cluster, and a closed market's outcome is already fixed by the
+    world — it just has not been reported yet, so it cannot correlate with a cluster
+    that is still trading. On 2026-08-28 Kalshi stalled every 08:00 ET expiry for
+    hours; the two positions held there pinned the count at the cap and blocked every
+    later cluster from 08:09 ET onward without one order attempt ever being made.
+
+    close_time is cached by check_outcomes, which already fetches each unsettled
+    market once per cycle. A position with no cached close_time is counted, so a
+    missing or unparseable value fails back to the old blocking behaviour.
+    """
+    now = datetime.now(timezone.utc)
+    stale = set()
+    for ticker, pos in state.get("positions", {}).items():
+        if pos.get("settled"):
+            continue
+        raw = pos.get("close_time")
+        if not raw:
+            continue
+        try:
+            closed_at = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if closed_at.tzinfo is None:
+            closed_at = closed_at.replace(tzinfo=timezone.utc)
+        if closed_at <= now:
+            stale.add(ticker)
+    return stale
+
+
 def check_outcomes(state, balance):
     today = datetime.now(ET).date().isoformat()
     daily = state.setdefault("daily", {"date": today, "pnl": 0.0})
@@ -2061,6 +2117,11 @@ def check_outcomes(state, balance):
         m = resp.get("market", resp)
         status = m.get("status", "")
         result = m.get("result", "")
+        # Cache the close time while the market is in hand. The heat check needs to
+        # tell a genuinely live position from one only awaiting settlement, and this
+        # is the one place that already fetches every unsettled market each cycle.
+        if m.get("close_time"):
+            pos["close_time"] = m["close_time"]
         if status not in ("settled", "finalized") or result not in ("yes", "no"):
             continue
 
