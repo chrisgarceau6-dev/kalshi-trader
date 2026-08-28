@@ -282,9 +282,13 @@ class OrderSafetyTests(unittest.TestCase):
         # 75 -> 50 on 2026-08-19 to restore the <=4.6%-of-balance ratio.
         # 50 -> 25 on 2026-08-22 for survival: balance $979.62 left only 6.6 losses
         # of headroom above the $650 stop after Aug 21-22 ran -$383.42.
-        self.assertEqual(trader.FLAT_BET_DOLLARS, 25)
-        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("25"))
-        self.assertEqual(count, 26)
+        # 25 -> 35 on 2026-08-28, bankroll scaling at Chris's direction: 1.8% -> 2.5%
+        # of a $1,405 balance. Explicitly an OVERRIDE of the "not on a good week" bar
+        # above FLAT_BET_DOLLARS, not a satisfied condition — see that comment for the
+        # measurements taken first and the 1.32x drawdown ratio accepted with it.
+        self.assertEqual(trader.FLAT_BET_DOLLARS, 35)
+        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("35"))
+        self.assertEqual(count, 37)
 
     def test_subpenny_boundaries_are_not_rounded_into_band(self):
         with patch.object(trader, "kalshi_get", return_value=(200, {"market": {"yes_ask_dollars": "0.8950"}})):

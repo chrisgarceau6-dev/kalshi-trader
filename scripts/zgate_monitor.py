@@ -26,7 +26,12 @@ sys.path.insert(0, ROOT)
 MIN_N_REJECTED   = 200     # before the reversal test can fire at all
 REVERT_WR_MARGIN = 0.0     # revert if rejected WR >= its own break-even
 MIN_N_TOTAL      = 500     # before the profitability test can fire
-REVERT_PER_TRADE = 0.10    # revert if overall $/trade falls below this
+# 0.10 -> 0.14 on 2026-08-28 when FLAT_BET_DOLLARS went 25 -> 35. This is a UNIT
+# RESCALE, not a relaxation: $/trade is absolute dollars, so a 1.4x bet inflates it
+# 1.4x at an unchanged edge, and leaving 0.10 would have silently disarmed the test —
+# a genuine collapse to $0.08/trade would have printed $0.11 and never tripped.
+# 0.10 x 35/25 = 0.14 holds the trip at the same underlying per-contract edge.
+REVERT_PER_TRADE = 0.14    # revert if overall $/trade falls below this
 RATE_LO, RATE_HI = 0.08, 0.35   # expected ~0.20; outside this for 3 days = distribution shift
 FEE_PP           = 0.539   # fee load in pp of break-even (CLAUDE.md)
 
