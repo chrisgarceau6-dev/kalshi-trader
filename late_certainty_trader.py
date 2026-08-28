@@ -309,7 +309,29 @@ SERIES_BET_MULTIPLIER = {}
 #
 # Restore to $50 when EITHER the reconciliation explains the capture gap, OR ~2,418
 # clean trades confirm the win rate above break-even. Not on a good week.
-FLAT_BET_DOLLARS = 25
+#
+# $25 -> $35 on 2026-08-28, at Chris's explicit direction, OVERRIDING the bar above.
+# Recorded as an override and NOT as a satisfied condition, because neither leg was
+# met: 749 clean trades since the cut against the ~2,418 asked for, and it was decided
+# during the best week on record — the exact circumstance "not on a good week" exists
+# to prevent. What was measured first, and is the honest case for it:
+#   - Jul 27-31 was a broken build (-$620.13, 288 tr, 28-39% WR). Excluding it,
+#     Aug 1-28 is +$566.57 over 2,099 trades, margin +0.75pp, cluster-bootstrap CI
+#     [-0.70,+1.99] — positive point estimate, still includes zero.
+#   - The good stretch is NOT an easy tape. Realized vol across the six coins ran
+#     13.0bp/min against 6.1 prior (+113%), cross-checked by the bot's own live
+#     sigma=12.96bp, so "crypto was calmer" is refuted. A fixed-band environment
+#     measure over 25,124 archived markets moved +0.65pp of a ~2.2pp swing, ~1 sd
+#     above its weekly average — ordinary. Most of the gain is not environmental.
+#   - But it is NOT established: daily margin Aug 1-21 +0.91pp vs Aug 22-28 +2.15pp,
+#     t=1.06, not significant. Seven days is smaller than one day of margin noise.
+# So: directionally real, not environmental, not proven. This is a BANKROLL-SCALING
+# decision taken with that in view — 1.8% -> 2.5% of a $1,405 balance, still far
+# inside any Kelly fraction — not a claim the edge is confirmed. Consequence accepted
+# deliberately: STOP_BALANCE headroom falls from 40 to 28.7 losses = 1.32x the worst
+# measured drawdown, under the 1.5x design target. The stop was NOT lowered to
+# restore that ratio; letting the balance grow back into it is the safer of the two.
+FLAT_BET_DOLLARS = 35
 
 
 def compute_bet_dollars(balance):
@@ -381,7 +403,7 @@ def daily_pnl(state, now_ts=None):
 # balance dressed as a constant, and it goes stale when the balance moves a lot.
 STOP_BALANCE            = 400
 CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
-MAX_CONCURRENT_POSITIONS = 2  # 2×$75=$150=10.9% of balance; matches old $90=10.5% exposure ratio
+MAX_CONCURRENT_POSITIONS = 2  # 2×$35=$70=5.0% of a $1,405 balance (comment was written at $75=10.9%)
 
 # Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
 # bot trades lives there, and collateral does not cross shards.
