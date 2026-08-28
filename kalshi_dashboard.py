@@ -1296,7 +1296,7 @@ function render(d){
       return '<div class="tr" data-k="'+k+'">'+
         '<span class="badge '+(s.won?'badge-w':'badge-l')+'">'+(s.won?'W':'L')+'</span>'+
         '<div class="tr-mid"><div class="tr-ser">'+s.series+'</div>'+
-        '<div class="tr-time">'+ts+' ET</div></div>'+
+        '<div class="tr-time">settled '+ts+' ET</div></div>'+
         '<span class="tr-side">'+s.side.toUpperCase()+'</span>'+
         '<span class="tr-pnl num '+cls(s.pnl)+'">'+signed(s.pnl)+'</span>'+
         (ex?'<div class="tr-det"><span>Ticker <b>'+s.ticker+'</b></span>'+
