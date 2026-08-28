@@ -118,6 +118,11 @@ def get_settlements():
                     "rev":    round(rev, 2),
                     "fee":    round(fee, 2),
                     "ts":     s.get("settled_time", ""),
+                    # Needed for break-even. Without a contract count the page can
+                    # only compare a win rate to a flat 92%, which is the exact
+                    # fee-blind comparison that reads green at a real loss.
+                    "con":    round(float(s.get("yes_count_fp", 0) or 0)
+                                    + float(s.get("no_count_fp", 0) or 0), 2),
                 })
             # Settlements come newest-first; once a page predates the floor every
             # later page does too. Stops ~9 API calls per refresh from being spent
@@ -1024,20 +1029,162 @@ body.dense h3{margin:14px 0 7px}
 .hwm-b{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;
   color:var(--up);background:rgba(0,209,129,.11);border:1px solid rgba(0,209,129,.25);
   padding:3px 8px;border-radius:12px;letter-spacing:.6px;margin-left:7px}
+
+/* ══ REDESIGN ═══════════════════════════════════════════════════════
+   Three problems this fixes:
+   1. Every card had a 1px border, so sixteen outlined boxes read as sixteen
+      equally important things. Hierarchy now comes from elevation and spacing,
+      and a border is reserved for something that genuinely needs bounding.
+   2. Chrome was brighter than data — labels and rules competed with numbers.
+      Labels go dimmer, numbers go brighter.
+   3. Simple was not simple. It is now four things; everything else is a tab.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --e1:#0C0E11; --e2:#14171C; --e3:#1C2026;
+  --sp:8px;
+  --sh:0 1px 2px rgba(0,0,0,.5), 0 6px 18px -8px rgba(0,0,0,.7);
+  --r-lg:18px; --r-md:13px; --r-sm:9px;
+}
+body{max-width:640px;padding-bottom:calc(96px + var(--safe-b))}
+
+/* elevation replaces outlines */
+.card,.stat{background:var(--e1);border:none;box-shadow:var(--sh);border-radius:var(--r-lg)}
+.stat{border-radius:var(--r-md)}
+.seg{background:var(--e1);border:none;box-shadow:var(--sh)}
+.seg .pill{background:var(--e3)}
+.chip{background:var(--e1);border:1px solid transparent;box-shadow:var(--sh)}
+.chip.on{background:var(--e3);border-color:rgba(255,255,255,.10);color:var(--tx)}
+
+/* chrome recedes, data advances */
+.stat-lbl,.pos-full,.pnote,.drama-top,.tr-time{color:#454B54}
+.stat-val,.pos-tick,.tr-pnl{color:var(--tx)}
+h3{font-size:11px;letter-spacing:1.1px;color:#565C66;text-transform:uppercase;font-weight:800}
+h4{font-size:10.5px;letter-spacing:1px;color:#565C66;text-transform:uppercase;font-weight:800}
+
+/* chart: lighter stroke, calmer fill */
+#pathLine{stroke-width:1.6}
+#pathArea{opacity:.62}
+.chart-wrap{height:186px}
+body.simple .chart-wrap{height:118px;margin-top:calc(var(--sp)*2)}
+
+/* ══ top bar + gear ═════════════════════════════════════════════════ */
+.topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:calc(var(--sp)*1.5) 0 0}
+.brand{font-size:12px;font-weight:800;letter-spacing:1.6px;color:#454B54;
+  text-transform:uppercase}
+.gear{width:34px;height:34px;border-radius:50%;background:var(--e1);border:none;
+  box-shadow:var(--sh);color:var(--dim);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:15px;transition:transform .25s,color .2s}
+.gear:active{transform:scale(.92)}
+
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(7px);
+  opacity:0;pointer-events:none;transition:opacity .28s;z-index:80}
+.sheet-bg.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:81;background:var(--e2);
+  border-radius:22px 22px 0 0;padding:calc(var(--sp)*2.5) calc(var(--sp)*2.5)
+  calc(var(--sp)*4 + var(--safe-b));transform:translateY(102%);
+  transition:transform .34s cubic-bezier(.32,.72,0,1);max-width:640px;margin:0 auto}
+.sheet.on{transform:translateY(0)}
+.sheet .grab{width:36px;height:4px;border-radius:3px;background:var(--e3);
+  margin:0 auto calc(var(--sp)*2.5)}
+.sheet h5{font-size:10px;letter-spacing:1.1px;color:#565C66;text-transform:uppercase;
+  font-weight:800;margin:calc(var(--sp)*2) 0 var(--sp)}
+.sheet-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+/* ══ bottom tabs (Full only) ════════════════════════════════════════ */
+#tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
+  background:rgba(10,11,13,.86);backdrop-filter:blur(18px) saturate(1.4);
+  border-top:1px solid rgba(255,255,255,.06);
+  padding:7px 10px calc(7px + var(--safe-b));max-width:640px;margin:0 auto}
+body.full #tabs{display:flex}
+#tabs button{flex:1;background:none;border:none;color:#4C525B;font-family:inherit;
+  font-size:9.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+  padding:7px 2px;cursor:pointer;border-radius:11px;min-height:44px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;transition:color .2s}
+#tabs button .ti{font-size:15px;line-height:1;opacity:.9}
+#tabs button.on{color:var(--up)}
+body.full .sect{display:none}
+body.full .sect.on{display:block;animation:secIn .3s cubic-bezier(.32,.72,0,1)}
+@keyframes secIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* ══ sticky mini header ═════════════════════════════════════════════ */
+#mini{position:fixed;top:0;left:0;right:0;z-index:55;max-width:640px;margin:0 auto;
+  padding:9px 20px calc(9px + 0px);background:rgba(10,11,13,.88);
+  backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid rgba(255,255,255,.06);
+  display:flex;align-items:center;justify-content:space-between;
+  transform:translateY(-110%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+#mini.on{transform:translateY(0)}
+#mini .mb{font-size:15.5px;font-weight:750;letter-spacing:-.02em}
+#mini .mc{font-size:12.5px;font-weight:650}
+
+/* ══ Simple: compact positions ══════════════════════════════════════ */
+.cpos{display:flex;align-items:center;gap:11px;padding:13px 15px}
+.cpos+.cpos{border-top:1px solid rgba(255,255,255,.05)}
+.cpos .cs{font-size:13px;font-weight:750;letter-spacing:-.01em;width:52px;flex:0 0 auto}
+.cpos .cd{font-size:10.5px;color:var(--dim);font-weight:650;width:58px;flex:0 0 auto}
+.cpos .cbar{flex:1;height:5px;border-radius:3px;background:var(--e3);overflow:hidden;position:relative}
+.cpos .cbar i{position:absolute;top:0;bottom:0;left:0;border-radius:3px}
+.cpos .ct{font-size:11.5px;font-weight:750;width:46px;text-align:right;flex:0 0 auto;
+  font-variant-numeric:tabular-nums}
+
+/* ══ "more" reveal (Simple) ═════════════════════════════════════════ */
+.more{width:100%;background:none;border:none;color:#565C66;font-family:inherit;
+  font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;
+  padding:calc(var(--sp)*2.5) 0;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;gap:6px;min-height:44px}
+.more .cv{transition:transform .3s}
+body.moreopen .more .cv{transform:rotate(180deg)}
+body.simple #moreWrap{display:none}
+body.simple.moreopen #moreWrap{display:block;animation:secIn .32s cubic-bezier(.32,.72,0,1)}
+
+/* ══ win-rate vs break-even bar ═════════════════════════════════════ */
+.wrbar{position:relative;height:32px;border-radius:var(--r-sm);background:var(--e2);
+  overflow:hidden;margin-top:10px}
+.wrbar .wf{position:absolute;left:0;top:0;bottom:0;border-radius:var(--r-sm);
+  transition:width .6s cubic-bezier(.32,.72,0,1)}
+.wrbar .be{position:absolute;top:0;bottom:0;width:2px;background:var(--tx);
+  box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.wrbar .bel{position:absolute;bottom:3px;font-size:8px;font-weight:800;color:var(--tx);
+  transform:translateX(-50%);letter-spacing:.4px;white-space:nowrap}
+.wrbar .wv{position:absolute;left:9px;top:50%;transform:translateY(-50%);
+  font-size:13px;font-weight:800;letter-spacing:-.02em}
+
+/* ══ trade strip ════════════════════════════════════════════════════ */
+.strip{display:flex;gap:2px;align-items:flex-end;height:26px;margin-top:9px}
+.strip i{flex:1;border-radius:1.5px;min-width:2px;transition:opacity .2s}
+.strip i:hover{opacity:.6}
+
+/* ══ series bars ════════════════════════════════════════════════════ */
+.sbar{position:relative;height:5px;border-radius:3px;background:var(--e2);
+  flex:1;overflow:hidden;margin:0 9px}
+.sbar i{position:absolute;top:0;bottom:0;border-radius:3px}
+
+/* ══ mode-specific visibility ═══════════════════════════════════════ */
+body.full .more{display:none}
+body.simple .hero{padding-top:calc(var(--sp)*2)}
+body.simple .foot{margin-top:calc(var(--sp)*2)}
+
+/* ══ motion ═════════════════════════════════════════════════════════ */
+.card,.stat{animation:secIn .34s cubic-bezier(.32,.72,0,1) backwards}
+.duo .card:nth-child(2){animation-delay:.05s}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
 </style>
 </head>
 <body>
 <div id="ptr"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#4C525B" stroke-width="2.5" stroke-dasharray="42" stroke-dashoffset="14" stroke-linecap="round"/></svg></div>
 <div id="blackout">BLACKOUT HOUR — STRATEGY PAUSED</div>
 
-<div class="modebar">
-  <div class="seg mini" id="viewSeg"><div class="pill"></div>
-    <button data-v="simple">Simple</button><button data-v="full">Full</button>
-  </div>
-  <div class="seg mini" id="densSeg" data-full><div class="pill"></div>
-    <button data-d="comfy">Comfy</button><button data-d="dense">Dense</button>
-  </div>
-  <button class="chip" id="sndBtn" title="Sound on fills and settlements">SOUND</button>
+<div id="mini">
+  <span class="mb num" id="miniBal">—</span>
+  <span class="mc num" id="miniChg">—</span>
+</div>
+
+<div class="topbar">
+  <span class="brand">Kalshi</span>
+  <button class="gear" id="gearBtn" aria-label="Settings">&#9881;</button>
 </div>
 
 <div id="anoms"></div>
@@ -1050,6 +1197,7 @@ body.dense h3{margin:14px 0 7px}
   <div class="nextclose" id="nextClose"></div>
 </div>
 
+<div class="sect on" id="secChart">
 <div class="chart-wrap">
   <svg id="svg" preserveAspectRatio="none" viewBox="0 0 1000 220">
     <defs>
@@ -1070,7 +1218,7 @@ body.dense h3{margin:14px 0 7px}
   <div class="chart-empty" id="chartEmpty" style="display:none">No activity in this range</div>
 </div>
 
-<div class="controls">
+<div class="controls" data-full>
   <div class="seg" id="ranges"><div class="pill"></div>
     <button data-r="1H" data-full>1H</button><button data-r="1D">1D</button><button data-r="24H" data-full>24H</button><button data-r="48H" data-full>48H</button><button data-r="72H" data-full>72H</button><button data-r="1W">1W</button><button data-r="1M" data-full>1M</button><button data-r="ALL">All</button>
   </div>
@@ -1080,8 +1228,11 @@ body.dense h3{margin:14px 0 7px}
 </div>
 
 <div id="stale">Data may be stale — last refresh failed</div>
-<div id="recon"></div>
+<div id="recon" data-full></div>
+</div><!-- /secChart -->
 
+<div class="sect" id="secStats" data-full>
+<div class="card pad" id="marginCard"></div>
 <div class="stats" id="stats">
   <div class="stat"><div class="stat-lbl" id="l0">P&L</div><div class="stat-val num sk" id="v0">$0</div><div class="stat-sub" id="s0"></div></div>
   <div class="stat"><div class="stat-lbl" id="l1">Win rate</div><div class="stat-val num sk" id="v1">0%</div><div class="stat-sub" id="s1"></div></div>
@@ -1096,24 +1247,60 @@ body.dense h3{margin:14px 0 7px}
   <div class="card pad" id="seriesCard"></div>
 </div>
 
-<div class="duo" data-full>
+<div class="duo">
   <div class="card pad" id="streakCard"></div>
   <div class="card pad" id="whatifCard"></div>
 </div>
+</div><!-- /secStats -->
 
-<div class="cols">
-  <div class="col-left">
-    <h3>Open positions <span class="count" id="posN">0</span></h3>
-    <div class="card" id="positions"><div class="empty">No open positions</div></div>
-  </div>
-  <div class="col-right">
-    <h3>Recent trades</h3>
+<div class="sect" id="secPos">
+  <h3 data-full>Open positions <span class="count" id="posN">0</span></h3>
+  <div class="card" id="positions"><div class="empty">No open positions</div></div>
+</div>
+
+<div class="sect" id="secTrades">
+  <button class="more" id="moreBtn"><span id="moreTx">Recent trades</span>
+    <span class="cv">&#9662;</span></button>
+  <div id="moreWrap">
+    <div class="card pad" id="stripCard" data-full></div>
+    <h3 data-full>Recent trades</h3>
     <div class="chips" id="tfilt" data-full></div>
     <div class="card" id="trades"><div class="empty">Loading…</div></div>
   </div>
 </div>
 
 <div class="foot" id="foot">—</div>
+
+<nav id="tabs">
+  <button data-t="secChart" class="on"><span class="ti">&#9650;</span>Chart</button>
+  <button data-t="secPos"><span class="ti">&#9673;</span>Open</button>
+  <button data-t="secTrades"><span class="ti">&#9776;</span>Trades</button>
+  <button data-t="secStats"><span class="ti">&#9632;</span>Stats</button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <h5>View</h5>
+  <div class="sheet-row">
+    <span class="mut" style="font-size:12.5px;font-weight:600">Detail level</span>
+    <div class="seg mini" id="viewSeg"><div class="pill"></div>
+      <button data-v="simple">Simple</button><button data-v="full">Full</button>
+    </div>
+  </div>
+  <h5>Density</h5>
+  <div class="sheet-row">
+    <span class="mut" style="font-size:12.5px;font-weight:600">Row height</span>
+    <div class="seg mini" id="densSeg"><div class="pill"></div>
+      <button data-d="comfy">Comfy</button><button data-d="dense">Dense</button>
+    </div>
+  </div>
+  <h5>Alerts</h5>
+  <div class="sheet-row">
+    <span class="mut" style="font-size:12.5px;font-weight:600">Sound &amp; haptics on fills</span>
+    <button class="chip" id="sndBtn">OFF</button>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -1306,7 +1493,11 @@ initSeg($('modes'),'m','pnl',v=>{ mode=v; firstDraw=true; if(last) render(last);
    question — is it working and am I up. Full is opt-in and remembered. */
 function applyView(){
   document.body.classList.toggle('simple',viewMode==='simple');
+  document.body.classList.toggle('full',viewMode==='full');
   document.body.classList.toggle('dense',density==='dense');
+  // Full hides every section but the active one, so one must always be active or
+  // switching into Full lands on a blank page.
+  if(viewMode==='full'&&!document.querySelector('.sect.on')) setTab('secChart');
   // A Full-only range must not stay selected after switching to Simple, or the
   // page silently shows a window whose control is no longer on screen.
   const on=$('ranges').querySelector('button.on');
@@ -1322,13 +1513,100 @@ initSeg($('viewSeg'),'v',viewMode,v=>{ viewMode=v; localStorage.setItem('kv',v);
   applyView(); if(last) render(last); });
 initSeg($('densSeg'),'d',density,v=>{ density=v; localStorage.setItem('kd',v);
   applyView(); if(last) render(last); });
-function paintSnd(){ $('sndBtn').classList.toggle('on',sndOn); }
+function paintSnd(){ const b=$('sndBtn'); b.classList.toggle('on',sndOn);
+  b.textContent=sndOn?'ON':'OFF'; }
 $('sndBtn').addEventListener('click',()=>{ sndOn=!sndOn;
   localStorage.setItem('ks',sndOn?'1':'0'); paintSnd(); if(sndOn) chime(true); });
 paintSnd(); applyView();
 
 window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'));
   movePill($('viewSeg')); movePill($('densSeg')); });
+
+/* ── tabs, sheet, reveal, sticky header ─────────────────────────────
+   Full mode is four screens rather than one long scroll. Simple has no tabs at
+   all — the whole point is that it is one screen you do not navigate. */
+function setTab(id){
+  document.querySelectorAll('.sect').forEach(x=>x.classList.toggle('on',x.id===id));
+  const t=$('tabs'); if(t) t.querySelectorAll('button').forEach(b=>
+    b.classList.toggle('on',b.dataset.t===id));
+  if(navigator.vibrate) navigator.vibrate(3);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+$('tabs').querySelectorAll('button').forEach(b=>
+  b.addEventListener('click',()=>setTab(b.dataset.t)));
+
+function sheet(on){
+  $('sheet').classList.toggle('on',on);
+  $('sheetBg').classList.toggle('on',on);
+  if(on&&navigator.vibrate) navigator.vibrate(3);
+  requestAnimationFrame(()=>{ movePill($('viewSeg')); movePill($('densSeg')); });
+}
+$('gearBtn').addEventListener('click',()=>sheet(true));
+$('sheetBg').addEventListener('click',()=>sheet(false));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') sheet(false); });
+
+$('moreBtn').addEventListener('click',()=>{
+  const open=document.body.classList.toggle('moreopen');
+  $('moreTx').textContent=open?'Hide trades':'Recent trades';
+  if(navigator.vibrate) navigator.vibrate(3);
+});
+
+let miniOn=false;
+window.addEventListener('scroll',()=>{
+  const on=window.scrollY>150;
+  if(on!==miniOn){ miniOn=on; $('mini').classList.toggle('on',on); }
+},{passive:true});
+$('mini').addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+/* ── margin: win rate against its OWN break-even ────────────────────
+   The only number that says whether the account makes money. A win rate on its
+   own cannot: at ~91.8c entries you need ~91.8% before fees just to break even,
+   so 92% is a LOSS. Break-even here is (cost + fees) / contracts, never
+   cost/contracts — the fee-blind version reads green at a real loss. */
+function renderMargin(sett){
+  const el=$('marginCard'); if(!el) return;
+  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cutoff(range));
+  const cost=inR.reduce((a,s)=>a+s.cost,0);
+  const fees=inR.reduce((a,s)=>a+(s.fee||0),0);
+  const con=inR.reduce((a,s)=>a+(s.con||0),0);
+  if(!inR.length||!cost||!con){
+    el.innerHTML='<h4>Margin</h4><div class="empty">No trades in range</div>'; return;
+  }
+  const wcost=inR.filter(s=>s.won).reduce((a,s)=>a+s.cost,0);
+  const dw=100*wcost/cost, be=100*(cost+fees)/con, m=dw-be;
+  const lo=Math.min(dw,be)-1.2, hi=Math.max(dw,be)+0.6, span=(hi-lo)||1;
+  const wpc=Math.max(2,Math.min(100,(dw-lo)/span*100));
+  const bpc=Math.max(0,Math.min(100,(be-lo)/span*100));
+  const col=m>=0?UP:DOWN;
+  el.innerHTML='<h4>Margin · '+RLBL[range]+'</h4>'+
+    '<div class="prow"><span class="l">$-weighted win rate</span>'+
+      '<span class="v num">'+dw.toFixed(2)+'%</span></div>'+
+    '<div class="prow"><span class="l">Break-even (incl. fees)</span>'+
+      '<span class="v num mut">'+be.toFixed(2)+'%</span></div>'+
+    '<div class="wrbar"><div class="wf" style="width:'+wpc.toFixed(1)+'%;background:'+
+      col+';opacity:.22"></div>'+
+      '<div class="be" style="left:'+bpc.toFixed(1)+'%"></div>'+
+      '<div class="bel" style="left:'+bpc.toFixed(1)+'%">B/E</div>'+
+      '<div class="wv" style="color:'+col+'">'+(m>=0?'+':'')+m.toFixed(2)+'pp</div></div>'+
+    '<div class="pnote">'+(m>=0
+      ? 'Winning '+m.toFixed(2)+' points more often than you need to.'
+      : 'Below break-even — the win rate does not cover entry price plus fees.')+'</div>';
+}
+
+/* ── trade strip: 60 outcomes at a glance ───────────────────────── */
+function renderStrip(sett){
+  const el=$('stripCard'); if(!el) return;
+  const rows=applyFilters(sett).slice(-60);
+  if(!rows.length){ el.innerHTML='<h4>Last 60</h4><div class="empty">None</div>'; return; }
+  const mx=Math.max(...rows.map(s=>Math.abs(s.pnl)))||1;
+  const w=rows.filter(s=>s.won).length;
+  el.innerHTML='<h4>Last '+rows.length+' · '+w+'W '+(rows.length-w)+'L</h4>'+
+    '<div class="strip">'+rows.map(s=>{
+      const h=Math.max(18,Math.abs(s.pnl)/mx*100);
+      return '<i style="height:'+h.toFixed(0)+'%;background:'+(s.won?UP:DOWN)+
+        ';opacity:'+(s.won?.55:.95)+'" title="'+signed(s.pnl)+'"></i>';
+    }).join('')+'</div>';
+}
 
 /* ── sound + haptics ────────────────────────────────────────────────
    Ambient awareness: a distinct tone for a win and a loss means the state is
@@ -1595,11 +1873,17 @@ function renderSeries(sett){
   const keys=Object.keys(by).sort((a,b)=>
     by[b].reduce((x,s)=>x+s.pnl,0)-by[a].reduce((x,s)=>x+s.pnl,0));
   if(!keys.length){ el.innerHTML='<h4>By series</h4><div class="empty">No trades in range</div>'; return; }
+  const mx=Math.max(...keys.map(k=>Math.abs(by[k].reduce((x,s)=>x+s.pnl,0))))||1;
   el.innerHTML='<h4>By series · '+RLBL[range]+'</h4>'+keys.map(k=>{
     const g=by[k], p=g.reduce((a,s)=>a+s.pnl,0), w=g.filter(s=>s.won).length;
     const col=p>0?UP:p<0?DOWN:'#7C828C';
-    return '<div class="srow"><div class="sname">'+k+'</div>'+
-      spark(g.map(s=>s.pnl),col)+
+    // Bar length is |P&L| against the biggest mover, so the ranking is readable as
+    // a shape before any number is read. Sparkline stays for the shape over time.
+    const wd=mx>0?Math.max(3,Math.abs(p)/mx*100):0;
+    return '<div class="srow"><div class="sname">'+esc(k)+'</div>'+
+      '<div class="sbar"><i style="width:'+wd.toFixed(0)+'%;background:'+col+
+        ';opacity:.75;'+(p<0?'right:50%':'left:50%')+'"></i>'+
+        '<i style="left:50%;width:1px;background:rgba(255,255,255,.18);opacity:1"></i></div>'+
       '<div class="sv '+cls(p)+'">'+signed(p)+'</div>'+
       '<div class="sn">'+pct(w,g.length)+'</div></div>';
   }).join('');
@@ -1838,13 +2122,34 @@ function render(d){
   renderSeries(sett);
   renderStreak(sett);
   renderWhatif(sett, d);
+  renderMargin(sett);
+  renderStrip(sett);
+  $('miniBal').textContent=money(d.balance||0);
+  const dayP=sett.filter(s=>new Date(s.ts).getTime()>=cutoff('1D'))
+    .reduce((a,s)=>a+s.pnl,0);
+  const mc=$('miniChg'); mc.textContent=signed(dayP); mc.className='mc num '+cls(dayP);
   renderFilters(sett);
   renderDeploys(d);
 
   // positions
   const pos=d.positions||[]; $('posN').textContent=pos.length;
   const pe=$('positions');
-  if(pos.length){
+  if(pos.length&&viewMode==='simple'){
+    // Simple: one line each. Coin, side, time bar, clock. Nothing else.
+    pe.innerHTML=pos.map(p=>{
+      const ms=p.close_time?new Date(p.close_time).getTime()-Date.now():0;
+      const sc=Math.max(0,Math.floor(ms/1000));
+      const lt=ms<=0?'settling':(sc<60?sc+'s':Math.floor(sc/60)+':'+String(sc%60).padStart(2,'0'));
+      const frac=Math.max(0,Math.min(1,sc/600))*100;
+      const col=ms<=0?'#7C828C':p.z==null?'#7C828C':p.z>=1.5?UP:p.z>=0.761?'#8FD14F':
+        p.z>=0?'#FFA318':DOWN;
+      return '<div class="cpos">'+
+        '<div class="cs">'+esc(p.ticker.split('-')[0].replace('KX','').replace('15M',''))+'</div>'+
+        '<div class="cd">'+esc((p.side||'').toUpperCase())+' '+(p.entry!=null?p.entry+'\u00A2':'')+'</div>'+
+        '<div class="cbar"><i style="width:'+frac.toFixed(0)+'%;background:'+col+'"></i></div>'+
+        '<div class="ct" style="color:'+col+'">'+lt+'</div></div>';
+    }).join('');
+  } else if(pos.length){
     pe.innerHTML=pos.map(p=>{
       const ms=p.close_time?new Date(p.close_time).getTime()-Date.now():0;
       const s=Math.max(0,Math.floor(ms/1000));
