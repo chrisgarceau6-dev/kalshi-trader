@@ -2,7 +2,7 @@
 """Kalshi trader dashboard — Render hosted.
 Env: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY (base64 PEM), PORT (set by Render)
 """
-import ast, base64, hmac, os, time
+import ast, base64, hmac, math, os, time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
@@ -173,7 +173,15 @@ def get_market(ticker):
         "no_bid":     _cents("no_bid_dollars"),
         "close_time": m.get("close_time", ""),
         "title":      m.get("subtitle", m.get("title", "")),
+        "strike":     _fstrike(m),
     }
+
+def _fstrike(m):
+    try:
+        v = float(m.get("floor_strike") or 0)
+        return v if v > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 def get_fills_basis(ticker):
     """Contracts, side and true cost basis for a ticker, from its fills.
@@ -218,12 +226,36 @@ def get_positions():
             ticker = p.get("ticker", "")
             mkt = get_market(ticker)
             b = get_fills_basis(ticker)
-            contracts = b["contracts"] or int(p.get("position") or 0)
+            # ABS is deliberate. Kalshi's `position` is signed (negative = long NO),
+            # and the fills fallback inherits that sign, so a NO position arrived here
+            # as -38. Direction is carried by `side`, not by the sign of the count, so
+            # a signed count double-encoded it and inverted every derived figure:
+            # "Mkt value" rendered $-38.00 and "If win" rendered +$-4.04 on a WINNING
+            # position. Magnitude here, direction in `side`.
+            contracts = abs(b["contracts"] or int(p.get("position") or 0))
             side = b["side"] or "yes"
             # Quote the side actually held. Showing the YES book for a NO position
             # displays ~9c against a 91c entry, and v5.16 trades NO about half the time.
             ask = mkt.get("no_ask") if side == "no" else mkt.get("yes_ask")
             bid = mkt.get("no_bid") if side == "no" else mkt.get("yes_bid")
+            # Live cushion: how far spot sits from the strike, in units of how far it
+            # can still travel before close. Same definition as the trader's z_value().
+            strike = mkt.get("strike")
+            sv = get_spot_vol(ticker.split("-")[0])
+            secs = 0
+            if mkt.get("close_time"):
+                try:
+                    secs = max(0.0, (datetime.fromisoformat(
+                        mkt["close_time"].replace("Z", "+00:00"))
+                        - datetime.now(timezone.utc)).total_seconds())
+                except ValueError:
+                    secs = 0
+            z = None
+            if strike and sv and sv["sigma_bp"] > 0 and secs > 0 and sv["spot"] > 0:
+                denom = (sv["sigma_bp"] / 1e4) * math.sqrt(secs / 60.0)
+                if denom > 0:
+                    z = (1.0 if side == "yes" else -1.0) * \
+                        ((sv["spot"] - strike) / sv["spot"]) / denom
             out.append({"ticker":     ticker,
                         "contracts":  contracts,
                         "side":       side,
@@ -233,7 +265,11 @@ def get_positions():
                         "ask":        ask,
                         "bid":        bid,
                         "close_time": mkt.get("close_time", ""),
-                        "title":      mkt.get("title", "")})
+                        "title":      mkt.get("title", ""),
+                        "strike":     strike,
+                        "spot":       round(sv["spot"], 4) if sv else None,
+                        "sigma_bp":   round(sv["sigma_bp"], 2) if sv else None,
+                        "z":          round(z, 3) if z is not None else None})
         return out
     return cached("pos", 15, _f)
 
@@ -309,6 +345,63 @@ GH_WORKFLOW = "late_certainty.yml"
 # Cancelled runs are routine: the backup cron collides with the self-dispatch chain
 # and the concurrency group drops one. Only these mean the trader actually broke.
 _FAILED = {"failure", "timed_out", "startup_failure"}
+
+def live_const(name, default=None):
+    """Any module-level literal from the trader, by AST. Same rule as live_series:
+    never hardcode a strategy constant here, or the two drift silently."""
+    def _f():
+        try:
+            tree = ast.parse(TRADER.read_text())
+        except Exception as e:
+            _last_err[name] = f"parse: {str(e)[:80]}"
+            return default
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == name:
+                    try:
+                        return ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        return default
+        return default
+    return cached(f"const:{name}", 300, _f)
+
+
+def get_spot_vol(series):
+    """Live spot and trailing-60min sigma for one series, from Coinbase.
+
+    Deliberately the SAME quantity the trader gates on — `z_value()` uses this sigma
+    over this spot against the market's floor_strike. Computing a *different* sigma
+    here would render a number that looks authoritative next to an open position and
+    quietly means something else than the z the bot acted on.
+    """
+    pair = (live_const("COINBASE_PAIR") or {}).get(series)
+    if not pair:
+        return None
+    def _f():
+        try:
+            r = requests.get(
+                f"https://api.exchange.coinbase.com/products/{pair}/candles"
+                f"?granularity=60", timeout=8)
+            if r.status_code != 200:
+                return None
+            rows = r.json()
+        except Exception as e:
+            _last_err["spot"] = f"{series}: {str(e)[:70]}"
+            return None
+        if not isinstance(rows, list) or len(rows) < 12:
+            return None
+        closes = [float(c[4]) for c in sorted(rows, key=lambda x: x[0])[-61:]]
+        rets = [math.log(closes[i] / closes[i - 1])
+                for i in range(1, len(closes)) if closes[i - 1] > 0]
+        if len(rets) < 10:
+            return None
+        mu = sum(rets) / len(rets)
+        sigma = (sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)) ** 0.5
+        return {"spot": closes[-1], "sigma_bp": sigma * 1e4}
+    return cached(f"spot:{series}", 45, _f)
+
 
 def get_health():
     """Liveness of the trader itself, from the Actions API.
@@ -445,14 +538,186 @@ def _require_token():
     # will not carry into the other. Every context needs somewhere to type it.
     return make_response(LOGIN_HTML, 401)
 
+def get_deploys():
+    """Deploy markers for the equity curve: commits that changed the TRADER.
+
+    Read through the GitHub API rather than `git log`, because Render builds from a
+    shallow clone where history is not reliably present. Filtered to commits touching
+    late_certainty_trader.py on purpose — a docs or dashboard commit is not a strategy
+    change, and marking those would make the rail meaningless exactly when it matters.
+    """
+    def _f():
+        url = (f"https://api.github.com/repos/{GH_REPO}/commits"
+               f"?path=late_certainty_trader.py&per_page=40")
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = os.environ.get("GH_READ_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code != 200:
+                return []
+            rows = r.json()
+        except Exception as e:
+            _last_err["deploys"] = str(e)[:90]
+            return []
+        out = []
+        for c in rows if isinstance(rows, list) else []:
+            try:
+                msg = (c["commit"]["message"] or "").split("\n")[0]
+                out.append({"ts":  c["commit"]["committer"]["date"],
+                            "sha": c["sha"][:7],
+                            "msg": msg[:80]})
+            except (KeyError, TypeError):
+                continue
+        return out
+    return cached("deploys", 900, _f)
+
+
+def _pts(ts):
+    """Kalshi returns variable sub-second precision; pad the fraction to 6 digits."""
+    import re
+    ts = (ts or "").replace("Z", "+00:00")
+    ts = re.sub(r"\.(\d{1,6})\d*", lambda m: "." + m.group(1).ljust(6, "0"), ts)
+    return datetime.fromisoformat(ts)
+
+
+def _pct_rank(v, xs):
+    """Fraction of xs at or below v. Empty history ranks everything mid."""
+    return (sum(1 for x in xs if x <= v) / len(xs)) if xs else 0.5
+
+
+def get_anomalies(sett, pos, balance, health):
+    """Things outside THIS account's own historical norms. [] means all clear.
+
+    Thresholds are percentiles of the account's own history, not typed-in numbers.
+    A hardcoded "bad day" goes stale the moment sizing changes — the same defect the
+    trader's DAILY_LOSS_LIMIT_BETS comment documents — whereas a percentile survived
+    the $25 -> $35 change without an edit. The dollar-denominated checks below read
+    their limits from the trader by AST for the same reason.
+
+    Silence is the healthy state: this returns nothing at all on a normal day, so
+    anything rendered is by definition worth a look.
+    """
+    out = []
+    now = datetime.now(timezone.utc)
+    def add(sev, key, msg, detail=""):
+        out.append({"sev": sev, "key": key, "msg": msg, "detail": detail})
+
+    # 1. Settlement stall. Normal is close +5s; this is what jammed the book on
+    #    2026-08-28 for 4.2h before #222, and it is invisible in every other panel.
+    stalled = []
+    for p_ in pos or []:
+        if not p_.get("close_time"):
+            continue
+        try:
+            lag = (now - _pts(p_["close_time"])).total_seconds() / 60.0
+        except ValueError:
+            continue
+        if lag > 3:
+            stalled.append((p_["ticker"], lag))
+    if stalled:
+        worst = max(l for _, l in stalled)
+        add("crit" if worst > 30 else "warn", "settle",
+            f"{len(stalled)} position{'s' if len(stalled)>1 else ''} closed but unsettled",
+            f"worst {worst:.0f} min past close — normal is 5s. Kalshi-side; slots are "
+            f"discounted so this is not blocking entries.")
+
+    # 2/3. Trader liveness.
+    h = health or {}
+    age = h.get("last_success_age_min")
+    if isinstance(age, (int, float)) and age > 20:
+        add("crit" if age > 45 else "warn", "stale",
+            f"no successful run in {age:.0f} min", "cadence is ~15.3 min")
+    if (h.get("consec_failures") or 0) >= 2:
+        add("crit", "fails", f"{h['consec_failures']} consecutive run failures")
+
+    # 4. Trading has stopped without a halt. 1.8h is the largest fill gap ever seen.
+    if sett:
+        try:
+            newest = max(_pts(x["ts"]) for x in sett if x.get("ts"))
+            quiet = (now - newest).total_seconds() / 60.0
+            if quiet > 108 and not pos:
+                add("warn", "quiet", f"nothing settled in {quiet/60:.1f}h",
+                    "largest gap ever observed is 1.8h")
+        except ValueError:
+            pass
+
+    # 5. Today's P&L against the account's own daily distribution.
+    byday = {}
+    for x in sett:
+        if not x.get("ts"):
+            continue
+        try:
+            d = _pts(x["ts"]).astimezone(ET).date()
+        except ValueError:
+            continue
+        byday.setdefault(d, []).append(x)
+    today = datetime.now(ET).date()
+    hist = [sum(v["pnl"] for v in rows) for d, rows in byday.items() if d != today]
+    if today in byday and len(hist) >= 10:
+        tp = sum(v["pnl"] for v in byday[today])
+        r = _pct_rank(tp, hist)
+        if r <= 0.10:
+            add("warn", "day", f"today ${tp:+.2f} is worse than {(1-r)*100:.0f}% of days",
+                f"{sum(1 for x in hist if x < tp)} day(s) in history were worse")
+
+    # 6. Trailing-24h realised loss against the emergency brake.
+    bet = live_const("FLAT_BET_DOLLARS")
+    bets = live_const("DAILY_LOSS_LIMIT_BETS")
+    if isinstance(bet, (int, float)) and isinstance(bets, (int, float)):
+        lim = bet * bets
+        cut = now.timestamp() - 86400
+        p24 = 0.0
+        for x in sett:
+            try:
+                if _pts(x["ts"]).timestamp() >= cut:
+                    p24 += x["pnl"]
+            except (ValueError, KeyError):
+                continue
+        if p24 < -0.6 * lim:
+            add("crit" if p24 < -0.85 * lim else "warn", "brake",
+                f"trailing-24h ${p24:+.2f} vs ${lim:.0f} halt",
+                f"{100*abs(p24)/lim:.0f}% of the daily loss limit")
+
+    # 7. Headroom to the hard stop, in losses rather than dollars.
+    stop = live_const("STOP_BALANCE")
+    if isinstance(stop, (int, float)) and isinstance(bet, (int, float)) and balance and bet > 0:
+        left = (balance - stop) / bet
+        if left < 15:
+            add("crit" if left < 8 else "warn", "room",
+                f"{left:.0f} losses of headroom to the ${stop:.0f} stop")
+
+    # 8. Sizing drift. Trade-weighted and dollar-weighted win rates diverging is the
+    #    signature of the pre-#151 defect: winning 92% of trades while losing money.
+    recent = sorted([x for x in sett if x.get("ts")], key=lambda x: x["ts"])[-200:]
+    tc = sum(x["cost"] for x in recent)
+    if len(recent) >= 60 and tc > 0:
+        tw = 100.0 * sum(1 for x in recent if x["won"]) / len(recent)
+        dw = 100.0 * sum(x["cost"] for x in recent if x["won"]) / tc
+        if abs(dw - tw) > 2.0:
+            add("warn", "drift",
+                f"$-weighted WR {dw:.1f}% vs trade WR {tw:.1f}%",
+                "losers and winners are being sized differently again")
+
+    return sorted(out, key=lambda a: {"crit": 0, "warn": 1, "info": 2}[a["sev"]])
+
+
 @app.route("/api/data")
 def api_data():
+    bal  = get_balance()
+    sett = get_settlements()
+    pos  = get_positions()
+    hea  = get_health()
     return jsonify({
-        "balance":     get_balance(),
-        "settlements": get_settlements(),
+        "balance":     bal,
+        "settlements": sett,
         "deposits":    get_deposits(),
-        "positions":   get_positions(),
-        "health":      get_health(),
+        "positions":   pos,
+        "health":      hea,
+        "anomalies":   get_anomalies(sett, pos, bal, hea),
+        "deploys":     get_deploys(),
+        "bet":         live_const("FLAT_BET_DOLLARS"),
         "blackout":    live_blackout_hours(),
         "ts":          datetime.now(ET).isoformat(timespec="seconds"),
         "errors":      dict(_last_err),
@@ -685,11 +950,97 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   body{max-width:1440px}
   .chart-wrap{height:380px}
 }
+
+/* ── view mode / density ─────────────────────────────────────────── */
+.modebar{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:14px}
+body.simple [data-full]{display:none !important}
+body.dense .stat{padding:9px 10px}
+body.dense .stat-val{font-size:16px}
+body.dense .tr{padding:7px 13px}
+body.dense .pos{padding:11px 13px}
+body.dense .chart-wrap{height:150px}
+body.dense h3{margin:14px 0 7px}
+
+/* ── anomaly strip ───────────────────────────────────────────────── */
+#anoms{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.anom{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:13px;
+  border:1px solid var(--line);background:var(--s1);animation:fade .3s ease}
+.anom .ic{width:7px;height:7px;border-radius:50%;flex:0 0 auto;margin-top:5px}
+.anom .am{font-size:12.5px;font-weight:700;letter-spacing:-.01em}
+.anom .ad{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.45;font-weight:500}
+.anom.crit{border-color:rgba(255,69,58,.32);background:rgba(255,69,58,.07)}
+.anom.crit .ic{background:var(--down);animation:breathe 1s ease-in-out infinite}
+.anom.crit .am{color:var(--down)}
+.anom.warn{border-color:rgba(255,163,24,.28);background:rgba(255,163,24,.06)}
+.anom.warn .ic{background:var(--warn)}
+.anom.warn .am{color:var(--warn)}
+.anom-ok{font-size:11px;color:var(--dimmer);font-weight:650;letter-spacing:.4px;
+  text-align:center;padding:7px 0}
+
+/* ── position drama: spot vs strike ──────────────────────────────── */
+.drama{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+.drama-top{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10px;color:var(--dimmer);text-transform:uppercase;letter-spacing:.8px;
+  font-weight:750;margin-bottom:9px}
+.drama-z{font-size:12.5px;font-weight:800;letter-spacing:-.02em}
+.track{position:relative;height:28px;border-radius:8px;background:var(--s2);
+  border:1px solid var(--line);overflow:hidden}
+.track .mid{position:absolute;left:50%;top:0;bottom:0;width:1px;
+  background:rgba(255,255,255,.3)}
+.track .midl{position:absolute;left:50%;top:2px;font-size:8.5px;color:var(--dimmer);
+  transform:translateX(-50%);font-weight:800;letter-spacing:.5px}
+.track .fill{position:absolute;top:0;bottom:0;opacity:.2}
+.track .mk{position:absolute;top:3px;bottom:3px;width:3px;border-radius:2px;
+  transition:left .5s cubic-bezier(.32,.72,0,1)}
+.drama-sub{display:flex;justify-content:space-between;font-size:10.5px;
+  color:var(--dim);margin-top:7px;font-weight:600}
+
+/* ── trade filters ───────────────────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}
+.chip{background:var(--s1);border:1px solid var(--line);color:var(--dim);
+  font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:14px;cursor:pointer;
+  font-family:inherit;letter-spacing:.3px;transition:all .18s}
+.chip.on{background:var(--s3);color:var(--tx);border-color:var(--line-2)}
+
+/* ── what-if / streak ────────────────────────────────────────────── */
+.wf-row{display:flex;align-items:center;gap:11px;margin-top:9px}
+.wf-row input[type=range]{flex:1;accent-color:var(--info);height:3px}
+.wf-val{font-size:12.5px;font-weight:800;min-width:42px;text-align:right}
+.streak{display:flex;gap:9px;margin-top:9px}
+.streak .sk2{flex:1;background:var(--s2);border-radius:11px;padding:10px;text-align:center}
+.streak .sk2 .n{font-size:19px;font-weight:750;letter-spacing:-.03em}
+.streak .sk2 .t{font-size:9px;color:var(--dimmer);text-transform:uppercase;
+  letter-spacing:.8px;font-weight:750;margin-top:4px}
+
+/* ── deploy markers ──────────────────────────────────────────────── */
+.dep{stroke:rgba(76,141,255,.42);stroke-width:1;stroke-dasharray:2 4;vector-effect:non-scaling-stroke}
+#depWrap{position:absolute;inset:0;pointer-events:none}
+.dep-f{position:absolute;top:0;font-size:8.5px;color:var(--info);font-weight:800;
+  letter-spacing:.4px;transform:translateX(-50%);white-space:nowrap;opacity:.75}
+
+/* ── high-water mark ─────────────────────────────────────────────── */
+@keyframes hwm{0%{transform:scale(1)}35%{transform:scale(1.055)}100%{transform:scale(1)}}
+.hwm{animation:hwm .85s cubic-bezier(.32,.72,0,1);color:var(--up) !important}
+.hwm-b{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;
+  color:var(--up);background:rgba(0,209,129,.11);border:1px solid rgba(0,209,129,.25);
+  padding:3px 8px;border-radius:12px;letter-spacing:.6px;margin-left:7px}
 </style>
 </head>
 <body>
 <div id="ptr"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#4C525B" stroke-width="2.5" stroke-dasharray="42" stroke-dashoffset="14" stroke-linecap="round"/></svg></div>
 <div id="blackout">BLACKOUT HOUR — STRATEGY PAUSED</div>
+
+<div class="modebar">
+  <div class="seg mini" id="viewSeg"><div class="pill"></div>
+    <button data-v="simple">Simple</button><button data-v="full">Full</button>
+  </div>
+  <div class="seg mini" id="densSeg" data-full><div class="pill"></div>
+    <button data-d="comfy">Comfy</button><button data-d="dense">Dense</button>
+  </div>
+  <button class="chip" id="sndBtn" title="Sound on fills and settlements">SOUND</button>
+</div>
+
+<div id="anoms"></div>
 
 <div class="hero">
   <div class="hero-lbl" id="heroLbl">Portfolio</div>
@@ -714,13 +1065,14 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
     <g id="cdot"><circle id="cdotO" r="5.5" fill="#000" stroke-width="2.5"></circle></g>
     <g id="liveDot" opacity="0"><circle id="livePing" fill="none"></circle><circle id="liveCore" r="3.5"></circle></g>
   </svg>
+  <div id="depWrap" data-full></div>
   <div class="scrub-time" id="scrubTime"></div>
   <div class="chart-empty" id="chartEmpty" style="display:none">No activity in this range</div>
 </div>
 
 <div class="controls">
   <div class="seg" id="ranges"><div class="pill"></div>
-    <button data-r="1H">1H</button><button data-r="1D">1D</button><button data-r="1W">1W</button><button data-r="1M">1M</button><button data-r="ALL">All</button>
+    <button data-r="1H" data-full>1H</button><button data-r="1D">1D</button><button data-r="24H" data-full>24H</button><button data-r="48H" data-full>48H</button><button data-r="72H" data-full>72H</button><button data-r="1W">1W</button><button data-r="1M" data-full>1M</button><button data-r="ALL">All</button>
   </div>
   <div class="seg mini" id="modes"><div class="pill"></div>
     <button data-m="pnl">P&amp;L</button><button data-m="bal">Balance</button>
@@ -740,8 +1092,13 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
 </div>
 
 <div class="duo">
-  <div class="card pad" id="paceCard"></div>
+  <div class="card pad" id="paceCard" data-full></div>
   <div class="card pad" id="seriesCard"></div>
+</div>
+
+<div class="duo" data-full>
+  <div class="card pad" id="streakCard"></div>
+  <div class="card pad" id="whatifCard"></div>
 </div>
 
 <div class="cols">
@@ -751,6 +1108,7 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   </div>
   <div class="col-right">
     <h3>Recent trades</h3>
+    <div class="chips" id="tfilt" data-full></div>
     <div class="card" id="trades"><div class="empty">Loading…</div></div>
   </div>
 </div>
@@ -764,8 +1122,17 @@ const UP='#00D181', DOWN='#FF453A', BLUE='#4C8DFF';
 const AUG1=new Date('2026-08-01T04:00:00Z').getTime();
 // The ALL range floors at Aug 1 (Kalshi keeps settled markets ~67 days), so it is
 // not all time and must not be labelled as if it were.
-const RLBL={'1H':'Hour','1D':'Today','1W':'Week','1M':'Month','ALL':'Since Aug 1'};
+const RLBL={'1H':'Hour','1D':'Today','24H':'24 hours','48H':'48 hours',
+  '72H':'72 hours','1W':'Week','1M':'Month','ALL':'Since Aug 1'};
 let range='1D', mode='pnl', last=null, expanded=new Set(), pts=[], firstDraw=true, scrubbing=false;
+let chartT0=0, chartSpan=1;
+let viewMode=localStorage.getItem('kv')||'simple';
+let density=localStorage.getItem('kd')||'comfy';
+let sndOn=localStorage.getItem('ks')==='1';
+let tf={series:null,side:null,res:null}, wfBet=null, lastTopTs=null;
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtPx=n=>{const a=Math.abs(n);return '$'+n.toLocaleString('en-US',
+  {minimumFractionDigits:a<1?4:2,maximumFractionDigits:a<1?4:2});};
 
 /* Modelled baseline, from the canonical harness at $50 flat with the measured
    0.105c execution gap. Reproduce with:
@@ -787,6 +1154,9 @@ const et=(d,o)=>d.toLocaleString('en-US',Object.assign({timeZone:'America/New_Yo
 function cutoff(r){
   const now=new Date(); let t;
   if(r==='1H') t=now.getTime()-3600000;
+  else if(r==='24H') t=now.getTime()-24*3600000;
+  else if(r==='48H') t=now.getTime()-48*3600000;
+  else if(r==='72H') t=now.getTime()-72*3600000;
   else if(r==='1D'){
     const p=et(now,{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}).split(':').map(Number);
     t=now.getTime()-((p[0]%24*3600+p[1]*60+p[2])*1000);
@@ -849,6 +1219,7 @@ function drawChart(series,color,baseVal){
   for(const p of series){ if(p.v<lo)lo=p.v; if(p.v>hi)hi=p.v; }
   if(baseVal!=null){ lo=Math.min(lo,baseVal); hi=Math.max(hi,baseVal); }
   const pad=(hi-lo)*0.12||1; lo-=pad; hi+=pad;
+  chartT0=t0; chartSpan=span;
   const X=t=>(t-t0)/span*W;
   const Y=v=>PADY+(1-(v-lo)/((hi-lo)||1))*(H-PADY*2);
   let d='';
@@ -929,7 +1300,172 @@ function initSeg(seg,attr,def,cb){
 }
 initSeg($('ranges'),'r','1D',v=>{ range=v; firstDraw=true; if(last) render(last); });
 initSeg($('modes'),'m','pnl',v=>{ mode=v; firstDraw=true; if(last) render(last); });
-window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes')); });
+
+/* ── view mode & density ────────────────────────────────────────────
+   Simple is the default because the page is most often opened to answer one
+   question — is it working and am I up. Full is opt-in and remembered. */
+function applyView(){
+  document.body.classList.toggle('simple',viewMode==='simple');
+  document.body.classList.toggle('dense',density==='dense');
+  // A Full-only range must not stay selected after switching to Simple, or the
+  // page silently shows a window whose control is no longer on screen.
+  const on=$('ranges').querySelector('button.on');
+  if(viewMode==='simple'&&on&&on.hasAttribute('data-full')){
+    $('ranges').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    $('ranges').querySelector('button[data-r="1D"]').classList.add('on');
+    range='1D'; firstDraw=true;
+  }
+  requestAnimationFrame(()=>{ movePill($('ranges')); movePill($('modes'));
+    movePill($('viewSeg')); movePill($('densSeg')); });
+}
+initSeg($('viewSeg'),'v',viewMode,v=>{ viewMode=v; localStorage.setItem('kv',v);
+  applyView(); if(last) render(last); });
+initSeg($('densSeg'),'d',density,v=>{ density=v; localStorage.setItem('kd',v);
+  applyView(); if(last) render(last); });
+function paintSnd(){ $('sndBtn').classList.toggle('on',sndOn); }
+$('sndBtn').addEventListener('click',()=>{ sndOn=!sndOn;
+  localStorage.setItem('ks',sndOn?'1':'0'); paintSnd(); if(sndOn) chime(true); });
+paintSnd(); applyView();
+
+window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'));
+  movePill($('viewSeg')); movePill($('densSeg')); });
+
+/* ── sound + haptics ────────────────────────────────────────────────
+   Ambient awareness: a distinct tone for a win and a loss means the state is
+   audible without the page being on screen. Off by default and remembered —
+   audio that starts itself uninvited is hostile. */
+function chime(win){
+  if(!sndOn) return;
+  try{
+    const C=window.AudioContext||window.webkitAudioContext; if(!C) return;
+    const ctx=chime._c||(chime._c=new C());
+    if(ctx.state==='suspended') ctx.resume();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine'; o.frequency.value=win?880:320;
+    g.gain.setValueAtTime(0.0001,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.075,ctx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.3);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime+0.32);
+  }catch(e){}
+}
+function announce(sett){
+  const top=sett.length?sett[sett.length-1]:null;
+  if(!top){ return; }
+  if(lastTopTs!==null && top.ts!==lastTopTs){
+    chime(top.won);
+    if(navigator.vibrate) navigator.vibrate(top.won?6:[7,45,7]);
+  }
+  lastTopTs=top.ts;
+}
+
+/* ── anomalies ──────────────────────────────────────────────────────
+   Silence is the healthy state. Anything rendered here is, by construction,
+   outside this account's own historical norms. */
+function renderAnoms(d){
+  const el=$('anoms'), a=d.anomalies||[];
+  if(!a.length){ el.innerHTML='<div class="anom-ok">ALL CLEAR</div>'; return; }
+  el.innerHTML=a.map(x=>'<div class="anom '+esc(x.sev)+'"><div class="ic"></div><div>'+
+    '<div class="am">'+esc(x.msg)+'</div>'+
+    (x.detail?'<div class="ad">'+esc(x.detail)+'</div>':'')+'</div></div>').join('');
+}
+
+/* ── deploy markers ─────────────────────────────────────────────── */
+function renderDeploys(d){
+  const el=$('depWrap'); if(!el) return;
+  const deps=(d.deploys||[]).map(x=>({t:new Date(x.ts).getTime(),sha:x.sha,msg:x.msg}))
+    .filter(x=>x.t>=chartT0 && x.t<=chartT0+chartSpan);
+  el.innerHTML=deps.map(x=>{
+    const L=((x.t-chartT0)/chartSpan*100).toFixed(2);
+    return '<div style="position:absolute;left:'+L+'%;top:0;bottom:22px;width:1px;'+
+      'background:rgba(76,141,255,.4)"></div>'+
+      '<div class="dep-f" style="left:'+L+'%" title="'+esc(x.msg)+'">'+esc(x.sha)+'</div>';
+  }).join('');
+}
+
+/* ── streaks ────────────────────────────────────────────────────── */
+function renderStreak(sett){
+  const el=$('streakCard'); if(!el) return;
+  let cur=0,best=0,curL=0,worstL=0;
+  for(const s of sett){
+    if(s.won){ cur++; best=Math.max(best,cur); curL=0; }
+    else { curL++; worstL=Math.max(worstL,curL); cur=0; }
+  }
+  const days={};
+  for(const s of sett){ const k=et(new Date(s.ts),{year:'numeric',month:'2-digit',day:'2-digit'});
+    days[k]=(days[k]||0)+s.pnl; }
+  const vals=Object.values(days);
+  const bestDay=vals.length?Math.max(...vals):0, worstDay=vals.length?Math.min(...vals):0;
+  el.innerHTML='<h4>Streaks &amp; bests</h4><div class="streak">'+
+    '<div class="sk2"><div class="n up num">'+cur+'</div><div class="t">current W</div></div>'+
+    '<div class="sk2"><div class="n num">'+best+'</div><div class="t">best W</div></div>'+
+    '<div class="sk2"><div class="n down num">'+worstL+'</div><div class="t">worst L</div></div>'+
+    '</div>'+
+    '<div class="prow" style="margin-top:10px"><span class="l">Best day</span>'+
+      '<span class="v num up">'+signed(bestDay)+'</span></div>'+
+    '<div class="prow"><span class="l">Worst day</span>'+
+      '<span class="v num down">'+signed(worstDay)+'</span></div>';
+}
+
+/* ── what-if sizing ─────────────────────────────────────────────── */
+function renderWhatif(sett,d){
+  const el=$('whatifCard'); if(!el) return;
+  const cur=d.bet||35; if(wfBet==null) wfBet=cur;
+  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cutoff(range));
+  const base=inR.reduce((a,s)=>a+s.pnl,0), scaled=base*(wfBet/cur);
+  el.innerHTML='<h4>What if the bet were…</h4>'+
+    '<div class="wf-row"><input type="range" id="wfR" min="10" max="100" step="5" value="'+wfBet+'">'+
+      '<span class="wf-val num">$'+wfBet+'</span></div>'+
+    '<div class="prow"><span class="l">'+RLBL[range]+' at $'+cur+'</span>'+
+      '<span class="v num '+cls(base)+'">'+signed(base)+'</span></div>'+
+    '<div class="prow"><span class="l">at $'+wfBet+'</span>'+
+      '<span class="v num '+cls(scaled)+'">'+signed(scaled)+'</span></div>'+
+    '<div class="pnote">Linear rescale of the same trades at the same prices. It does '+
+      'NOT model fill quality or book depth at larger size, both of which get worse — '+
+      'so read it as a bound, not a forecast.</div>';
+  $('wfR').addEventListener('input',e=>{ wfBet=+e.target.value; renderWhatif(sett,d); });
+}
+
+/* ── trade filters ──────────────────────────────────────────────── */
+function renderFilters(sett){
+  const el=$('tfilt'); if(!el) return;
+  const ser=[...new Set(sett.map(s=>(s.series||'').replace('KX','').replace('15M','')))]
+    .filter(Boolean).sort();
+  const mk=(k,v,l)=>'<button class="chip'+(tf[k]===v?' on':'')+'" data-k="'+k+'" data-v="'+
+    esc(v)+'">'+esc(l)+'</button>';
+  el.innerHTML=mk('res','win','Wins')+mk('res','loss','Losses')+
+    mk('side','yes','YES')+mk('side','no','NO')+ser.map(x=>mk('series',x,x)).join('');
+  el.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.k, v=b.dataset.v; tf[k]=tf[k]===v?null:v;
+    if(navigator.vibrate) navigator.vibrate(2);
+    if(last) render(last);
+  }));
+}
+function applyFilters(rows){
+  if(viewMode!=='full') return rows;      // chips are hidden in Simple; so is their effect
+  return rows.filter(s=>{
+    if(tf.res==='win'&&!s.won) return false;
+    if(tf.res==='loss'&&s.won) return false;
+    if(tf.side&&(s.side||'').toLowerCase()!==tf.side) return false;
+    if(tf.series&&(s.series||'').replace('KX','').replace('15M','')!==tf.series) return false;
+    return true;
+  });
+}
+
+/* ── all-time high ──────────────────────────────────────────────── */
+function checkHWM(bal){
+  if(!(bal>0)) return false;
+  const prev=parseFloat(localStorage.getItem('khwm')||'0');
+  if(bal>prev){
+    localStorage.setItem('khwm',String(bal));
+    if(prev>0){
+      const el=$('bal'); el.classList.remove('hwm'); void el.offsetWidth; el.classList.add('hwm');
+      if(navigator.vibrate) navigator.vibrate([6,40,6]);
+    }
+    return true;
+  }
+  return bal>=prev-0.005;
+}
 
 /* ── reconciliation ─────────────────────────────────────────────────
    Every percent on this page rests on one assumption: that deposits + settlements
@@ -952,6 +1488,51 @@ const RECON_KEY='dash-recon-v1';
    day, so prorating a daily figure by clock time would score a quiet morning as a
    shortfall. Trade count is shown against the full-day model with the elapsed
    fraction beside it, so a partial day reads as partial rather than as a miss. */
+/* ── position drama: live spot vs strike ────────────────────────────
+   The actual bet, drawn. z is the cushion between spot and the strike measured in
+   units of how far price can still travel before close — the SAME quantity the
+   trader gates entries on, so the number here is the one the bot would compute.
+   The marker walks as spot moves and the scale tightens as the clock runs down,
+   which is the whole drama: a comfortable position gets thinner by standing still. */
+function drama(p){
+  // Market already closed: z is undefined because there is no remaining volatility to
+  // normalise against, and CURRENT spot is NOT the settlement price — that is the RTI
+  // print taken at close, which has already happened. Drawing spot-vs-strike here
+  // would imply an outcome from a price that no longer decides it. The book does know,
+  // so say what the book says and nothing more.
+  if(p.z==null&&p.bid!=null&&p.close_time&&new Date(p.close_time).getTime()<=Date.now()){
+    const decided=p.bid>=99, lost=p.bid<=1;
+    const col=decided?UP:lost?DOWN:'#7C828C';
+    return '<div class="drama"><div class="drama-top">'+
+      '<span>awaiting settlement</span>'+
+      '<span class="drama-z" style="color:'+col+'">'+
+        (decided?'WON':lost?'LOST':'UNDECIDED')+'</span></div>'+
+      '<div class="drama-sub"><span>book '+p.bid+'¢ on '+esc((p.side||'').toUpperCase())+
+        '</span><span class="mut">settlement price is fixed at close</span></div></div>';
+  }
+  if(p.z==null||p.strike==null||p.spot==null) return '';
+  const z=p.z;
+  const col=z>=1.5?UP:z>=0.761?'#8FD14F':z>=0?'#FFA318':DOWN;
+  const L=Math.max(2,Math.min(98,50+(z/6)*100));
+  const diff=p.spot-p.strike, dp=p.strike?diff/p.strike*100:0;
+  const note=z<0?'behind — needs a reversal':z<0.761?'thin — under the gate cut':
+    z<1.5?'holding':'comfortable';
+  return '<div class="drama">'+
+    '<div class="drama-top"><span>'+esc(note)+'</span>'+
+      '<span class="drama-z" style="color:'+col+'">z '+(z>=0?'+':'')+z.toFixed(2)+'</span></div>'+
+    '<div class="track">'+
+      '<div class="fill" style="'+(z>=0?'left:50%;width:'+(L-50).toFixed(1)+'%':
+        'left:'+L.toFixed(1)+'%;width:'+(50-L).toFixed(1)+'%')+';background:'+col+'"></div>'+
+      '<div class="mid"></div><div class="midl">STRIKE</div>'+
+      '<div class="mk" style="left:'+L.toFixed(1)+'%;background:'+col+'"></div>'+
+    '</div>'+
+    '<div class="drama-sub"><span>spot '+fmtPx(p.spot)+'</span>'+
+      '<span style="color:'+col+'">'+(diff>=0?'+':'')+fmtPx(diff)+' ('+(dp>=0?'+':'')+
+        dp.toFixed(2)+'%)</span>'+
+      '<span>&sigma; '+(p.sigma_bp!=null?p.sigma_bp.toFixed(1)+'bp':'—')+'</span></div>'+
+    '</div>';
+}
+
 function renderPace(sett, d){
   const el=$('paceCard'); if(!el) return;
   const dayStart=cutoff('1D');
@@ -965,6 +1546,9 @@ function renderPace(sett, d){
   const expPer=MODEL_PER_TRADE*scale, expDay=MODEL_PER_TRADE*MODEL_TRADES_DAY*scale;
   const et0=new Date(dayStart), frac=Math.min(1,(Date.now()-dayStart)/86400000);
   const ratio=per!=null&&expPer>0?per/expPer:null;
+  // Straight-line projection off elapsed day fraction. Suppressed before 8% of the
+  // day has run, where one trade swings it by tens of dollars and it reads as noise.
+  const proj=frac>0.08?pnl/frac:null;
   const capture=Math.min(100,n/MODEL_TRADES_DAY*100);
   const barCol=ratio==null?'var(--dimmer)':ratio>=1?UP:ratio>=0?'var(--warn)':DOWN;
   el.innerHTML='<h4>Pace vs model</h4>'+
@@ -972,6 +1556,8 @@ function renderPace(sett, d){
       signed(pnl)+'</span></div>'+
     '<div class="prow"><span class="l">Model pace</span><span class="v num mut">'+
       signed(expDay*frac)+'</span></div>'+
+    '<div class="prow"><span class="l">Projected close</span><span class="v num '+
+      (proj==null?'mut':cls(proj))+'">'+(proj==null?'—':signed(proj))+'</span></div>'+
     '<div class="prow"><span class="l">Per trade</span><span class="v num '+
       (per==null?'mut':cls(per-expPer))+'">'+
       (per==null?'—':signed(per)+'  vs  '+signed(expPer))+'</span></div>'+
@@ -1244,8 +1830,16 @@ function render(d){
     el.className='stat-val num '+vc; setNum(el,vt); $(si).textContent=st;
   }
 
+  renderAnoms(d);
+  announce(sett);
+  $('heroLbl').innerHTML='Portfolio'+(checkHWM(d.balance)?
+    '<span class="hwm-b">ALL-TIME HIGH</span>':'');
   renderPace(sett, d);
   renderSeries(sett);
+  renderStreak(sett);
+  renderWhatif(sett, d);
+  renderFilters(sett);
+  renderDeploys(d);
 
   // positions
   const pos=d.positions||[]; $('posN').textContent=pos.length;
@@ -1283,12 +1877,12 @@ function render(d){
         '<div class="pg"><div class="l">If win</div><div class="v num up">'+(win!=null?'+$'+win.toFixed(2):'—')+'</div></div>'+
         '<div class="pg"><div class="l">Mkt value</div><div class="v num">'+mv+'</div></div>'+
         '<div class="pg"><div class="l">At risk</div><div class="v num down">'+(risk!=null?'-$'+risk.toFixed(2):'—')+'</div></div>'+
-        '</div></div>';
+        '</div>'+drama(p)+'</div>';
     }).join('');
   } else pe.innerHTML='<div class="empty">No open positions</div>';
 
   // trades
-  const rec=sett.slice(-60).reverse(), te=$('trades');
+  const rec=applyFilters(sett).slice(-60).reverse(), te=$('trades');
   if(rec.length){
     te.innerHTML=rec.map(s=>{
       const k=s.ticker+'|'+s.ts, ex=expanded.has(k), dt=new Date(s.ts);
