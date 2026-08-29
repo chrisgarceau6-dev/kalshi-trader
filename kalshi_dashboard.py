@@ -723,6 +723,7 @@ def api_data():
         "anomalies":   get_anomalies(sett, pos, bal, hea),
         "deploys":     get_deploys(),
         "bet":         live_const("FLAT_BET_DOLLARS"),
+        "stop":        live_const("STOP_BALANCE"),
         "blackout":    live_blackout_hours(),
         "ts":          datetime.now(ET).isoformat(timespec="seconds"),
         "errors":      dict(_last_err),
@@ -1265,6 +1266,102 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
 @media (max-width:1079px){
   body{padding-bottom:calc(104px + var(--safe-b))}
 }
+
+/* ══ HOOD ═══════════════════════════════════════════════════════════
+   The visual system chosen from the options lab. Robinhood's palette and
+   restraint, carrying the instruments Robinhood has no pattern for.
+   Options applied: 1 draw-in · 2 number roll · 3 range morph · 4 scrub ·
+   5 stagger · 7 underline ranges · 8 flatter easing · 10 stats 4+expand ·
+   12 no duplicate WR · 13 no footer · 14 taller chart · 15 line glow ·
+   16 pulsing endpoint · 18 deploy dots · 20 streak · 21 all-time high ·
+   25 change glow · 26 consistent radii · 27 tighter tracking.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --up:#00C805; --down:#FF5000;
+  --bg:#000; --e1:#0B0B0D; --e2:#131316; --e3:#1B1B1F;
+  --line:#1C1C1E; --line-2:#242427;
+  --tx:#FFFFFF; --dim:#8C8C8C; --dimmer:#5E5E63;
+  --ease:cubic-bezier(.4,0,.2,1);          /* 8 · flatter shared curve */
+  --r-lg:14px; --r-md:14px; --r-sm:14px;   /* 26 · one radius everywhere */
+}
+html,body{background:#000}
+.card,.stat{background:var(--e1);box-shadow:none;border:1px solid var(--line)}
+.seg{background:var(--e1);border:1px solid var(--line);box-shadow:none}
+.seg .pill{background:var(--e3)}
+
+/* 27 · tighter tracking on the figures that carry the page */
+.hero-bal{letter-spacing:-.042em;font-weight:500}
+.stat-val{letter-spacing:-.03em}
+
+/* 25 · the change figure gets light behind it */
+.hero-chg .up,.hero-chg [class*="up"]{text-shadow:0 0 20px rgba(0,200,5,.5)}
+
+/* 14 · taller chart · 15 · the line carries its own glow */
+.chart-wrap{height:330px}
+body.simple .chart-wrap{height:150px}
+@media (min-width:1080px){ .chart-wrap{height:390px} }
+#pathLine{stroke-width:2;filter:drop-shadow(0 0 7px rgba(0,200,5,.45))}
+#pathArea{opacity:.85}
+
+/* 16 · the endpoint is the page's one sign of life */
+#livePing{animation:ping 2.4s ease-out infinite}
+
+/* 18 · deploy dots stay small — an annotation must not outweigh its data */
+.dep-t{background:#4C8DFF;opacity:.45}
+.dep-t:hover{opacity:1}
+
+/* 7 · ranges underline instead of pill. movePill already slides the element;
+       this only changes what the element looks like. */
+#ranges,#modes{background:none;border:none;box-shadow:none;padding:0;gap:22px;
+  border-radius:0}
+#ranges button,#modes button{padding:8px 0;border-radius:0;font-weight:620;
+  font-size:13.5px}
+#ranges button.on,#modes button.on{color:var(--up)}
+#ranges .pill,#modes .pill{top:auto;bottom:0;height:2px;border-radius:2px;
+  background:var(--up);transition:left .34s var(--ease),width .34s var(--ease)}
+.controls{gap:28px;padding-bottom:2px;border-bottom:1px solid var(--line)}
+
+/* 10 · four tiles, the rest behind one control · 12 · no duplicate win rate */
+.stat.gone{display:none}
+.stat.x{display:none}
+body.statx .stat.x{display:block}
+.statmore{display:block;width:100%;background:none;border:none;color:var(--dim);
+  font-family:inherit;font-size:12.5px;font-weight:620;padding:12px 0;cursor:pointer;
+  min-height:44px}
+.statmore:hover{color:var(--tx)}
+
+/* 13 · no footer */
+.foot{display:none}
+
+/* 20 · the streak reads as a moment, not a row */
+#streakCard .n{font-size:26px;letter-spacing:-.035em}
+
+/* 21 · all-time high */
+.hwm-b{background:rgba(0,200,5,.13);border-color:rgba(0,200,5,.3);color:var(--up);
+  letter-spacing:.8px}
+@keyframes hwm{0%{transform:scale(1)}30%{transform:scale(1.05)}100%{transform:scale(1)}}
+.hwm{animation:hwm .9s var(--ease);color:var(--up) !important}
+
+/* 5 · sections arrive in sequence rather than all at once */
+@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hero,.chart-wrap,.controls,#overviewCard,.stats,.duo,.sect>h3,.sect>.card{
+  animation:riseIn .46s var(--ease) backwards}
+.chart-wrap{animation-delay:.05s}
+.controls{animation-delay:.10s}
+#overviewCard{animation-delay:.15s}
+.stats{animation-delay:.20s}
+.duo{animation-delay:.25s}
+.duo+.duo{animation-delay:.30s}
+
+/* everything shares one curve */
+.seg .pill,.bar i,.track .f,.wrbar .wf,.cbar i,.mk,.tr,.pos,.stat,.card{
+  transition-timing-function:var(--ease)}
+
+@media (prefers-reduced-motion:reduce){
+  .hero,.chart-wrap,.controls,#overviewCard,.stats,.duo,.sect>h3,.sect>.card{
+    animation:none}
+  #livePing{animation:none}
+}
 </style>
 </head>
 <body>
@@ -1333,12 +1430,16 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
 <div class="card pad" id="marginCard"></div>
 <div class="stats" id="stats">
   <div class="stat"><div class="stat-lbl" id="l0">P&L</div><div class="stat-val num sk" id="v0">$0</div><div class="stat-sub" id="s0"></div></div>
-  <div class="stat"><div class="stat-lbl" id="l1">Win rate</div><div class="stat-val num sk" id="v1">0%</div><div class="stat-sub" id="s1"></div></div>
+  <div class="stat gone"><div class="stat-lbl" id="l1">Win rate</div><div class="stat-val num sk" id="v1">0%</div><div class="stat-sub" id="s1"></div></div>
   <div class="stat"><div class="stat-lbl" id="l2">Trades</div><div class="stat-val num sk" id="v2">0</div><div class="stat-sub" id="s2"></div></div>
   <div class="stat"><div class="stat-lbl" id="l3">Hour P&L</div><div class="stat-val num sk" id="v3">$0</div><div class="stat-sub" id="s3"></div></div>
-  <div class="stat"><div class="stat-lbl" id="l4">Hour WR</div><div class="stat-val num sk" id="v4">0%</div><div class="stat-sub" id="s4"></div></div>
+  <div class="stat x"><div class="stat-lbl" id="l4">Hour WR</div><div class="stat-val num sk" id="v4">0%</div><div class="stat-sub" id="s4"></div></div>
   <div class="stat"><div class="stat-lbl" id="l5">Open</div><div class="stat-val num sk" id="v5">0</div><div class="stat-sub" id="s5"></div></div>
+  <div class="stat x"><div class="stat-lbl" id="l6">Per trade</div><div class="stat-val num sk" id="v6">$0</div><div class="stat-sub" id="s6"></div></div>
+  <div class="stat x"><div class="stat-lbl" id="l7">Bet size</div><div class="stat-val num sk" id="v7">$0</div><div class="stat-sub" id="s7"></div></div>
+  <div class="stat x"><div class="stat-lbl" id="l8">Headroom</div><div class="stat-val num sk" id="v8">0</div><div class="stat-sub" id="s8"></div></div>
 </div>
+<button class="statmore" id="statMore" data-full>Show 4 more &#9662;</button>
 
 <div class="duo">
   <div class="card pad" id="paceCard" data-full></div>
@@ -1405,7 +1506,7 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-const UP='#00D181', DOWN='#FF453A', BLUE='#4C8DFF';
+const UP='#00C805', DOWN='#FF5000', BLUE='#4C8DFF';
 const AUG1=new Date('2026-08-01T04:00:00Z').getTime();
 // The ALL range floors at Aug 1 (Kalshi keeps settled markets ~67 days), so it is
 // not all time and must not be labelled as if it were.
@@ -1516,6 +1617,41 @@ function renderHealth(h){
 
 /* ── chart ──────────────────────────────────────────────────────── */
 const W=1000,H=220,PADY=18;
+
+/* Ranges have different point counts AND different time spans, so a morph has to
+   interpolate BOTH axes. Resample each side to a fixed count in normalised index
+   space, then lerp t and v together — that is what makes the curve appear to
+   travel rather than cut. Draw-in owns the first paint; morph owns every range
+   change after it. Reduced-motion falls back to a plain redraw. */
+function resample(s,n){
+  const out=[], m=s.length;
+  for(let k=0;k<n;k++){
+    const f=k/(n-1)*(m-1), i=Math.floor(f), fr=f-i;
+    const a=s[i], b=s[Math.min(m-1,i+1)];
+    out.push({t:a.t+(b.t-a.t)*fr, v:a.v+(b.v-a.v)*fr});
+  }
+  return out;
+}
+let morphRAF=null, lastSeries=null;
+function drawSeries(series,color,baseVal){
+  const reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(reduce||firstDraw||!lastSeries||lastSeries.length<2||series.length<2){
+    lastSeries=series; drawChart(series,color,baseVal); return;
+  }
+  const N=170, from=resample(lastSeries,N), to=resample(series,N);
+  lastSeries=series;
+  if(morphRAF) cancelAnimationFrame(morphRAF);
+  const t0=performance.now(), D=560;
+  (function step(now){
+    const k=Math.min(1,(now-t0)/D), e=1-Math.pow(1-k,3);
+    drawChart(from.map((p,i)=>({t:p.t+(to[i].t-p.t)*e, v:p.v+(to[i].v-p.v)*e})),
+              color,baseVal);
+    // Land on the REAL series, not a 99.9% interpolation of it — otherwise the
+    // resampled approximation is what the scrub and the endpoint read from.
+    if(k<1) morphRAF=requestAnimationFrame(step);
+    else drawChart(series,color,baseVal);
+  })(t0);
+}
 function drawChart(series,color,baseVal){
   const line=$('pathLine'), area=$('pathArea'), sv=$('svg');
   pts=[];
@@ -1615,8 +1751,8 @@ function initSeg(seg,attr,def,cb){
   });
   requestAnimationFrame(()=>movePill(seg));
 }
-initSeg($('ranges'),'r','1D',v=>{ range=v; firstDraw=true; if(last) render(last); });
-initSeg($('modes'),'m','pnl',v=>{ mode=v; firstDraw=true; if(last) render(last); });
+initSeg($('ranges'),'r','1D',v=>{ range=v; if(last) render(last); });
+initSeg($('modes'),'m','pnl',v=>{ mode=v; if(last) render(last); });
 
 /* ── view mode & density ────────────────────────────────────────────
    Simple is the default because the page is most often opened to answer one
@@ -1695,6 +1831,11 @@ $('gearBtn').addEventListener('click',()=>sheet(true));
 $('sheetBg').addEventListener('click',()=>sheet(false));
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') sheet(false); });
 
+$('statMore').addEventListener('click',()=>{
+  const o=document.body.classList.toggle('statx');
+  $('statMore').innerHTML=o?'Show less &#9652;':'Show 4 more &#9662;';
+  if(navigator.vibrate) navigator.vibrate(3);
+});
 $('moreBtn').addEventListener('click',()=>{
   const open=document.body.classList.toggle('moreopen');
   $('moreTx').textContent=open?'Hide trades':'Recent trades';
@@ -2216,7 +2357,7 @@ function render(d){
     const endV=series.length?series[series.length-1].v:0;
     color=baseVal==null?BLUE:(endV>=baseVal?UP:DOWN);
   }
-  drawChart(series,color,baseVal);
+  drawSeries(series,color,baseVal);
 
   // hero
   const rangePnl=inR.reduce((a,s)=>a+s.pnl,0);
@@ -2323,7 +2464,13 @@ function render(d){
     ['l2',RLBL[range]+' trades','v2',String(inR.length),'mut','s2',wins+'W · '+(inR.length-wins)+'L'],
     ['l3',(alt?'Today':'Hour')+' P&L','v3',signed(dP),cls(dP),'s3',''],
     ['l4',(alt?'Today':'Hour')+' WR','v4',pct(dW,dS.length),'','s4',dS.length+' trades'],
-    ['l5','Open','v5',String((d.positions||[]).length),(d.positions||[]).length?'up':'mut','s5','']
+    ['l5','Open','v5',String((d.positions||[]).length),(d.positions||[]).length?'up':'mut','s5',''],
+    ['l6','Per trade','v6',inR.length?signed(avg):'—',inR.length?cls(avg):'mut','s6',
+     RLBL[range].toLowerCase()],
+    ['l7','Bet size','v7',d.bet?'$'+d.bet:'—','mut','s7','flat'],
+    ['l8','Headroom','v8',
+      (d.stop&&d.bet&&d.balance)?String(Math.floor((d.balance-d.stop)/d.bet)):'—','mut','s8',
+      d.stop?'losses to $'+d.stop:'']
   ];
   for(const [li,lt,vi,vt,vc,si,st] of S){
     $(li).textContent=lt; const el=$(vi);
@@ -2333,7 +2480,7 @@ function render(d){
   renderAnoms(d);
   announce(sett);
   $('heroLbl').innerHTML='Portfolio'+(checkHWM(d.balance)?
-    '<span class="hwm-b">ALL-TIME HIGH</span>':'');
+    '<span class="hwm-b">&#9650; ALL-TIME HIGH</span>':'');
   // Full mode shows one section at a time, so building the other three every refresh
   // was pure waste — the Stats tab alone is five cards over the whole settlement list.
   if(vis('secStats')){
