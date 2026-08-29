@@ -755,7 +755,7 @@ html{background:var(--bg)}
 body{
   background:var(--bg);color:var(--tx);
   font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Inter,sans-serif;
-  max-width:620px;margin:0 auto;padding:0 20px calc(48px + var(--safe-b));
+  max-width:620px;margin:0 auto;padding:0 16px calc(48px + var(--safe-b));
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overscroll-behavior-y:contain;
 }
@@ -927,36 +927,18 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
   color:var(--down);border-radius:12px;padding:10px 13px;font-size:11.5px;font-weight:650;
   margin-top:16px;text-align:center}
 .foot{text-align:center;color:var(--dimmer);font-size:10.5px;margin-top:26px;font-weight:550}
-.cols{display:block}
 
 /* ── tablet ──────────────────────────────────────────────────────── */
-@media (min-width:760px){
-  body{max-width:720px}
-  .chart-wrap{height:260px}
-  .hero-bal{font-size:60px}
-}
-
-/* ── desktop: use the width instead of a phone column in a black sea ── */
+/* Width, chart height, stat columns and type scale are all owned by the SIZE
+   block at the end of this sheet. Only rules that are still the SOLE definition
+   of something remain here. The .cols / .col-left / .col-right rules that used
+   to live in this block went out with the two-column body they styled — tabs
+   and .sect replaced it, so they had been dead CSS since #226. */
 @media (min-width:1080px){
-  body{max-width:1280px;padding:0 34px calc(60px + var(--safe-b))}
-  .hero{padding:40px 0 4px}
-  .hero-bal{font-size:68px}
-  .hero-chg{font-size:17px}
-  .chart-wrap{height:340px;margin:22px -8px 0}
-  .stats{grid-template-columns:repeat(6,1fr);gap:11px;margin:26px 0 4px}
   .stat{padding:16px 15px}
   .stat-val{font-size:22px}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start}
-  .duo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
   .duo>.card+.card{margin-top:0}
-  /* positions stay in view while the trade log scrolls past them */
-  .col-left{position:sticky;top:22px}
-  .col-left h3,.col-right h3{margin-top:26px}
-  #blackout{margin:0 -34px 4px}
-}
-@media (min-width:1500px){
-  body{max-width:1440px}
-  .chart-wrap{height:380px}
+  #blackout{margin:0 -32px 4px}
 }
 
 /* ── view mode / density ─────────────────────────────────────────── */
@@ -966,7 +948,6 @@ body.dense .stat{padding:9px 10px}
 body.dense .stat-val{font-size:16px}
 body.dense .tr{padding:7px 13px}
 body.dense .pos{padding:11px 13px}
-body.dense .chart-wrap{height:150px}
 body.dense h3{margin:14px 0 7px}
 
 /* ── anomaly strip ───────────────────────────────────────────────── */
@@ -1068,8 +1049,7 @@ h4{font-size:10.5px;letter-spacing:1px;color:#565C66;text-transform:uppercase;fo
 /* chart: lighter stroke, calmer fill */
 #pathLine{stroke-width:1.6}
 #pathArea{opacity:.62}
-.chart-wrap{height:250px}
-body.simple .chart-wrap{height:118px;margin-top:calc(var(--sp)*2)}
+body.simple .chart-wrap{margin-top:calc(var(--sp)*2)}
 
 /* ══ top bar + gear ═════════════════════════════════════════════════ */
 .topbar{display:flex;align-items:center;justify-content:space-between;
@@ -1187,8 +1167,6 @@ body.full:not([data-tab="secChart"]) .hero-chg{font-size:12.5px;margin-top:5px}
 body.full:not([data-tab="secChart"]) .health{margin-top:9px;transform:scale(.9)}
 
 /* ══ denser tiles and rows ══════════════════════════════════════════ */
-.stats{grid-template-columns:repeat(3,1fr);gap:8px}
-@media (min-width:760px){.stats{grid-template-columns:repeat(6,1fr)}}
 .tr{padding:9px 14px}
 .pos-grid{gap:7px 10px}
 
@@ -1217,8 +1195,6 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
    ═══════════════════════════════════════════════════════════════════ */
 @media (min-width:760px){
   body{max-width:740px}
-  .chart-wrap{height:270px}
-  body.simple .chart-wrap{height:150px}
 }
 
 @media (min-width:1080px){
@@ -1227,7 +1203,6 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
   .hero{padding:34px 0 4px}
   .hero-bal{font-size:clamp(52px,4.4vw,66px)}
   .hero-chg{font-size:16px}
-  .chart-wrap{height:330px}
 
   /* every section visible; the bottom bar is for phones */
   body.full #tabs{display:none}
@@ -1246,7 +1221,6 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
   body.full:not([data-tab="secChart"]) .hero-chg{font-size:16px}
   body.full:not([data-tab="secChart"]) .health{margin-top:14px;transform:none}
 
-  .stats{grid-template-columns:repeat(6,1fr);gap:11px}
   .duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .duo>.card+.card{margin-top:0}
   .ovgrid{grid-template-columns:repeat(4,1fr);gap:14px}
@@ -1259,7 +1233,6 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
 
 @media (min-width:1500px){
   body.full{max-width:1460px}
-  .chart-wrap{height:370px}
 }
 
 /* phone: keep the tab bar clear of the last row */
@@ -1297,9 +1270,6 @@ html,body{background:#000}
 .hero-chg .up,.hero-chg [class*="up"]{text-shadow:0 0 20px rgba(0,200,5,.5)}
 
 /* 14 · taller chart · 15 · the line carries its own glow */
-.chart-wrap{height:330px}
-body.simple .chart-wrap{height:150px}
-@media (min-width:1080px){ .chart-wrap{height:390px} }
 #pathLine{stroke-width:2;filter:drop-shadow(0 0 7px rgba(0,200,5,.45))}
 #pathArea{opacity:.85}
 
@@ -1362,6 +1332,87 @@ body.statx .stat.x{display:block}
     animation:none}
   #livePing{animation:none}
 }
+
+/* ══ SIZE — one authority, phone first ══════════════════════════════
+   Chart height had been set in THIRTEEN places across three overlapping
+   media-query systems, and the stat grid asked for six columns while only four
+   tiles were visible — leaving two dead cells on every desktop. Every one of
+   those declarations was removed; this block is now the only thing that sizes
+   the chart, the stat grid and the range control. Add sizes HERE or they will
+   fight something.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── phone (iPhone portrait is the base case, not an afterthought) ── */
+.chart-wrap{height:190px;margin:14px -6px 0}
+body.simple .chart-wrap{height:128px}
+body.dense .chart-wrap{height:136px}
+
+.stats{grid-template-columns:repeat(2,1fr);gap:8px;margin:18px 0 4px}
+.ovgrid{grid-template-columns:repeat(2,1fr);gap:12px}
+.pos-grid{gap:9px 8px}
+.chips{gap:5px}
+
+/* Eight range buttons do not fit across 375px. Scroll them instead of letting
+   the page scroll sideways, and keep the sliding underline working by leaving
+   the segment itself as the scroll container. */
+.controls{display:flex;align-items:flex-end;justify-content:flex-start;
+  gap:12px;margin-top:14px}
+#ranges{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:15px}
+#ranges::-webkit-scrollbar{display:none}
+#ranges button{flex:0 0 auto}
+#modes{flex:0 0 auto}
+
+.hero{padding:22px 0 4px}
+.hero-bal{font-size:clamp(38px,11.5vw,50px)}
+.hero-chg{font-size:14px}
+h3{margin:18px 0 3px}
+.col{padding:4px 0 18px}
+.col+.col{border-left:none;border-top:1px solid var(--line);padding-top:14px}
+.duo{display:grid;grid-template-columns:1fr;gap:10px}
+.pos-grid{grid-template-columns:repeat(3,1fr)}
+/* tap targets */
+#ranges button,#modes button,#tabs button,.chip,.more,.statmore,.gear{min-height:44px}
+#ranges button,#modes button{display:flex;align-items:center}
+
+@media (min-width:600px){
+  .chart-wrap{height:238px}
+  body.simple .chart-wrap{height:150px}
+  .stats{grid-template-columns:repeat(4,1fr);gap:9px}
+  .ovgrid{grid-template-columns:repeat(4,1fr)}
+  #ranges{gap:19px}
+  .hero-bal{font-size:clamp(44px,8vw,56px)}
+  .hero-chg{font-size:15px}
+}
+
+@media (min-width:900px){ .chart-wrap{height:290px} }
+
+@media (min-width:1080px){
+  .chart-wrap{height:350px;margin:20px -8px 0}
+  body.simple .chart-wrap{height:180px}
+  body.dense .chart-wrap{height:230px}
+  .stats{grid-template-columns:repeat(4,1fr);gap:11px;margin:22px 0 4px}
+  .controls{gap:26px}
+  #ranges{overflow:visible;gap:24px;flex:0 0 auto}
+  .hero{padding:32px 0 4px}
+  .hero-bal{font-size:clamp(52px,4.6vw,66px)}
+  .hero-chg{font-size:16px}
+  .col{padding:4px 0 22px}
+  .col+.col{border-left:1px solid var(--line);border-top:none;padding-top:4px;
+    padding-left:26px}
+  .duo{grid-template-columns:1fr 1fr;gap:16px}
+  h3{margin:22px 0 3px}
+}
+
+@media (min-width:1500px){ .chart-wrap{height:390px} }
+
+/* nothing may push the document sideways */
+html,body{overflow-x:hidden}
+.wrbar,.track,.strip,.sbar,.cbar,.zbar{max-width:100%}
+
+/* iPhone: 16px gutters are enough at 375px; give it back on anything wider. */
+@media (min-width:600px){ body{padding-left:20px;padding-right:20px} }
+@media (min-width:1080px){ body.full{padding-left:32px;padding-right:32px} }
 </style>
 </head>
 <body>
