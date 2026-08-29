@@ -783,6 +783,8 @@ body{
   display:flex;align-items:center;justify-content:center;gap:7px;min-height:20px}
 .arrow{font-size:11px;line-height:1;transform:translateY(-1px)}
 .chg-sub{color:var(--dimmer);font-weight:500}
+.chg-dot{color:#2E333A;font-weight:700;margin:0 1px}
+.hero-chg{flex-wrap:wrap;row-gap:2px}
 
 /* health */
 .health{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;
@@ -1065,7 +1067,7 @@ h4{font-size:10.5px;letter-spacing:1px;color:#565C66;text-transform:uppercase;fo
 /* chart: lighter stroke, calmer fill */
 #pathLine{stroke-width:1.6}
 #pathArea{opacity:.62}
-.chart-wrap{height:186px}
+.chart-wrap{height:250px}
 body.simple .chart-wrap{height:118px;margin-top:calc(var(--sp)*2)}
 
 /* ══ top bar + gear ═════════════════════════════════════════════════ */
@@ -1145,8 +1147,9 @@ body.simple.moreopen #moreWrap{display:block;animation:secIn .32s cubic-bezier(.
   transition:width .6s cubic-bezier(.32,.72,0,1)}
 .wrbar .be{position:absolute;top:0;bottom:0;width:2px;background:var(--tx);
   box-shadow:0 0 0 1px rgba(0,0,0,.6)}
-.wrbar .bel{position:absolute;bottom:3px;font-size:8px;font-weight:800;color:var(--tx);
-  transform:translateX(-50%);letter-spacing:.4px;white-space:nowrap}
+.wrbar{margin-top:22px}
+.wrbar .bel{position:absolute;top:-16px;font-size:8.5px;font-weight:800;color:var(--dim);
+  transform:translateX(-50%);letter-spacing:.5px;white-space:nowrap}
 .wrbar .wv{position:absolute;left:9px;top:50%;transform:translateY(-50%);
   font-size:13px;font-weight:800;letter-spacing:-.02em}
 
@@ -1159,6 +1162,34 @@ body.simple.moreopen #moreWrap{display:block;animation:secIn .32s cubic-bezier(.
 .sbar{position:relative;height:5px;border-radius:3px;background:var(--e2);
   flex:1;overflow:hidden;margin:0 9px}
 .sbar i{position:absolute;top:0;bottom:0;border-radius:3px}
+
+/* ══ chart-tab overview ════════════════════════════════════════════ */
+.ovgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ov{text-align:center}
+.ovl{font-size:9px;color:#454B54;text-transform:uppercase;letter-spacing:.9px;
+  font-weight:800;margin-bottom:6px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.ovv{font-size:17px;font-weight:730;letter-spacing:-.025em}
+.ovsep{height:1px;background:rgba(255,255,255,.06);margin:15px 0 12px}
+
+/* ══ chart axis ═════════════════════════════════════════════════════ */
+.yax{position:absolute;right:2px;top:6px;bottom:6px;display:flex;flex-direction:column;
+  justify-content:space-between;align-items:flex-end;pointer-events:none;
+  font-size:9.5px;font-weight:700;color:#3E444D;font-variant-numeric:tabular-nums}
+
+/* ══ hero compresses off the Chart tab ══════════════════════════════
+   The balance is context everywhere but the subject only on Chart. At full size it
+   was eating 40% of the viewport on every tab before any of that tab's content. */
+body.full:not([data-tab="secChart"]) .hero{padding:calc(var(--sp)*2) 0 0}
+body.full:not([data-tab="secChart"]) .hero-bal{font-size:clamp(28px,7vw,34px)}
+body.full:not([data-tab="secChart"]) .hero-chg{font-size:12.5px;margin-top:5px}
+body.full:not([data-tab="secChart"]) .health{margin-top:9px;transform:scale(.9)}
+
+/* ══ denser tiles and rows ══════════════════════════════════════════ */
+.stats{grid-template-columns:repeat(3,1fr);gap:8px}
+@media (min-width:760px){.stats{grid-template-columns:repeat(6,1fr)}}
+.tr{padding:9px 14px}
+.pos-grid{gap:7px 10px}
 
 /* ══ mode-specific visibility ═══════════════════════════════════════ */
 body.full .more{display:none}
@@ -1215,6 +1246,7 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
     <g id="liveDot" opacity="0"><circle id="livePing" fill="none"></circle><circle id="liveCore" r="3.5"></circle></g>
   </svg>
   <div id="depWrap" data-full></div>
+  <div class="yax"><span id="yHi">—</span><span id="yLo">—</span></div>
   <div class="scrub-time" id="scrubTime"></div>
   <div class="chart-empty" id="chartEmpty" style="display:none">No activity in this range</div>
 </div>
@@ -1227,6 +1259,8 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
     <button data-m="pnl">P&amp;L</button><button data-m="bal">Balance</button>
   </div>
 </div>
+
+<div class="card pad" id="overviewCard"></div>
 
 <div id="stale">Data may be stale — last refresh failed</div>
 <div id="recon" data-full></div>
@@ -1433,6 +1467,12 @@ function drawChart(series,color,baseVal){
   $('g0').setAttribute('stop-color',color); $('g1').setAttribute('stop-color',color);
   if(baseVal!=null){ const by=Y(baseVal); const bl=$('baseline'); bl.setAttribute('y1',by); bl.setAttribute('y2',by); bl.style.opacity=1; }
   else $('baseline').style.opacity=0;
+  // Min/max on the axis so a value can be read without scrubbing for it.
+  const yl=$('yLo'), yh=$('yHi');
+  if(yl&&yh){
+    const f=mode==='bal'?money:signed;
+    yh.textContent=f(hi-pad); yl.textContent=f(lo+pad);
+  }
   const lp=pts[pts.length-1];
   const ld=$('liveDot'); ld.setAttribute('opacity','1');
   ld.setAttribute('transform','translate('+lp.x+','+lp.y+')');
@@ -1530,6 +1570,7 @@ initSeg($('viewSeg'),'v',viewMode,v=>{ viewMode=v; localStorage.setItem('kv',v);
   applyView(); if(last) render(last); });
 initSeg($('densSeg'),'d',density,v=>{ density=v; localStorage.setItem('kd',v);
   applyView(); if(last) render(last); });
+document.body.dataset.tab='secChart';   // stamped before any setTab() call
 function paintSnd(){ const b=$('sndBtn'); b.classList.toggle('on',sndOn);
   b.textContent=sndOn?'ON':'OFF'; }
 $('sndBtn').addEventListener('click',()=>{ sndOn=!sndOn;
@@ -1550,6 +1591,7 @@ function vis(sec){
   return el.classList.contains('on');
 }
 function setTab(id){
+  document.body.dataset.tab=id;
   document.querySelectorAll('.sect').forEach(x=>x.classList.toggle('on',x.id===id));
   const t=$('tabs'); if(t) t.querySelectorAll('button').forEach(b=>
     b.classList.toggle('on',b.dataset.t===id));
@@ -1582,6 +1624,49 @@ window.addEventListener('scroll',()=>{
   if(on!==miniOn){ miniOn=on; $('mini').classList.toggle('on',on); }
 },{passive:true});
 $('mini').addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+/* ── chart-tab overview ─────────────────────────────────────────────
+   The Chart tab was a chart and then half a screen of black. This fills it with the
+   four numbers worth knowing at a glance plus where the money came from, so the
+   default tab answers "how am I doing" without a trip to Stats. */
+function renderOverview(sett,d){
+  const el=$('overviewCard'); if(!el) return;
+  const cut=cutoff(range), inR=sett.filter(s=>s._t>=cut);
+  if(!inR.length){ el.innerHTML='<div class="empty">No trades in range</div>'; return; }
+  const pnl=inR.reduce((a,s)=>a+s.pnl,0);
+  const cost=inR.reduce((a,s)=>a+s.cost,0);
+  const fees=inR.reduce((a,s)=>a+(s.fee||0),0);
+  const con=inR.reduce((a,s)=>a+(s.con||0),0);
+  const wc=inR.filter(s=>s.won).reduce((a,s)=>a+s.cost,0);
+  const dw=cost?100*wc/cost:0, be=con?100*(cost+fees)/con:0, m=dw-be;
+  const nOpen=(d.positions||[]).length;
+  const tile=(l,v,c)=>'<div class="ov"><div class="ovl">'+l+'</div><div class="ovv num '+
+    (c||'')+'">'+v+'</div></div>';
+  const by={};
+  for(const x of inR){ const k=(x.series||'').replace('KX','').replace('15M','')||'?';
+    (by[k]=by[k]||[]).push(x); }
+  const keys=Object.keys(by).sort((a,b)=>
+    by[b].reduce((x,y)=>x+y.pnl,0)-by[a].reduce((x,y)=>x+y.pnl,0));
+  const mx=Math.max(...keys.map(k=>Math.abs(by[k].reduce((x,y)=>x+y.pnl,0))))||1;
+  el.innerHTML='<div class="ovgrid">'+
+      tile(RLBL[range]+' P&L',signed(pnl),cls(pnl))+
+      tile('Margin',(m>=0?'+':'')+m.toFixed(2)+'pp',m>=0?'up':'down')+
+      tile('Trades',inR.length,'')+
+      tile('Open',nOpen,'')+
+    '</div>'+
+    '<div class="ovsep"></div>'+
+    keys.map(k=>{
+      const g=by[k], v=g.reduce((a,x)=>a+x.pnl,0), w=g.filter(x=>x.won).length;
+      const col=v>0?UP:v<0?DOWN:'#7C828C';
+      const wd=Math.max(3,Math.abs(v)/mx*100);
+      return '<div class="srow"><div class="sname">'+esc(k)+'</div>'+
+        '<div class="sbar"><i style="width:'+wd.toFixed(0)+'%;background:'+col+
+          ';opacity:.75;'+(v<0?'right:50%':'left:50%')+'"></i>'+
+          '<i style="left:50%;width:1px;background:rgba(255,255,255,.18);opacity:1"></i></div>'+
+        '<div class="sv '+cls(v)+'">'+signed(v)+'</div>'+
+        '<div class="sn">'+pct(w,g.length)+'</div></div>';
+    }).join('');
+}
 
 /* ── margin: win rate against its OWN break-even ────────────────────
    The only number that says whether the account makes money. A win rate on its
@@ -1623,13 +1708,19 @@ function renderStrip(sett){
   const el=$('stripCard'); if(!el) return;
   const rows=applyFilters(sett).slice(-60);
   if(!rows.length){ el.innerHTML='<h4>Last 60</h4><div class="empty">None</div>'; return; }
-  const mx=Math.max(...rows.map(s=>Math.abs(s.pnl)))||1;
   const w=rows.filter(s=>s.won).length;
-  el.innerHTML='<h4>Last '+rows.length+' · '+w+'W '+(rows.length-w)+'L</h4>'+
+  // Height was |P&L|, which made this LIE. A loss is ~$34 and a win is ~$2.50, so a
+  // 54W/6L run rendered as a wall of red — the strip said "disaster" about the best
+  // week on record. Outcome is categorical, so it gets the categorical encoding:
+  // equal height, colour carries the result. Magnitude lives in opacity and the
+  // tooltip, where it cannot overpower a 90% win rate.
+  const mx=Math.max(...rows.map(s=>Math.abs(s.pnl)))||1;
+  el.innerHTML='<h4>Last '+rows.length+' · '+w+'W '+(rows.length-w)+'L · '+
+      (100*w/rows.length).toFixed(0)+'%</h4>'+
     '<div class="strip">'+rows.map(s=>{
-      const h=Math.max(18,Math.abs(s.pnl)/mx*100);
-      return '<i style="height:'+h.toFixed(0)+'%;background:'+(s.won?UP:DOWN)+
-        ';opacity:'+(s.won?.55:.95)+'" title="'+signed(s.pnl)+'"></i>';
+      const mag=0.45+0.55*Math.min(1,Math.abs(s.pnl)/mx);
+      return '<i style="height:100%;background:'+(s.won?UP:DOWN)+
+        ';opacity:'+mag.toFixed(2)+'" title="'+signed(s.pnl)+'"></i>';
     }).join('')+'</div>';
 }
 
@@ -1667,7 +1758,9 @@ function announce(sett){
    outside this account's own historical norms. */
 function renderAnoms(d){
   const el=$('anoms'), a=d.anomalies||[];
-  if(!a.length){ el.innerHTML='<div class="anom-ok">ALL CLEAR</div>'; return; }
+  // Nothing is the right rendering for nothing. The health pill already says the
+  // trader is live, so a permanent "ALL CLEAR" only pushed the balance down the page.
+  if(!a.length){ el.innerHTML=''; return; }
   el.innerHTML=a.map(x=>'<div class="anom '+esc(x.sev)+'"><div class="ic"></div><div>'+
     '<div class="am">'+esc(x.msg)+'</div>'+
     (x.detail?'<div class="ad">'+esc(x.detail)+'</div>':'')+'</div></div>').join('');
@@ -2092,8 +2185,10 @@ function render(d){
     tween(bal,rangePnl,v=>signed(v));
     chg.className='hero-chg num '+cls(rangePnl);
     chg.innerHTML=(ret==null?'':'<span class="arrow">'+(ret>=0?'▲':'▼')+'</span>'+retTx+' ')+
-      '<span class="chg-sub">'+(ret==null?'':'on '+money(capital)+' avg capital · ')+
-      money(liveBal)+' portfolio · '+inR.length+' trades</span>';
+      '<span class="chg-sub">'+(ret==null?'':'on '+money(capital)+' capital')+
+      '</span><span class="chg-dot">·</span><span class="chg-sub">'+
+      money(liveBal)+'</span><span class="chg-dot">·</span><span class="chg-sub">'+
+      inR.length+' trades</span>';
   }
 
   // stats
@@ -2163,6 +2258,7 @@ function render(d){
     renderWhatif(sett, d); renderMargin(sett);
   }
   if(vis('secTrades')) renderStrip(sett);
+  if(vis('secChart')) renderOverview(sett, d);
   $('miniBal').textContent=money(d.balance||0);
   const dayP=sett.filter(s=>s._t>=cutoff('1D'))
     .reduce((a,s)=>a+s.pnl,0);
