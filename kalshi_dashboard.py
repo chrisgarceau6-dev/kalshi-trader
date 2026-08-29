@@ -1018,10 +1018,11 @@ body.dense h3{margin:14px 0 7px}
   letter-spacing:.8px;font-weight:750;margin-top:4px}
 
 /* ── deploy markers ──────────────────────────────────────────────── */
-.dep{stroke:rgba(76,141,255,.42);stroke-width:1;stroke-dasharray:2 4;vector-effect:non-scaling-stroke}
 #depWrap{position:absolute;inset:0;pointer-events:none}
-.dep-f{position:absolute;top:0;font-size:8.5px;color:var(--info);font-weight:800;
-  letter-spacing:.4px;transform:translateX(-50%);white-space:nowrap;opacity:.75}
+.dep-t{position:absolute;bottom:2px;width:7px;height:7px;margin-left:-3.5px;
+  border-radius:2px;background:var(--info);opacity:.5;pointer-events:auto;
+  transform:rotate(45deg);transition:opacity .2s,transform .2s;cursor:help}
+.dep-t:hover{opacity:1;transform:rotate(45deg) scale(1.35)}
 
 /* ── high-water mark ─────────────────────────────────────────────── */
 @keyframes hwm{0%{transform:scale(1)}35%{transform:scale(1.055)}100%{transform:scale(1)}}
@@ -1093,7 +1094,7 @@ body.simple .chart-wrap{height:118px;margin-top:calc(var(--sp)*2)}
 
 /* ══ bottom tabs (Full only) ════════════════════════════════════════ */
 #tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
-  background:rgba(10,11,13,.86);backdrop-filter:blur(18px) saturate(1.4);
+  background:rgba(10,11,13,.94);backdrop-filter:blur(10px);will-change:transform;
   border-top:1px solid rgba(255,255,255,.06);
   padding:7px 10px calc(7px + var(--safe-b));max-width:640px;margin:0 auto}
 body.full #tabs{display:flex}
@@ -1109,8 +1110,8 @@ body.full .sect.on{display:block;animation:secIn .3s cubic-bezier(.32,.72,0,1)}
 
 /* ══ sticky mini header ═════════════════════════════════════════════ */
 #mini{position:fixed;top:0;left:0;right:0;z-index:55;max-width:640px;margin:0 auto;
-  padding:9px 20px calc(9px + 0px);background:rgba(10,11,13,.88);
-  backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid rgba(255,255,255,.06);
+  padding:9px 20px;background:rgba(10,11,13,.94);
+  backdrop-filter:blur(10px);will-change:transform;border-bottom:1px solid rgba(255,255,255,.06);
   display:flex;align-items:center;justify-content:space-between;
   transform:translateY(-110%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
 #mini.on{transform:translateY(0)}
@@ -1337,8 +1338,24 @@ const signed=n=>(n>=0?'+':'-')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFr
 const cls=n=>n>0?'up':n<0?'down':'mut';
 const pct=(w,n)=>n?(w/n*100).toFixed(1)+'%':'—';
 const et=(d,o)=>d.toLocaleString('en-US',Object.assign({timeZone:'America/New_York'},o));
+/* ET's UTC offset, resolved once. Used for cheap day bucketing in hot loops. */
+const ET_OFF=(()=>{ const d=new Date();
+  return new Date(d.toLocaleString('en-US',{timeZone:'America/New_York'})).getTime()
+       - new Date(d.toLocaleString('en-US',{timeZone:'UTC'})).getTime(); })();
 
+/* cutoff() does a toLocaleString to find the ET day boundary, which costs ~50us.
+   Several callers pass it straight into a filter predicate, so it was running once
+   PER SETTLEMENT — 2,500 timezone conversions per render, three times over. Memoised
+   per (range, wall-clock second): correctness is unchanged because the value only
+   moves once a second, and every caller inside a loop becomes free. */
+const _cutC=new Map();
 function cutoff(r){
+  const k=r+'|'+((Date.now()/1000)|0);
+  const hit=_cutC.get(k); if(hit!==undefined) return hit;
+  if(_cutC.size>32) _cutC.clear();
+  const v=_cutRaw(r); _cutC.set(k,v); return v;
+}
+function _cutRaw(r){
   const now=new Date(); let t;
   if(r==='1H') t=now.getTime()-3600000;
   else if(r==='24H') t=now.getTime()-24*3600000;
@@ -1525,12 +1542,20 @@ window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'
 /* ── tabs, sheet, reveal, sticky header ─────────────────────────────
    Full mode is four screens rather than one long scroll. Simple has no tabs at
    all — the whole point is that it is one screen you do not navigate. */
+/* A section is worth rendering only if it is on screen. Simple hides everything
+   marked data-full; Full shows exactly one tab. */
+function vis(sec){
+  const el=$(sec); if(!el) return false;
+  if(viewMode==='simple') return !el.hasAttribute('data-full');
+  return el.classList.contains('on');
+}
 function setTab(id){
   document.querySelectorAll('.sect').forEach(x=>x.classList.toggle('on',x.id===id));
   const t=$('tabs'); if(t) t.querySelectorAll('button').forEach(b=>
     b.classList.toggle('on',b.dataset.t===id));
   if(navigator.vibrate) navigator.vibrate(3);
   window.scrollTo({top:0,behavior:'smooth'});
+  if(last) render(last);          // the tab just revealed was skipped while hidden
 }
 $('tabs').querySelectorAll('button').forEach(b=>
   b.addEventListener('click',()=>setTab(b.dataset.t)));
@@ -1565,7 +1590,7 @@ $('mini').addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}
    cost/contracts — the fee-blind version reads green at a real loss. */
 function renderMargin(sett){
   const el=$('marginCard'); if(!el) return;
-  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cutoff(range));
+  const inR=sett.filter(s=>s._t>=cutoff(range));
   const cost=inR.reduce((a,s)=>a+s.cost,0);
   const fees=inR.reduce((a,s)=>a+(s.fee||0),0);
   const con=inR.reduce((a,s)=>a+(s.con||0),0);
@@ -1651,13 +1676,18 @@ function renderAnoms(d){
 /* ── deploy markers ─────────────────────────────────────────────── */
 function renderDeploys(d){
   const el=$('depWrap'); if(!el) return;
-  const deps=(d.deploys||[]).map(x=>({t:new Date(x.ts).getTime(),sha:x.sha,msg:x.msg}))
-    .filter(x=>x.t>=chartT0 && x.t<=chartT0+chartSpan);
+  // 40 full-height rules with their SHAs stacked on top of each other was unreadable,
+  // and it buried the line it was annotating. Only STRATEGY changes get a mark (the
+  // LIVE: prefix this repo uses for them), drawn as small ticks on the baseline with
+  // the label on hover. An annotation must never outweigh the data it annotates.
+  const deps=(d.deploys||[])
+    .filter(x=>/^LIVE\b/i.test(x.msg||''))
+    .map(x=>({t:new Date(x.ts).getTime(),sha:x.sha,msg:x.msg}))
+    .filter(x=>x.t>=chartT0&&x.t<=chartT0+chartSpan)
+    .slice(0,8);
   el.innerHTML=deps.map(x=>{
     const L=((x.t-chartT0)/chartSpan*100).toFixed(2);
-    return '<div style="position:absolute;left:'+L+'%;top:0;bottom:22px;width:1px;'+
-      'background:rgba(76,141,255,.4)"></div>'+
-      '<div class="dep-f" style="left:'+L+'%" title="'+esc(x.msg)+'">'+esc(x.sha)+'</div>';
+    return '<div class="dep-t" style="left:'+L+'%" title="'+esc(x.sha+'  '+x.msg)+'"></div>';
   }).join('');
 }
 
@@ -1669,8 +1699,12 @@ function renderStreak(sett){
     if(s.won){ cur++; best=Math.max(best,cur); curL=0; }
     else { curL++; worstL=Math.max(worstL,curL); cur=0; }
   }
+  // Bucket by ET calendar day with arithmetic, not toLocaleString per row — the
+  // per-row version cost ~124ms on 2,500 settlements all by itself. The ET offset is
+  // resolved once; a trade within an hour of midnight on one of the two DST-change
+  // days can land in the neighbouring bucket, which is acceptable for "best day".
   const days={};
-  for(const s of sett){ const k=et(new Date(s.ts),{year:'numeric',month:'2-digit',day:'2-digit'});
+  for(const s of sett){ const k=Math.floor((s._t+ET_OFF)/86400000);
     days[k]=(days[k]||0)+s.pnl; }
   const vals=Object.values(days);
   const bestDay=vals.length?Math.max(...vals):0, worstDay=vals.length?Math.min(...vals):0;
@@ -1689,7 +1723,7 @@ function renderStreak(sett){
 function renderWhatif(sett,d){
   const el=$('whatifCard'); if(!el) return;
   const cur=d.bet||35; if(wfBet==null) wfBet=cur;
-  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cutoff(range));
+  const inR=sett.filter(s=>s._t>=cutoff(range));
   const base=inR.reduce((a,s)=>a+s.pnl,0), scaled=base*(wfBet/cur);
   el.innerHTML='<h4>What if the bet were…</h4>'+
     '<div class="wf-row"><input type="range" id="wfR" min="10" max="100" step="5" value="'+wfBet+'">'+
@@ -1814,7 +1848,7 @@ function drama(p){
 function renderPace(sett, d){
   const el=$('paceCard'); if(!el) return;
   const dayStart=cutoff('1D');
-  const today=sett.filter(s=>new Date(s.ts).getTime()>=dayStart);
+  const today=sett.filter(s=>s._t>=dayStart);
   const n=today.length, pnl=today.reduce((a,s)=>a+s.pnl,0);
   const per=n?pnl/n:null;
   // scale the baseline to whatever the account is actually betting
@@ -1864,7 +1898,7 @@ function spark(vals,col){
 function renderSeries(sett){
   const el=$('seriesCard'); if(!el) return;
   const cut=cutoff(range);
-  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cut);
+  const inR=sett.filter(s=>s._t>=cut);
   const by={};
   for(const s of inR){
     const k=(s.series||'').replace('KX','').replace('15M','')||'?';
@@ -1912,7 +1946,7 @@ function reconcile(equity, settAll, deps, openFee){
   if(!prev||!(prev.t>0)||typeof prev.equity!=='number'){ save(); return null; }
   // Only events strictly newer than the last sample: older ones were already
   // counted, and the oldest can age out of the fetch window entirely.
-  const moved=settAll.filter(s=>new Date(s.ts).getTime()>prev.t).reduce((a,s)=>a+s.pnl,0)
+  const moved=settAll.filter(s=>s._t>prev.t).reduce((a,s)=>a+s.pnl,0)
              +deps.filter(x=>x.t>prev.t).reduce((a,x)=>a+x.dep,0);
   const feeDelta=openFee-(prev.openFee||0);
   const gap=+(equity-(prev.equity+moved-feeDelta)).toFixed(2);
@@ -1945,10 +1979,14 @@ function showRecon(rec, equity, retHidden){
 /* ── render ─────────────────────────────────────────────────────── */
 function render(d){
   renderHealth(d.health);
+  // Parse each settled_time ONCE per payload. Every range filter below then becomes
+  // a numeric compare instead of a Date construction, and there are ~10 such passes.
   const settAll=d.settlements||[];
+  if(settAll.length&&settAll[0]._t===undefined)
+    for(let i=0;i<settAll.length;i++) settAll[i]._t=new Date(settAll[i].ts).getTime();
   const sett=settAll.filter(s=>s.strat!==false);   // flag absent on older payloads
   const cut=cutoff(range);
-  const inR=sett.filter(s=>new Date(s.ts).getTime()>=cut);
+  const inR=sett.filter(s=>s._t>=cut);
 
   // blackout — server reads BLACKOUT_HOURS from the trader; null means unverified
   const hr=parseInt(et(new Date(),{hour:'numeric',hour12:false}))||0;
@@ -1956,9 +1994,9 @@ function render(d){
 
   // series — strategy stats use 15M settlements only; the balance line uses every
   // settlement, because anything that moved cash has to be in the reconstruction.
-  let run=0; const pnlAll=sett.map(s=>{run+=s.pnl;return{t:new Date(s.ts).getTime(),v:run};});
+  let run=0; const pnlAll=sett.map(s=>{run+=s.pnl;return{t:s._t,v:run};});
   const deps=(d.deposits||[]).map(x=>({t:new Date(x.ts).getTime(),dep:x.amount,pnl:0}));
-  const trs=settAll.map(x=>({t:new Date(x.ts).getTime(),dep:0,pnl:x.pnl}));
+  const trs=settAll.map(x=>({t:x._t,dep:0,pnl:x.pnl}));
   const comb=deps.concat(trs).sort((a,b)=>a.t-b.t);
   // Anchor on EQUITY, not cash: /portfolio/balance excludes money tied up in open
   // positions, and the curve is built from the live figure, so anchoring on cash
@@ -2060,10 +2098,10 @@ function render(d){
 
   // stats
   const wins=inR.filter(s=>s.won).length;
-  const hs=sett.filter(s=>new Date(s.ts).getTime()>=cutoff('1H'));
+  const hs=sett.filter(s=>s._t>=cutoff('1H'));
   const hw=hs.filter(s=>s.won).length, hp=hs.reduce((a,s)=>a+s.pnl,0);
   const alt=range==='1H';
-  const dS=alt?sett.filter(s=>new Date(s.ts).getTime()>=cutoff('1D')):hs;
+  const dS=alt?sett.filter(s=>s._t>=cutoff('1D')):hs;
   const dW=dS.filter(s=>s.won).length, dP=dS.reduce((a,s)=>a+s.pnl,0);
   const avg=inR.length?rangePnl/inR.length:0;
 
@@ -2118,14 +2156,15 @@ function render(d){
   announce(sett);
   $('heroLbl').innerHTML='Portfolio'+(checkHWM(d.balance)?
     '<span class="hwm-b">ALL-TIME HIGH</span>':'');
-  renderPace(sett, d);
-  renderSeries(sett);
-  renderStreak(sett);
-  renderWhatif(sett, d);
-  renderMargin(sett);
-  renderStrip(sett);
+  // Full mode shows one section at a time, so building the other three every refresh
+  // was pure waste — the Stats tab alone is five cards over the whole settlement list.
+  if(vis('secStats')){
+    renderPace(sett, d); renderSeries(sett); renderStreak(sett);
+    renderWhatif(sett, d); renderMargin(sett);
+  }
+  if(vis('secTrades')) renderStrip(sett);
   $('miniBal').textContent=money(d.balance||0);
-  const dayP=sett.filter(s=>new Date(s.ts).getTime()>=cutoff('1D'))
+  const dayP=sett.filter(s=>s._t>=cutoff('1D'))
     .reduce((a,s)=>a+s.pnl,0);
   const mc=$('miniChg'); mc.textContent=signed(dayP); mc.className='mc num '+cls(dayP);
   renderFilters(sett);
@@ -2143,7 +2182,7 @@ function render(d){
       const frac=Math.max(0,Math.min(1,sc/600))*100;
       const col=ms<=0?'#7C828C':p.z==null?'#7C828C':p.z>=1.5?UP:p.z>=0.761?'#8FD14F':
         p.z>=0?'#FFA318':DOWN;
-      return '<div class="cpos">'+
+      return '<div class="cpos" data-ct="'+(p.close_time?new Date(p.close_time).getTime():0)+'">'+
         '<div class="cs">'+esc(p.ticker.split('-')[0].replace('KX','').replace('15M',''))+'</div>'+
         '<div class="cd">'+esc((p.side||'').toUpperCase())+' '+(p.entry!=null?p.entry+'\u00A2':'')+'</div>'+
         '<div class="cbar"><i style="width:'+frac.toFixed(0)+'%;background:'+col+'"></i></div>'+
@@ -2167,7 +2206,7 @@ function render(d){
       // ~92c for a $1 contract, so the upside is the ~8c spread, not the whole dollar.
       const win=p.entry!=null?(c*(100-p.entry)/100-(p.fee||0)):null;
       const risk=p.cost!=null?p.cost:null;
-      return '<div class="pos"><div class="pos-top"><div style="flex:1;min-width:0">'+
+      return '<div class="pos" data-ct="'+(p.close_time?new Date(p.close_time).getTime():0)+'"><div class="pos-top"><div style="flex:1;min-width:0">'+
         '<div class="pos-tick">'+p.ticker.split('-')[0]+
           (p.entry!=null?' <span class="tr-side">'+(p.side||'yes').toUpperCase()+' @ '+p.entry+'¢</span>':'')+'</div>'+
         '<div class="pos-full">'+p.ticker+'</div></div>'+
@@ -2252,10 +2291,30 @@ addEventListener('touchend',()=>{
 });
 
 /* live countdown ticks without refetching */
-setInterval(()=>{ if(last&&!scrubbing&&(last.positions||[]).length) render(last); },1000);
+/* Position clocks tick every second. Calling render() to move a countdown was
+   costing ~10 filtered passes over every settlement — thousands of Date parses per
+   second — plus rebuilding the trade list, the strip and every card. That was the
+   lag. Touch only the two nodes per position that actually change. */
+function tickPositions(){
+  const now=Date.now(), els=document.querySelectorAll('[data-ct]');
+  for(let i=0;i<els.length;i++){
+    const el=els[i], ms=(+el.dataset.ct)-now, sec=Math.max(0,Math.floor(ms/1000));
+    const compact=el.classList.contains('cpos');
+    const lt=ms<=0?'settling':(compact
+      ? (sec<60?sec+'s':Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'))
+      : (sec<60?sec+'s':Math.floor(sec/60)+'m '+(sec%60)+'s'));
+    const t=el.querySelector(compact?'.ct':'.pos-left');
+    if(t&&t.textContent!==lt) t.textContent=lt;
+    const bar=el.querySelector(compact?'.cbar i':'.bar i');
+    if(bar) bar.style.width=(Math.max(0,Math.min(1,sec/600))*100).toFixed(1)+'%';
+  }
+}
+setInterval(()=>{ if(!scrubbing&&!document.hidden) tickPositions(); },1000);
 refresh();
 tickClose(); setInterval(tickClose,1000);
-setInterval(refresh,30000);
+setInterval(()=>{ if(!document.hidden) refresh(); },30000);
+// A backgrounded tab can sit for hours; catch up the moment it is looked at again.
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 </script>
 </body>
