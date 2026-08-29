@@ -1203,6 +1203,68 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
   *,*::before,*::after{animation-duration:.01ms !important;
     animation-iteration-count:1 !important;transition-duration:.01ms !important}
 }
+
+/* ══ RESPONSIVE ═════════════════════════════════════════════════════
+   The redesign hardcoded max-width:640px, which overrode the desktop rules that
+   already existed further up and left a phone column stranded in a black sea on a
+   1500px screen. Layout is now genuinely per-device rather than one column scaled.
+
+   Phone  : one column, bottom tabs, hero large on Chart and compressed elsewhere.
+   Desktop: every section laid out at once. Tabs are a phone affordance — with this
+            much width, paging between four sections is friction for no gain.
+   Simple stays a narrow focused column at every size; widening it would defeat it.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (min-width:760px){
+  body{max-width:740px}
+  .chart-wrap{height:270px}
+  body.simple .chart-wrap{height:150px}
+}
+
+@media (min-width:1080px){
+  body.full{max-width:1300px;padding:0 32px 40px}
+  body.simple{max-width:780px}          /* Simple is meant to stay a single column */
+  .hero{padding:34px 0 4px}
+  .hero-bal{font-size:clamp(52px,4.4vw,66px)}
+  .hero-chg{font-size:16px}
+  .chart-wrap{height:330px}
+
+  /* every section visible; the bottom bar is for phones */
+  body.full #tabs{display:none}
+  body.full .sect{display:block;animation:none}
+  body.full .grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  body.full #secChart{grid-column:1/-1}
+  body.full #secStats{grid-column:1/-1}
+  body.full #secPos{grid-column:1;position:sticky;top:20px}
+  body.full #secTrades{grid-column:2}
+  body.full .sect>h3:first-child{margin-top:0}
+
+  /* the hero is compressed on phones to buy room for the tab below it; on desktop
+     nothing is below it, so the compression is pure loss */
+  body.full:not([data-tab="secChart"]) .hero{padding:34px 0 4px}
+  body.full:not([data-tab="secChart"]) .hero-bal{font-size:clamp(52px,4.4vw,66px)}
+  body.full:not([data-tab="secChart"]) .hero-chg{font-size:16px}
+  body.full:not([data-tab="secChart"]) .health{margin-top:14px;transform:none}
+
+  .stats{grid-template-columns:repeat(6,1fr);gap:11px}
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .duo>.card+.card{margin-top:0}
+  .ovgrid{grid-template-columns:repeat(4,1fr);gap:14px}
+  .ovv{font-size:20px}
+  #blackout{margin:0 -32px 4px}
+  #mini{max-width:1300px;padding:10px 32px}
+  .more{display:none}                    /* nothing to reveal when all of it is shown */
+  body.full #moreWrap{display:block}
+}
+
+@media (min-width:1500px){
+  body.full{max-width:1460px}
+  .chart-wrap{height:370px}
+}
+
+/* phone: keep the tab bar clear of the last row */
+@media (max-width:1079px){
+  body{padding-bottom:calc(104px + var(--safe-b))}
+}
 </style>
 </head>
 <body>
@@ -1229,6 +1291,7 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
   <div class="nextclose" id="nextClose"></div>
 </div>
 
+<div class="grid">
 <div class="sect on" id="secChart">
 <div class="chart-wrap">
   <svg id="svg" preserveAspectRatio="none" viewBox="0 0 1000 220">
@@ -1304,6 +1367,8 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
   </div>
 </div>
 
+</div><!-- /grid -->
+
 <div class="foot" id="foot">—</div>
 
 <nav id="tabs">
@@ -1356,15 +1421,23 @@ const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const fmtPx=n=>{const a=Math.abs(n);return '$'+n.toLocaleString('en-US',
   {minimumFractionDigits:a<1?4:2,maximumFractionDigits:a<1?4:2});};
 
-/* Modelled baseline, from the canonical harness at $50 flat with the measured
-   0.105c execution gap. Reproduce with:
-     python3 scripts/backtest.py            (then apply --slip 0.105)
-   These are the ONLY hardcoded strategy numbers on the page. Everything else is
-   derived from live data. Re-measure them if the config changes; a stale baseline
-   here silently mis-scores every day. */
-const MODEL_PER_TRADE = 0.54;    // $/trade at $50 flat, 0.105c slip
-const MODEL_TRADES_DAY = 126;    // distinct entries per day the harness takes
-const MODEL_BET = 50;            // the bet size those two figures were measured at
+/* Modelled baseline, re-measured 2026-08-29 against the CURRENT live config —
+   $35 flat, z-gate on at 0.761, both sides. Reproduce exactly:
+     python3 scripts/backtest.py --slip 0.227
+     -> 9,717 tr  93.59% WR  +$4,978... at 0.105c / +$4,549 at 0.227c
+        over 2026-06-11..08-28 (79 days) = +$0.47/tr, +$58/day, 123 tr/day
+   These are the ONLY hardcoded strategy numbers on the page; everything else is
+   derived from live data. A stale baseline here silently mis-scores every day, and
+   this one was stale in TWO ways:
+     - it was measured at $50 with the z-gate OFF, and the page rescales linearly by
+       bet size, so it was asserting $0.378/tr at $35 against a true $0.47;
+     - it used slip 0.105c, which CLAUDE.md struck through on 2026-08-24 as YES-only
+       and measured against a 1-min candle. The live figure is 0.227c, n=500, both
+       sides. Using the retired number flattered every "pace vs model" reading.
+   Re-measure whenever the strategy config changes. */
+const MODEL_PER_TRADE = 0.47;    // $/trade at $35 flat, 0.227c slip, z-gate on
+const MODEL_TRADES_DAY = 123;    // distinct entries per day the harness takes
+const MODEL_BET = 35;            // the bet size those two figures were measured at
 
 /* ── formatting ─────────────────────────────────────────────────── */
 const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1577,17 +1650,27 @@ $('sndBtn').addEventListener('click',()=>{ sndOn=!sndOn;
   localStorage.setItem('ks',sndOn?'1':'0'); paintSnd(); if(sndOn) chime(true); });
 paintSnd(); applyView();
 
-window.addEventListener('resize',()=>{ movePill($('ranges')); movePill($('modes'));
-  movePill($('viewSeg')); movePill($('densSeg')); });
+let _wide=WIDE();
+window.addEventListener('resize',()=>{
+  movePill($('ranges')); movePill($('modes'));
+  movePill($('viewSeg')); movePill($('densSeg'));
+  // Crossing the breakpoint changes which sections are on screen, and the ones that
+  // were hidden were skipped by vis() — they need a render before they are shown.
+  if(WIDE()!==_wide){ _wide=WIDE(); if(last) render(last); }
+});
 
 /* ── tabs, sheet, reveal, sticky header ─────────────────────────────
    Full mode is four screens rather than one long scroll. Simple has no tabs at
    all — the whole point is that it is one screen you do not navigate. */
 /* A section is worth rendering only if it is on screen. Simple hides everything
    marked data-full; Full shows exactly one tab. */
+// Declared as a function, not a const arrow: the resize handler above references it
+// during setup, and a const would still be in its temporal dead zone there.
+function WIDE(){ return window.matchMedia('(min-width:1080px)').matches; }
 function vis(sec){
   const el=$(sec); if(!el) return false;
   if(viewMode==='simple') return !el.hasAttribute('data-full');
+  if(WIDE()) return true;   // desktop lays every section out at once, so all render
   return el.classList.contains('on');
 }
 function setTab(id){
@@ -1970,7 +2053,7 @@ function renderPace(sett, d){
       ' / '+MODEL_TRADES_DAY+'</span></div>'+
     '<div class="bar"><i style="width:'+capture+'%;background:'+barCol+'"></i></div>'+
     '<div class="pnote">'+(frac*100).toFixed(0)+'% of the day elapsed · baseline '+
-      signed(MODEL_PER_TRADE)+'/trade at $'+MODEL_BET+
+      signed(MODEL_PER_TRADE)+'/trade at $'+MODEL_BET+' (0.227c slip)'+
       (scale!==1?' scaled x'+scale.toFixed(2):'')+'</div>';
 }
 
