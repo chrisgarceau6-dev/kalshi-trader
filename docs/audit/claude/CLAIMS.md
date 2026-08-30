@@ -12,6 +12,7 @@ conclusion survives but the written number is wrong. **FAILS** — does not repr
 | 2 | Low-ask gate: p3≥80 at ≤91c | **HOLDS** — P=0.996 |
 | 3 | Pre-2026-08-22 archive rounding is a minor effect | **FAILS** — 40.4% of selections disagree |
 | 4 | C1 quarantine is worth ~$260 | **FAILS** — −$52, nothing established (`DIFF.md` §5) |
+| 5 | Crash fills silently upsize the position | **FAILS** — compared against a superseded bet size; mechanism is structurally impossible |
 
 ---
 
@@ -164,7 +165,74 @@ gate on the full archive, so it carries the bias too — but its CI is wide enou
 
 ---
 
-## 4. Standing after this session
+## 5. FAILS — "a crash fill silently UPSIZES" compares against a superseded bet size
+
+CLAUDE.md (z-gate row, Aug 29) records the Aug 29 crash fill and adds a separate
+finding: *"it filled 37 contracts for $31.45 against a $25 flat bet — 26% over. A
+cheaper fill buys more contracts, so a crash fill silently UPSIZES exactly when the
+book is disorderly. Pre-existing, unrelated to the z-gate, and not currently
+controlled."*
+
+The arithmetic is right and the conclusion is wrong, for two independent reasons.
+
+```
+python3 docs/audit/claude/probe_fillsize.py
+```
+
+**(a) The bet was $35 that day, not $25.** #224 moved `FLAT_BET_DOLLARS` 25 → 35 on
+Aug 28 — the day *before* the fill. Aug 29's median settlement cost is **$34.04**.
+The flagged fill is **$31.45, a ratio of 0.92x — below the day's typical size**, not
+26% above it. `contracts_for_risk(35, 0.87) = 40`; 37 filled at 85.00c is a normal
+order that filled slightly short and slightly cheap.
+
+**(b) The mechanism cannot do what the note says.** `contracts_for_risk`
+(`late_certainty_trader.py:470`) sizes off **`limit_cents`**, not the expected fill
+price — and `limit_cents = min(MAX_ASK_CENTS, entry_ask + LIMIT_BUFFER)` (l.1695) is
+the *worst* price the order can pay. So a cheaper fill spends strictly **less** than
+the bet; it cannot spend more. Above that, the top-up loop accumulates
+`total_cost` and raises an **EXECUTION HALT** whenever cumulative principal exceeds
+the budget (l.1874). Two independent guards, both holding.
+
+**Confirmed empirically: nothing exceeds 2.4x its day's size, ever.**
+
+| cost / day's median cost | n | share | P&L | WR | ROC |
+|---|---|---|---|---|---|
+| <0.6x (partial fills) | 35 | 1.7% | +$68.61 | 97.1% | +16.65% |
+| 0.6–1.15x (normal) | 1,875 | 92.7% | +$779.25 | 93.9% | +1.10% |
+| 1.15–1.6x | 56 | 2.8% | +$34.93 | 94.6% | +1.71% |
+| 1.6–2.4x | 56 | 2.8% | −$6.27 | 91.1% | −0.20% |
+| **>2.4x** | **0** | — | — | — | — |
+
+**And the 1.6–2.4x cohort is not overshoot either — it is deploy days.**
+All 56 fall on four dates, and each is bimodal because a sizing deploy lands mid-day:
+
+| day | n ≥1.6x | day splits as | what happened |
+|---|---|---|---|
+| Aug 5 | 2 | 42 @ ~$35.82 + 4 @ ~$54.52 | sizing deploy mid-day |
+| Aug 9 | 1 | 40 @ ~$45.57 + 1 @ ~$92.00 | single outlier |
+| Aug 14 | 11 | 49 @ ~$45.57 + 12 @ ~$73.97 | $50 → $75 landed Aug 14, not Aug 15 |
+| Aug 22 | 42 | 56 @ ~$23.95 + 42 @ ~$48.87 | #151, $50 → $25 |
+
+Net across the whole cohort: **−$6.27 on 2.8% of trades.** There is no oversizing
+problem to control.
+
+### The trap, because it caught this analysis first
+
+`FLAT_BET_DOLLARS` moved **six times** in this window — ~$36 → $45.6 → $73.5 → $48.8
+→ $24 → $34 — and a deploy lands mid-day, so a single day spans two sizes. Scoring
+fill size against a *remembered* bet constant manufactures a large fake "oversized"
+cohort with a plausible-looking loss attached; a first pass at this produced a
+confident **−$129.79** that was entirely an artifact of the wrong era map. The only
+safe denominator is **the day's own median settlement cost**, cross-checked for
+bimodality on deploy days. `probe_fillsize.py` does both.
+
+The same defect is what put the claim in CLAUDE.md: the Aug 29 note was written
+against $25 one day after the bet became $35. **When quoting a per-trade dollar
+figure here, derive the bet size from the data, never from the file.**
+
+---
+
+## Standing after this session
 
 | claim | status |
 |---|---|
@@ -174,6 +242,7 @@ gate on the full archive, so it carries the bias too — but its CI is wide enou
 | Archive rounding | **direction and size established**; precise correction not recoverable pre-Aug-22 |
 | C1 quarantine | not established either way (`DIFF.md` §5) |
 | p3 inversion above 91c | **lead only** — needs pre-registration before anyone acts |
+| Crash-fill upsizing | **refuted** — remove the claim from CLAUDE.md's z-gate row; two guards hold and >2.4x is empty |
 
 Both new checks are wired into `scripts/verify.py` (`--check slippage rounding`) so
 they re-derive on demand instead of ageing into prose.
