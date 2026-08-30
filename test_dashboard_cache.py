@@ -11,6 +11,7 @@ which are invisible to a screenshot and easy to reintroduce:
     compression an open tab pulls ~65 MB/hr.
 """
 import gzip
+import re
 import json
 import threading
 import time
@@ -159,6 +160,38 @@ class DeployMarkerTests(unittest.TestCase):
     def test_payload_no_longer_ships_deploys(self):
         self.assertFalse(hasattr(dash, "get_deploys"),
                          "get_deploys is dead code once the markers are gone")
+
+
+class ScrollContainerTests(unittest.TestCase):
+    """Trackpad scrolling died on macOS Chrome while the scrollbar still worked.
+
+    Cause: `html,body{overflow-x:hidden}`. Setting overflow-x on body forces its
+    overflow-y to compute to `auto`, so BODY becomes a second scroll container nested
+    inside the viewport scroller. A wheel gesture targets body, body has nothing to
+    scroll, and the gesture is swallowed rather than chaining to the viewport —
+    dragging the scrollbar still moves the viewport, which is why it looked selective.
+
+    Measured with the rule removed: scrollWidth === clientWidth at every width from
+    320 to 2200 in both modes, so it was never load-bearing.
+    """
+
+    def _css(self):
+        return dash.HTML[:dash.HTML.index("</style>")]
+
+    def test_body_never_gets_an_overflow_x_rule(self):
+        css = self._css()
+        for m in re.finditer(r"([^{}]*)\{([^{}]*)\}", css):
+            sel, body = m.group(1), m.group(2)
+            if "overflow-x" not in body and "overflow:" not in body:
+                continue
+            targets = [t.strip() for t in sel.split(",")]
+            self.assertNotIn("body", targets,
+                             f"overflow on body makes it a scroll container: {sel.strip()}")
+            self.assertNotIn("html,body", [t.replace(" ", "") for t in targets])
+
+    def test_the_root_clips_rather_than_hiding(self):
+        """`clip` clips without creating a scroll container; `hidden` does not."""
+        self.assertIn("html{overflow-x:clip}", self._css())
 
 
 class GzipTests(unittest.TestCase):

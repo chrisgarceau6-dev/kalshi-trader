@@ -1447,7 +1447,14 @@ h3{margin:18px 0 3px}
 @media (min-width:1500px){ .chart-wrap{height:390px} }
 
 /* nothing may push the document sideways */
-html,body{overflow-x:hidden}
+/* `overflow-x:hidden` on BOTH html and body makes BODY its own scroll container. On
+   macOS Chrome that can swallow trackpad wheel events while the scrollbar still
+   works — you can drag the bar but two fingers do nothing. Measured with the rule
+   disabled, scrollWidth === clientWidth at every width from 320 to 2200 in both
+   modes, so nothing actually overflows and this was purely defensive. `clip` on the
+   root clips without creating a scroll container, and body gets no overflow-x at
+   all, so it can never become one. */
+html{overflow-x:clip}
 .wrbar,.track,.strip,.sbar,.cbar,.zbar{max-width:100%}
 
 /* iPhone: 16px gutters are enough at 375px; give it back on anything wider. */
