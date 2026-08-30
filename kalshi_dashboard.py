@@ -933,6 +933,14 @@ h3 .count{background:var(--s2);color:var(--dim);border-radius:10px;padding:2px 7
 .srow{display:grid;grid-template-columns:44px 1fr 62px 44px;gap:9px;align-items:center;
   padding:6px 0;border-top:1px solid var(--line)}
 .srow:first-of-type{border-top:0}
+/* A settle is the thing that actually happens ~100x a day, and the row for it
+   changed silently. Tint it once, in the direction of the result. The global
+   prefers-reduced-motion rule collapses this to nothing, which is correct. */
+@keyframes srowflash{0%{background:transparent}14%{background:var(--flash)}
+  100%{background:transparent}}
+.srow.settled{animation:srowflash 1.15s ease-out}
+.srow.settled.win{--flash:rgba(0,209,129,.15)}
+.srow.settled.loss{--flash:rgba(255,69,58,.15)}
 .srow .sname{font-size:12.5px;color:var(--tx);font-weight:600}
 .srow .spk{height:16px}
 .srow .sv{font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
@@ -1397,9 +1405,31 @@ body.dense .chart-wrap{height:136px}
    the segment itself as the scroll container. */
 .controls{display:flex;align-items:flex-end;justify-content:flex-start;
   gap:12px;margin-top:14px}
+/* The strip shared a row with the P&L/Balance segment, which left it ~242px for
+   277px of buttons — so it scrolled, cutting `1M` mid-glyph. Fading its right edge
+   only moved the problem: the fade landed in the MIDDLE of the visible row, with
+   crisp text after it, which reads as a rendering fault rather than "more this way".
+   Below 430px the row wraps instead and the strip gets the full width (358px at
+   390px), so nothing is cut and no affordance is needed. The fade rules stay for
+   genuinely tiny viewports, where the fade is then at the real screen edge. */
 #ranges{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;
   scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:15px}
+@media (max-width:429px){
+  .controls{flex-wrap:wrap;row-gap:2px}
+  #ranges{flex:1 0 100%}
+  #modes{margin-left:-2px}
+}
 #ranges::-webkit-scrollbar{display:none}
+/* The strip is a hidden-scrollbar scroller, so at 390px it silently cut ~35px of
+   content (scrollWidth 277 in a 242px box) with nothing to say so — `1M` just
+   ended mid-glyph. Fade whichever edge still has content behind it. At >=1080
+   #ranges is overflow:visible so scrollWidth==clientWidth and this never fires. */
+#ranges.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent)}
+#ranges.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 30px);
+  mask-image:linear-gradient(90deg,transparent,#000 30px)}
+#ranges.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 30px,#000 calc(100% - 30px),transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 30px,#000 calc(100% - 30px),transparent)}
 #ranges button{flex:0 0 auto}
 #modes{flex:0 0 auto}
 
@@ -1678,10 +1708,13 @@ function _cutRaw(r){
 
 /* ── number tween ───────────────────────────────────────────────── */
 const tweens={};
+const RM=window.matchMedia('(prefers-reduced-motion:reduce)');
 function tween(el,to,fmt){
   if(!el) return;
   const key=el.id, from=(tweens[key]!==undefined)?tweens[key]:to;
-  if(from===to){el.textContent=fmt(to);tweens[key]=to;return;}
+  // The global reduced-motion CSS rule only reaches CSS animations; a rAF counter
+  // is invisible to it and would keep animating for someone who asked it not to.
+  if(from===to||RM.matches){el.textContent=fmt(to);tweens[key]=to;return;}
   const t0=performance.now(), dur=520;
   cancelAnimationFrame(el._raf||0);
   const step=t=>{
@@ -1940,6 +1973,16 @@ $('moreBtn').addEventListener('click',()=>{
 });
 
 let miniOn=false;
+function rangeFade(){
+  const g=$('ranges'); if(!g) return;
+  const max=g.scrollWidth-g.clientWidth;
+  g.classList.toggle('fade-r', max>1 && g.scrollLeft < max-1);
+  g.classList.toggle('fade-l', g.scrollLeft > 1);
+}
+$('ranges').addEventListener('scroll',rangeFade,{passive:true});
+window.addEventListener('resize',rangeFade);
+rangeFade();
+
 window.addEventListener('scroll',()=>{
   const on=window.scrollY>150;
   if(on!==miniOn){ miniOn=on; $('mini').classList.toggle('on',on); }
@@ -2064,12 +2107,34 @@ function chime(win){
     o.start(); o.stop(ctx.currentTime+0.32);
   }catch(e){}
 }
+// announce() runs BEFORE the series rows are rebuilt by innerHTML, so the flash
+// cannot be applied where it is detected — the nodes it would mark are about to be
+// replaced. It is recorded here and applied by applyFlash() at the end of render().
+// A requestAnimationFrame defer also works in a live tab but silently does nothing
+// in a background tab or a headless browser, which makes it both fragile and
+// untestable; this is synchronous and deterministic.
+let pendingFlash=null;
+function flashSeries(s){
+  const name=(s.series||'').replace('KX','').replace('15M','');
+  if(name) pendingFlash={name:name, won:!!s.won};
+}
+function applyFlash(){
+  if(!pendingFlash) return;
+  const {name,won}=pendingFlash; pendingFlash=null;
+  document.querySelectorAll('.srow').forEach(r=>{
+    const n=r.querySelector('.sname');
+    if(!n||n.textContent!==name) return;
+    r.classList.remove('settled','win','loss'); void r.offsetWidth;
+    r.classList.add('settled', won?'win':'loss');
+  });
+}
 function announce(sett){
   const top=sett.length?sett[sett.length-1]:null;
   if(!top){ return; }
   if(lastTopTs!==null && top.ts!==lastTopTs){
     chime(top.won);
     if(navigator.vibrate) navigator.vibrate(top.won?6:[7,45,7]);
+    flashSeries(top);
   }
   lastTopTs=top.ts;
 }
@@ -2590,6 +2655,8 @@ function render(d){
   }
   if(vis('secTrades')) renderStrip(sett);
   if(vis('secChart')) renderOverview(sett, d);
+  rangeFade();   // which range buttons are visible depends on view mode
+  applyFlash();  // after every innerHTML above, or the marked nodes are gone
   $('miniBal').textContent=money(d.balance||0);
   const dayP=sett.filter(s=>s._t>=cutoff('1D'))
     .reduce((a,s)=>a+s.pnl,0);
