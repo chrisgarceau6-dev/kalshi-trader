@@ -43,7 +43,13 @@ jobs:
 
       # z-gate revert-rule check (2026-08-27). Never fails the job: this reports on the
       # gate, and a monitoring error must not look like a trading failure. It exits 2
-      # when a PRE-REGISTERED revert condition trips, and emails on its own.
+      # when a PRE-REGISTERED revert condition trips, 3 when the archive is too stale
+      # to score what it harvested, and emails on its own in both cases.
+      #
+      # --days 7, not 2 (2026-08-30). At ~11 rejected signals/day against an archive
+      # that lags a day, a 2-day window scored roughly one day of decisions, so the
+      # block rate that rule 3 watches was a rate over almost nothing. 7 days costs
+      # ~4 min of log harvesting and changes no pre-registered constant.
       - name: z-gate monitor
         continue-on-error: true
         env:
@@ -51,4 +57,4 @@ jobs:
           COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL_FROM }}
           COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
-        run: python3 scripts/zgate_monitor.py --days 2 --email || true
+        run: python3 scripts/zgate_monitor.py --days 7 --email || true
