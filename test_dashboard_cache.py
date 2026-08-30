@@ -194,6 +194,45 @@ class ScrollContainerTests(unittest.TestCase):
         self.assertIn("html{overflow-x:clip}", self._css())
 
 
+class PolishTests(unittest.TestCase):
+    """Small interaction details, guarded structurally because the browser proof needs
+    CDP. Verified there first: a BTC win marks only the BTC row `settled win`, the
+    390px strip shows fade-r at rest and fade-l scrolled to the end, and tween() is
+    instant under reduced motion."""
+
+    def test_the_settle_flash_is_applied_after_render_not_on_a_frame_callback(self):
+        """announce() runs before the series rows are rebuilt, so the flash must be
+        recorded then applied at the end of render. A requestAnimationFrame defer
+        works in a live tab but does nothing in a background tab or headless."""
+        js = dash.HTML
+        fn = js[js.index("function flashSeries"):]
+        fn = fn[:fn.index("\n}\n") + 3]
+        self.assertNotIn("requestAnimationFrame", fn)
+        self.assertIn("pendingFlash", fn)
+        self.assertIn("applyFlash();", js, "the flash must be applied inside render()")
+        # ...and after the innerHTML that builds the rows it marks
+        self.assertGreater(js.index("applyFlash();"), js.index("renderOverview(sett, d);"))
+
+    def test_tween_honours_prefers_reduced_motion(self):
+        """The global reduced-motion CSS rule cannot reach a requestAnimationFrame
+        counter, so tween has to check the query itself."""
+        js = dash.HTML
+        fn = js[js.index("function tween(el,to,fmt)"):]
+        fn = fn[:fn.index("\n}\n") + 3]
+        self.assertIn("RM.matches", fn)
+        self.assertIn("prefers-reduced-motion", js)
+
+    def test_the_range_strip_advertises_that_it_scrolls(self):
+        """At 390px the strip cut ~35px with no affordance at all."""
+        js = dash.HTML
+        self.assertIn("fade-r", js)
+        self.assertIn("fade-l", js)
+        fn = js[js.index("function rangeFade"):]
+        fn = fn[:fn.index("\n}\n") + 3]
+        self.assertIn("scrollWidth", fn)
+        self.assertIn("scrollLeft", fn)
+
+
 class GzipTests(unittest.TestCase):
     def setUp(self):
         dash.app.config["TESTING"] = True
