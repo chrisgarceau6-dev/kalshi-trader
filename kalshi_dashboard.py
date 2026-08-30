@@ -602,41 +602,6 @@ def _require_token():
     # will not carry into the other. Every context needs somewhere to type it.
     return make_response(LOGIN_HTML, 401)
 
-def get_deploys():
-    """Deploy markers for the equity curve: commits that changed the TRADER.
-
-    Read through the GitHub API rather than `git log`, because Render builds from a
-    shallow clone where history is not reliably present. Filtered to commits touching
-    late_certainty_trader.py on purpose — a docs or dashboard commit is not a strategy
-    change, and marking those would make the rail meaningless exactly when it matters.
-    """
-    def _f():
-        url = (f"https://api.github.com/repos/{GH_REPO}/commits"
-               f"?path=late_certainty_trader.py&per_page=40")
-        headers = {"Accept": "application/vnd.github+json"}
-        tok = os.environ.get("GH_READ_TOKEN", "").strip()
-        if tok:
-            headers["Authorization"] = f"Bearer {tok}"
-        try:
-            r = requests.get(url, headers=headers, timeout=10)
-            if r.status_code != 200:
-                return []
-            rows = r.json()
-        except Exception as e:
-            _last_err["deploys"] = str(e)[:90]
-            return []
-        out = []
-        for c in rows if isinstance(rows, list) else []:
-            try:
-                msg = (c["commit"]["message"] or "").split("\n")[0]
-                out.append({"ts":  c["commit"]["committer"]["date"],
-                            "sha": c["sha"][:7],
-                            "msg": msg[:80]})
-            except (KeyError, TypeError):
-                continue
-        return out
-    return cached("deploys", 900, _f)
-
 
 def _pts(ts):
     """Kalshi returns variable sub-second precision; pad the fraction to 6 digits."""
@@ -807,7 +772,6 @@ def api_data():
         "positions":   pos,
         "health":      hea,
         "anomalies":   get_anomalies(sett, pos, bal, hea),
-        "deploys":     get_deploys(),
         "bet":         live_const("FLAT_BET_DOLLARS"),
         "stop":        live_const("STOP_BALANCE"),
         "blackout":    live_blackout_hours(),
@@ -1088,13 +1052,6 @@ body.dense h3{margin:14px 0 7px}
 .streak .sk2 .t{font-size:9px;color:var(--dimmer);text-transform:uppercase;
   letter-spacing:.8px;font-weight:750;margin-top:4px}
 
-/* ── deploy markers ──────────────────────────────────────────────── */
-#depWrap{position:absolute;inset:0;pointer-events:none}
-.dep-t{position:absolute;bottom:2px;width:7px;height:7px;margin-left:-3.5px;
-  border-radius:2px;background:var(--info);opacity:.5;pointer-events:auto;
-  transform:rotate(45deg);transition:opacity .2s,transform .2s;cursor:help}
-.dep-t:hover{opacity:1;transform:rotate(45deg) scale(1.35)}
-
 /* ── high-water mark ─────────────────────────────────────────────── */
 @keyframes hwm{0%{transform:scale(1)}35%{transform:scale(1.055)}100%{transform:scale(1)}}
 .hwm{animation:hwm .85s cubic-bezier(.32,.72,0,1);color:var(--up) !important}
@@ -1333,7 +1290,7 @@ body.simple .foot{margin-top:calc(var(--sp)*2)}
    Options applied: 1 draw-in · 2 number roll · 3 range morph · 4 scrub ·
    5 stagger · 7 underline ranges · 8 flatter easing · 10 stats 4+expand ·
    12 no duplicate WR · 13 no footer · 14 taller chart · 15 line glow ·
-   16 pulsing endpoint · 18 deploy dots · 20 streak · 21 all-time high ·
+   16 pulsing endpoint · 20 streak · 21 all-time high ·
    25 change glow · 26 consistent radii · 27 tighter tracking.
    ═══════════════════════════════════════════════════════════════════ */
 :root{
@@ -1362,10 +1319,6 @@ html,body{background:#000}
 
 /* 16 · the endpoint is the page's one sign of life */
 #livePing{animation:ping 2.4s ease-out infinite}
-
-/* 18 · deploy dots stay small — an annotation must not outweigh its data */
-.dep-t{background:#4C8DFF;opacity:.45}
-.dep-t:hover{opacity:1}
 
 /* 7 · ranges underline instead of pill. movePill already slides the element;
        this only changes what the element looks like. */
@@ -1543,7 +1496,6 @@ html,body{overflow-x:hidden}
     <g id="cdot"><circle id="cdotO" r="5.5" fill="#000" stroke-width="2.5"></circle></g>
     <g id="liveDot" opacity="0"><circle id="livePing" fill="none"></circle><circle id="liveCore" r="3.5"></circle></g>
   </svg>
-  <div id="depWrap" data-full></div>
   <div class="yax"><span id="yHi">—</span><span id="yLo">—</span></div>
   <div class="scrub-time" id="scrubTime"></div>
   <div class="chart-empty" id="chartEmpty" style="display:none">No activity in this range</div>
@@ -2128,23 +2080,6 @@ function renderAnoms(d){
     (x.detail?'<div class="ad">'+esc(x.detail)+'</div>':'')+'</div></div>').join('');
 }
 
-/* ── deploy markers ─────────────────────────────────────────────── */
-function renderDeploys(d){
-  const el=$('depWrap'); if(!el) return;
-  // 40 full-height rules with their SHAs stacked on top of each other was unreadable,
-  // and it buried the line it was annotating. Only STRATEGY changes get a mark (the
-  // LIVE: prefix this repo uses for them), drawn as small ticks on the baseline with
-  // the label on hover. An annotation must never outweigh the data it annotates.
-  const deps=(d.deploys||[])
-    .filter(x=>/^LIVE\b/i.test(x.msg||''))
-    .map(x=>({t:new Date(x.ts).getTime(),sha:x.sha,msg:x.msg}))
-    .filter(x=>x.t>=chartT0&&x.t<=chartT0+chartSpan)
-    .slice(0,8);
-  el.innerHTML=deps.map(x=>{
-    const L=((x.t-chartT0)/chartSpan*100).toFixed(2);
-    return '<div class="dep-t" style="left:'+L+'%" title="'+esc(x.sha+'  '+x.msg)+'"></div>';
-  }).join('');
-}
 
 /* ── streaks ────────────────────────────────────────────────────── */
 function renderStreak(sett){
@@ -2175,22 +2110,43 @@ function renderStreak(sett){
 }
 
 /* ── what-if sizing ─────────────────────────────────────────────── */
+let wfState=null;
+function paintWhatif(){
+  if(!wfState) return;
+  const {cur,base}=wfState, scaled=base*(wfBet/cur);
+  $('wfVal').textContent='$'+wfBet;
+  $('wfBaseL').textContent=RLBL[wfState.range]+' at $'+cur;
+  const bv=$('wfBaseV'); bv.textContent=signed(base); bv.className='v num '+cls(base);
+  $('wfScaleL').textContent='at $'+wfBet;
+  const sv=$('wfScaleV'); sv.textContent=signed(scaled); sv.className='v num '+cls(scaled);
+}
 function renderWhatif(sett,d){
   const el=$('whatifCard'); if(!el) return;
   const cur=d.bet||35; if(wfBet==null) wfBet=cur;
   const inR=sett.filter(s=>s._t>=cutoff(range));
-  const base=inR.reduce((a,s)=>a+s.pnl,0), scaled=base*(wfBet/cur);
-  el.innerHTML='<h4>What if the bet were…</h4>'+
-    '<div class="wf-row"><input type="range" id="wfR" min="10" max="100" step="5" value="'+wfBet+'">'+
-      '<span class="wf-val num">$'+wfBet+'</span></div>'+
-    '<div class="prow"><span class="l">'+RLBL[range]+' at $'+cur+'</span>'+
-      '<span class="v num '+cls(base)+'">'+signed(base)+'</span></div>'+
-    '<div class="prow"><span class="l">at $'+wfBet+'</span>'+
-      '<span class="v num '+cls(scaled)+'">'+signed(scaled)+'</span></div>'+
-    '<div class="pnote">Linear rescale of the same trades at the same prices. It does '+
-      'NOT model fill quality or book depth at larger size, both of which get worse — '+
-      'so read it as a bound, not a forecast.</div>';
-  $('wfR').addEventListener('input',e=>{ wfBet=+e.target.value; renderWhatif(sett,d); });
+  wfState={cur:cur, base:inR.reduce((a,s)=>a+s.pnl,0), range:range};
+  // Build the shell ONCE. This used to rebuild el.innerHTML from the slider's own
+  // 'input' handler, which destroyed the <input> being dragged — the pointer was
+  // left holding a node no longer in the document, so the slider jumped one step
+  // and stopped dead. On touch it barely moved at all. Only the text changes now.
+  if(!el.dataset.built){
+    el.innerHTML='<h4>What if the bet were…</h4>'+
+      '<div class="wf-row"><input type="range" id="wfR" min="10" max="100" step="5">'+
+        '<span class="wf-val num" id="wfVal"></span></div>'+
+      '<div class="prow"><span class="l" id="wfBaseL"></span>'+
+        '<span class="v num" id="wfBaseV"></span></div>'+
+      '<div class="prow"><span class="l" id="wfScaleL"></span>'+
+        '<span class="v num" id="wfScaleV"></span></div>'+
+      '<div class="pnote">Linear rescale of the same trades at the same prices. It does '+
+        'NOT model fill quality or book depth at larger size, both of which get worse — '+
+        'so read it as a bound, not a forecast.</div>';
+    el.dataset.built='1';
+    $('wfR').addEventListener('input',e=>{ wfBet=+e.target.value; paintWhatif(); });
+  }
+  // Do not fight a finger that is mid-drag: a 30s refresh must not yank the thumb.
+  const r=$('wfR');
+  if(document.activeElement!==r && +r.value!==wfBet) r.value=wfBet;
+  paintWhatif();
 }
 
 /* ── trade filters ──────────────────────────────────────────────── */
@@ -2632,7 +2588,6 @@ function render(d){
     .reduce((a,s)=>a+s.pnl,0);
   const mc=$('miniChg'); mc.textContent=signed(dayP); mc.className='mc num '+cls(dayP);
   renderFilters(sett);
-  renderDeploys(d);
 
   // positions
   const pos=d.positions||[]; $('posN').textContent=pos.length;
