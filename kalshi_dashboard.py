@@ -2,7 +2,7 @@
 """Kalshi trader dashboard — Render hosted.
 Env: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY (base64 PEM), PORT (set by Render)
 """
-import ast, base64, hmac, math, os, time
+import ast, base64, gzip, hmac, math, os, threading, time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
@@ -60,10 +60,68 @@ def kalshi(path, params=None):
         return None
 
 _cache = {}
+_cache_lock = threading.Lock()
+_refreshing = set()
+
+# How many multiples of its own TTL a value may age while background refreshes keep
+# failing. Past this the request blocks and refetches, so a persistently broken source
+# surfaces as slowness and an error rather than silently serving old numbers as live.
+STALE_CEILING = 10
+
+
+def _refresh_async(key, fn):
+    """Refresh one key behind the request that found it stale."""
+    def run():
+        try:
+            v = fn()
+            with _cache_lock:
+                _cache[key] = {"t": time.time(), "v": v}
+        except Exception as e:                      # kalshi() swallows its own; be safe
+            _last_err[key] = str(e)[:120]
+        finally:
+            with _cache_lock:
+                _refreshing.discard(key)
+    threading.Thread(target=run, daemon=True).start()
+
+
 def cached(key, ttl, fn):
+    """Stale-while-revalidate.
+
+    The client polls every 30s but settlements carry a 120s TTL, so every fourth poll
+    used to pay the full refetch — seconds of pagination — while the browser sat on a
+    pending request. A pull-to-refresh that landed on it spun for that whole time for
+    no reason, because a perfectly good value was already in hand.
+
+    Now an expired-but-usable value is returned immediately and refreshed behind the
+    request. Only one refresh per key runs at a time, so N concurrent viewers cause one
+    refetch, not N. Replacement semantics are unchanged: whatever fn() returns wins,
+    exactly as before.
+    """
     now = time.time()
-    if key in _cache and now - _cache[key]["t"] < ttl: return _cache[key]["v"]
-    v = fn(); _cache[key] = {"t": now, "v": v}; return v
+    with _cache_lock:
+        ent = _cache.get(key)
+        if ent is not None:
+            age = now - ent["t"]
+            if age < ttl:
+                return ent["v"]
+            if age < ttl * STALE_CEILING:
+                start = key not in _refreshing
+                if start:
+                    _refreshing.add(key)
+                stale = ent["v"]
+                fresh_needed = False
+            else:
+                start, stale, fresh_needed = False, None, True
+        else:
+            start, stale, fresh_needed = False, None, True
+    if not fresh_needed:
+        if start:
+            _refresh_async(key, fn)
+        return stale
+    v = fn()
+    with _cache_lock:
+        _cache[key] = {"t": time.time(), "v": v}
+    return v
 
 def get_balance():
     def _f():
@@ -466,6 +524,7 @@ LOGIN_HTML = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Kalshi</title>
@@ -708,6 +767,33 @@ def get_anomalies(sett, pos, balance, health):
     return sorted(out, key=lambda a: {"crit": 0, "warn": 1, "info": 2}[a["sev"]])
 
 
+# The payload is ~540 KB of mostly-repetitive JSON and the client polls it every 30s,
+# so an open phone tab was pulling ~65 MB/hr uncompressed. Flask does not compress
+# anything by default and Render does not do it for us. gzip takes 540 KB -> ~50 KB.
+# Only /api/data is worth compressing: the HTML is served once per load and the CPU
+# cost is paid on every request.
+GZIP_MIN_BYTES = 4096
+
+
+@app.after_request
+def _gzip(resp):
+    if (resp.status_code != 200
+            or "gzip" not in request.headers.get("Accept-Encoding", "").lower()
+            or resp.direct_passthrough
+            or resp.headers.get("Content-Encoding")
+            or not resp.mimetype.startswith("application/json")):
+        return resp
+    data = resp.get_data()
+    if len(data) < GZIP_MIN_BYTES:
+        return resp
+    resp.set_data(gzip.compress(data, 6))
+    resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Content-Length"] = str(len(resp.get_data()))
+    # Same URL can come back gzipped or not depending on the request header.
+    resp.headers["Vary"] = "Accept-Encoding"
+    return resp
+
+
 @app.route("/api/data")
 def api_data():
     bal  = get_balance()
@@ -737,6 +823,7 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Kalshi">
@@ -2634,7 +2721,13 @@ function render(d){
 
 /* ── refresh + staleness ────────────────────────────────────────── */
 let lastOk=Date.now();
+let inFlight=null;
+// Pull-to-refresh, the 30s timer and the visibility handler can all fire at once.
+// Without this they raced and whichever response landed last won, so the screen
+// could jump backwards to older data. Callers all await the SAME request.
 async function refresh(){
+  if(inFlight) return inFlight;
+  inFlight=(async()=>{
   try{
     const r=await fetch('/api/data',{cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -2647,6 +2740,8 @@ async function refresh(){
     $('stale').style.display='block';
     $('stale').textContent='Data may be stale — last refresh failed'+(age>0?' ('+age+'m old)':'');
   }
+  })().finally(()=>{ inFlight=null; });
+  return inFlight;
 }
 
 /* pull to refresh */
@@ -2691,7 +2786,8 @@ refresh();
 tickClose(); setInterval(tickClose,1000);
 setInterval(()=>{ if(!document.hidden) refresh(); },30000);
 // A backgrounded tab can sit for hours; catch up the moment it is looked at again.
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
+// Registered ONCE. This was duplicated, so every return to the tab fired two full
+// refreshes — two ~540 KB fetches racing each other, on phones, on cellular.
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 </script>
 </body>
