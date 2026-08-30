@@ -117,6 +117,50 @@ def _t_html():
                                    mimetype="text/html")
 
 
+class WhatIfSliderTests(unittest.TestCase):
+    """The what-if slider used to rebuild its own card from its 'input' handler, which
+    destroyed the <input> being dragged: the thumb jumped one step and froze, and on
+    touch it barely moved. Verified against a real drag through CDP — pre-fix the value
+    stuck at 25 for all 8 drag steps and the node did not survive. That needs a browser,
+    so what is guarded here is the structural invariant that made it possible."""
+
+    def setUp(self):
+        self.js = dash.HTML[dash.HTML.index("function renderWhatif"):]
+        self.js = self.js[:self.js.index("\n}\n") + 3]
+
+    def test_markup_is_built_once_not_on_every_input(self):
+        body = self.js
+        self.assertIn("el.dataset.built", body,
+                      "the card must be built behind a one-time guard")
+        guard = body.index("if(!el.dataset.built)")
+        self.assertGreater(body.index("el.innerHTML="), guard,
+                           "innerHTML must only be assigned inside the build-once guard")
+
+    def test_the_input_handler_does_not_rebuild_the_card(self):
+        handler = self.js[self.js.index("addEventListener('input'"):]
+        handler = handler[:handler.index("\n")]
+        self.assertIn("paintWhatif", handler)
+        self.assertNotIn("renderWhatif", handler,
+                         "calling renderWhatif from its own input handler destroys "
+                         "the slider mid-drag — this is the exact bug")
+
+    def test_a_background_refresh_does_not_yank_a_thumb_being_dragged(self):
+        self.assertIn("document.activeElement!==r", self.js)
+
+
+class DeployMarkerTests(unittest.TestCase):
+    """The deploy diamonds were removed: hover-only titles are unreachable on a phone,
+    and they sat over the chart with pointer-events:auto."""
+
+    def test_no_deploy_marker_markup_or_styles_remain(self):
+        for token in ("dep-t", "depWrap", "renderDeploys"):
+            self.assertNotIn(token, dash.HTML, f"{token} should be gone")
+
+    def test_payload_no_longer_ships_deploys(self):
+        self.assertFalse(hasattr(dash, "get_deploys"),
+                         "get_deploys is dead code once the markers are gone")
+
+
 class GzipTests(unittest.TestCase):
     def setUp(self):
         dash.app.config["TESTING"] = True
