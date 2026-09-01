@@ -201,6 +201,14 @@ def main(hours=24, trades=None):
     gross_pnl = sum(t["pnl"] for t in trades)
     wagered   = sum(t["cost"] for t in trades)
     avg_per   = gross_pnl / n if n else 0
+    # Size-invariant twin of $/trade, and the quantity z-gate revert rule 2 is now
+    # denominated in (scripts/zgate_monitor.py REVERT_RETURN_ON_WAGERED). $/trade is
+    # absolute dollars, so it moves 1:1 with FLAT_BET_DOLLARS at an unchanged edge and
+    # is not comparable across a window that spans a sizing change. Dividing by dollars
+    # actually wagered normalises every trade by its OWN cost, so this stays comparable
+    # across bet sizes and across mixed windows. Keep both lines: $/trade is what the
+    # P&L feels like, $/wagered is what is measurable.
+    ret_wag   = gross_pnl / wagered if wagered else 0
     avg_fill  = sum(t["contracts"] for t in trades) / n if n else 0
 
     series_stats = {}
@@ -225,6 +233,7 @@ def main(hours=24, trades=None):
         f"Net P&L:   ${gross_pnl:+.2f}",
         f"$/trade:   ${avg_per:+.2f}",
         f"Wagered:   ${wagered:.2f}",
+        f"$/wagered: {ret_wag:+.4f}   (size-invariant; z-gate revert rule 2)",
         f"Avg fill:  {avg_fill:.1f} contracts",
         archive_status(),
     ]

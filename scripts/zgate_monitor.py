@@ -35,7 +35,35 @@ MIN_N_TOTAL      = 500     # before the profitability test can fire
 # 1.4x at an unchanged edge, and leaving 0.10 would have silently disarmed the test —
 # a genuine collapse to $0.08/trade would have printed $0.11 and never tripped.
 # 0.10 x 35/25 = 0.14 holds the trip at the same underlying per-contract edge.
-REVERT_PER_TRADE = 0.14    # revert if overall $/trade falls below this
+#
+# 2026-09-01, FLAT_BET_DOLLARS 35 -> 50: RESCALING THE THRESHOLD A SECOND TIME WOULD
+# NOT HAVE WORKED, and that is why this is now a ratio instead. Aug 28 got away with a
+# rescale because it landed at n~0, so the whole sample was in one unit. This change
+# lands at n~46 rejected with the n>=500 horizon still ahead, so the rule-2 sample will
+# SPAN TWO BET SIZES. A pooled $/trade over mixed units sits between the $35 and $50
+# thresholds and is correctly compared to NEITHER — there is no single dollar number
+# that is right for that sample, so no rescale of REVERT_PER_TRADE could have been
+# correct. Only a per-observation normalisation is.
+#
+# So the rule is denominated in RETURN ON WAGERED — P&L divided by dollars actually
+# risked — which every trade carries individually, making it invariant to bet size and
+# correct across a mixed sample. Same fix, same reason, as DAILY_LOSS_LIMIT_BETS
+# (bet-denominated) and min_book_depth() (self-rescaling): fixed constants do not
+# survive a sizing change; ratios do. This is the THIRD time that lesson has been
+# re-learned in this repo, and it is the last place a fixed dollar constant was left.
+#
+# Conversion is anchored on the measured median cost of $34.04 at the $35 bet (#233):
+#     0.14 / 34.04 = 0.004112
+# Cross-check against the ORIGINAL calibration, which must reproduce independently:
+#     0.10 / (0.972 x 25 = 24.31) = 0.004114   <- agrees to 3 significant figures
+# The two anchors agreeing is the evidence this is a units change and not a new number.
+# NEUTRALITY CHECK at the new size: 0.0041 x (0.972 x 50 = 48.61) = $0.199/trade, against
+# a naive rescale of 0.14 x 50/35 = $0.200. Identical to the cent — the trip fires at the
+# same underlying edge it always did, which is what makes this a rescale and not a
+# relaxation. Approximation accepted and stated: the anchor is a MEDIAN cost used as a
+# proxy for the mean, since return-on-wagered is mean-cost weighted. The gap is far
+# inside the 2 significant figures this threshold is quoted to.
+REVERT_RETURN_ON_WAGERED = 0.0041   # revert if overall P&L / dollars wagered falls below this
 RATE_LO, RATE_HI = 0.08, 0.35   # expected ~0.20; outside this for 3 days = distribution shift
 
 # Archive lag that counts as BROKEN rather than normal. archive_candles.py runs daily
@@ -202,7 +230,8 @@ def main():
     lines.append("")
     lines.append("  pre-registered revert rule (fixed before any live data):")
     lines.append(f"    1. rejected WR >= its break-even at n>={MIN_N_REJECTED}   [n={n_r}]")
-    lines.append(f"    2. overall $/trade < {REVERT_PER_TRADE} at n>={MIN_N_TOTAL}  (daily_summary.py)")
+    lines.append(f"    2. overall return-on-wagered < {REVERT_RETURN_ON_WAGERED} "
+                 f"at n>={MIN_N_TOTAL}  (daily_summary.py prints '$/wagered')")
     lines.append(f"    3. rejection rate outside [{RATE_LO*100:.0f}%,{RATE_HI*100:.0f}%] "
                  f"for 3 consecutive days   [now {rate*100:.1f}% "
                  f"on {share:.0f}% of decisions{' — STALE SUBSET' if warns else ''}]")

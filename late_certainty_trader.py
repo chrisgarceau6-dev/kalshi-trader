@@ -15,13 +15,13 @@ STRATEGY:
   markets; excluded candidates are shadow-logged only.
 
 BET SIZING:
-  Flat $25 principal-risk budget per order. Contract count is sized from
-  the limit price so principal at the worst allowed fill cannot exceed $25.
+  Flat $50 principal-risk budget per order. Contract count is sized from
+  the limit price so principal at the worst allowed fill cannot exceed $50.
   Exchange fees are additional.
 
 KILL SWITCHES:
-  STOP_BALANCE=$650
-  trailing-24h realized-loss limit = max($300, 4x bet size) -> $300 at current sizing
+  STOP_BALANCE=$400
+  trailing-24h realized-loss limit = 20x bet size -> $1,000 at current sizing
   9 consecutive losses -> 60-minute cooldown
   50-trade WR below 84% -> 2-hour degradation halt
   ambiguous execution state -> persistent fail-closed halt
@@ -187,7 +187,7 @@ PRIOR_LOOKBACK  = 2      # v5.6.5: relaxed 3→2 candles — -0.1pp WR, +53% vol
 # the time, so neither side is structurally favoured.
 # Expected effect at measured fill quality (+0.105c): +$62/day -> +$108/day,
 # delta +$3,134 over 68 days, P(better)=0.981 (98.75% CI lower bound -$302).
-# MAX_CONCURRENT_POSITIONS=2 still caps a settlement cluster at $150 regardless
+# MAX_CONCURRENT_POSITIONS=2 still caps a settlement cluster at $100 regardless
 # of side, so this adds volume without widening the per-cluster tail.
 YES_ONLY        = False
 # TIGHT limit — small buffer above observed ask. Prevents catastrophic fills at
@@ -331,7 +331,36 @@ SERIES_BET_MULTIPLIER = {}
 # deliberately: STOP_BALANCE headroom falls from 40 to 28.7 losses = 1.32x the worst
 # measured drawdown, under the 1.5x design target. The stop was NOT lowered to
 # restore that ratio; letting the balance grow back into it is the safer of the two.
-FLAT_BET_DOLLARS = 35
+#
+# $35 -> $50 on 2026-09-01, at Chris's explicit direction. The balance grew back into
+# the ratio, which is exactly what the Aug 28 entry said it should do — but not all the
+# way, so this is again a small documented miss and not a clean satisfaction:
+#   - Balance ~$2,000. Headroom to the $400 stop is (2000-400)/50 = 32.0 losses against
+#     a worst measured drawdown of 22 losses = 1.45x, versus the 1.5x design target.
+#     Exactly compliant would be $48.48; $50 was taken as the round number. This is a
+#     3% miss, against the 12% miss (1.32x) accepted on Aug 28 — the ratio IMPROVED.
+#   - Exposure is 2.5% of balance, unchanged from Aug 28, and 2 x $50 = $100 = 5.0% of
+#     balance concurrent, also unchanged. The bet grew with the bankroll, not ahead of it.
+#   - The ~2,418-clean-trade bar above is STILL NOT MET and this is STILL not a good week
+#     to be raising on. Both clauses are knowingly overridden for the second time in five
+#     days. If a third override lands, delete the clauses instead of overriding them —
+#     a bar that is never binding is worse than no bar, because it reads as control.
+#   - RESOLVED, confirmed by Chris 2026-09-01: the ~$595 move from the $1,405 balance of
+#     Aug 28 is TRADING P&L, not a deposit. Two consequences, one good and one not:
+#     (a) STOP_BALANCE is NOT stale — its revisit trigger is a large deposit/withdrawal,
+#         and organic P&L growth is not one. It correctly stays at 400, and the headroom
+#         ratio recovering 1.32x -> 1.45x is real, earned headroom rather than an artefact
+#         of new money. The "preserves a third of the account" property has decayed to 20%,
+#         but that is the intended behaviour of a fixed floor under a growing account.
+#     (b) It also means this IS raising into a hot streak: +42% in four days. That is the
+#         literal circumstance "not on a good week" was written to prevent, and knowing it
+#         is P&L makes the override larger, not smaller. Taken at Chris's direction with
+#         this stated. If the next drawdown is ordinary, expect it to feel worse than any
+#         previous one purely from the 1.43x size, and do NOT read that as edge decay.
+# Coupled change, required, see scripts/zgate_monitor.py: the z-gate revert rule 2 is
+# dollar-denominated and its n>=500 sample now spans two bet sizes, which a threshold
+# rescale CANNOT fix. It was converted to a ratio (return on wagered) instead.
+FLAT_BET_DOLLARS = 50
 
 
 def compute_bet_dollars(balance):
@@ -401,9 +430,20 @@ def daily_pnl(state, now_ts=None):
 # preserves a third of the account to restart or reassess from. Emergency only, as
 # intended. Revisit on any large deposit or withdrawal — this is a ratio to the
 # balance dressed as a constant, and it goes stale when the balance moves a lot.
+#
+# 2026-09-01, at the $50 bet on a ~$2,000 balance: headroom is 32.0 losses = 1.45x,
+# up from 1.32x at $35/$1,405 and still short of the 1.5x target. Held at 400.
+# RESOLVED 2026-09-01: the balance move was P&L, NOT a deposit, so the revisit trigger
+# above did not fire and 400 correctly stands. Noted for the next reader: the "preserves
+# a third of the account" property has decayed to 20% of a $2,000 balance simply because
+# the account grew under a fixed floor. That is this constant working as designed, not
+# drift — but it does mean the floor is a progressively weaker brake as the balance
+# climbs, and the ratio, not the dollar figure, is the thing to re-check on any
+# DEPOSIT or WITHDRAWAL. Do that as its own change, never in the same commit as a bet
+# change, or a subsequent halt cannot be attributed to either.
 STOP_BALANCE            = 400
 CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
-MAX_CONCURRENT_POSITIONS = 2  # 2×$35=$70=5.0% of a $1,405 balance (comment was written at $75=10.9%)
+MAX_CONCURRENT_POSITIONS = 2  # 2×$50=$100=5.0% of a $2,000 balance (comment was written at $75=10.9%)
 
 # Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
 # bot trades lives there, and collateral does not cross shards.
