@@ -1067,6 +1067,53 @@ class ShadowZTests(unittest.TestCase):
         self.assertIn("z_value(", inspect.getsource(trader.z_gate_blocks))
 
 
+class PostLossCooldownTests(unittest.TestCase):
+    """Pre-registered 2026-09-03, shipped DISABLED. These tests pin two things: that
+    it stays off until someone deliberately turns it on, and that every ambiguous
+    input fails OPEN. A risk filter that can halt the book on a bad timestamp is a
+    worse failure than the losses it is trying to avoid."""
+
+    def setUp(self):
+        self.now = trader.datetime.now(trader.ET).timestamp()
+
+    def test_ships_disabled(self):
+        """Tripwire. Enabling this is a pre-registered decision with a horizon and a
+        revert rule (CLAUDE.md 2026-09-03); it must never be flipped incidentally."""
+        self.assertFalse(trader.POST_LOSS_COOLDOWN_ENABLED)
+        self.assertEqual(trader.POST_LOSS_COOLDOWN_MINUTES, 15)
+
+    def test_disabled_never_blocks_however_recent_the_loss(self):
+        blocked, _ = trader.post_loss_cooldown_blocks({"last_loss_ts": self.now})
+        self.assertFalse(blocked)
+
+    def test_blocks_inside_the_window_and_clears_after(self):
+        with patch.object(trader, "POST_LOSS_COOLDOWN_ENABLED", True):
+            b, left = trader.post_loss_cooldown_blocks({"last_loss_ts": self.now - 60})
+            self.assertTrue(b)
+            self.assertAlmostEqual(left, 14.0, places=0)
+            b2, _ = trader.post_loss_cooldown_blocks({"last_loss_ts": self.now - 1200})
+            self.assertFalse(b2)
+
+    def test_fails_open_on_every_unusable_timestamp(self):
+        """Missing, zero, garbage and FUTURE all degrade to the old behaviour. The
+        future case is real: last_loss_ts is stamped when the bot OBSERVES a
+        settlement, and Kalshi has stalled settlement for 4h+ (2026-08-28)."""
+        with patch.object(trader, "POST_LOSS_COOLDOWN_ENABLED", True):
+            for state in ({}, {"last_loss_ts": 0}, {"last_loss_ts": None},
+                          {"last_loss_ts": "garbage"}, {"last_loss_ts": []},
+                          {"last_loss_ts": self.now + 999}):
+                blocked, _ = trader.post_loss_cooldown_blocks(state)
+                self.assertFalse(blocked, f"must fail open on {state!r}")
+
+    def test_does_not_touch_the_consecutive_loss_halt(self):
+        """Two different controls with two different jobs. CONSEC_LOSS_LIMIT is an
+        emergency brake at 9; this is a regime filter at 1. Neither may quietly
+        become the other — 5 was already tried and reverted for firing on
+        correlated closes."""
+        self.assertEqual(trader.CONSEC_LOSS_LIMIT, 9)
+        self.assertNotEqual(trader.CONSEC_LOSS_LIMIT, trader.POST_LOSS_COOLDOWN_MINUTES)
+
+
 class ZGateTests(unittest.TestCase):
     """The live z-gate. Every test here is about FAILING OPEN — the gate may only ever
     remove trades it can positively score, and must never halt or crash the book."""
