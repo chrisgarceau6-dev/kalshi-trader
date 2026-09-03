@@ -443,6 +443,39 @@ def daily_pnl(state, now_ts=None):
 # change, or a subsequent halt cannot be attributed to either.
 STOP_BALANCE            = 400
 CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fired too often on correlated closes)
+
+# ── POST-LOSS COOLDOWN — PRE-REGISTERED 2026-09-03, DELIBERATELY OFF ──────────
+# Block new entries for N minutes after ANY loss settles. See the dated row in
+# CLAUDE.md for the full pre-registration; the decision rule was fixed before any
+# live data and must not be edited after seeing results.
+#
+# WHY THE TRIGGER IS ONE LOSS AND NOT TWO. A higher trigger fires after the damage.
+# On 2026-09-03 three losses cost -$146.23, but two of them settled SIMULTANEOUSLY
+# at 17:45 and were both entered ~17:38 — before the 17:30 loss had even settled.
+# "Halt after 2" could not have stopped the third; only a 1-loss trigger acts in
+# time. This is the same correlated-closes problem that took CONSEC_LOSS_LIMIT
+# from 5 to 9, and it is why that constant is not the right tool for this job.
+#
+# HONEST STATE OF THE EVIDENCE — this is NOT established, and the flag is off
+# because of that, not because of deploy sequencing alone:
+#   - Conditional WR is monotonic in time-since-loss over 3,128 real settlements:
+#     0-15m n=311 WR 69.1% ($-1.21/tr), 15-30m 88.3%, 30-60m 91.6%, 120m+ 92.8%.
+#   - Simulated 1L/15m is positive in EVERY window (full +$262, first half +$196,
+#     second half +$69, clean +$86), unlike 20 tuned halt rules of which 13 were
+#     positive in-sample and only 3 survived out-of-sample (OOS mean -$90; the best
+#     in-sample rule, +$724, went -$422 OOS). Only the mechanism-derived rule holds.
+#   - BUT the day-cluster bootstrap on the clean sample is +$54, 95% CI
+#     [-$180, +$329], P(>0)=0.640 — a coin flip — and most of the raw effect is the
+#     Jul 27-31 broken build, where blocked trades won 45.4%. In clean recent data
+#     (Aug 21 - Sep 3) blocked WR is 91.9% against a ~91.8% break-even: edge ~ZERO.
+# Invariant 8 applies at full force. The default is REVERT and the burden is on the
+# filter to earn its place.
+#
+# DO NOT ENABLE until the z-gate revert test resolves at n>=200 rejected (~Sep 7).
+# 63% of the z-gate's backtested value was the same whipsaw-regime effect, so
+# running both at once confounds both measurements.
+POST_LOSS_COOLDOWN_ENABLED = False
+POST_LOSS_COOLDOWN_MINUTES = 15
 MAX_CONCURRENT_POSITIONS = 2  # 2×$50=$100=5.0% of a $2,000 balance (comment was written at $75=10.9%)
 
 # Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
@@ -921,6 +954,32 @@ def check_halts(state, balance, shard_balance=None):
         else:
             state["edge_degrade_halted_at"] = 0
     return False, ""
+
+
+def post_loss_cooldown_blocks(state):
+    """(blocked, minutes_left). FAILS OPEN in every ambiguous case.
+
+    Reads `last_loss_ts`, which the settlement handler already maintains, so this
+    adds no new state and cannot drift from the counter it depends on.
+
+    Fails open on a missing, unparseable, zero or FUTURE timestamp. The future case
+    is not hypothetical paranoia: `last_loss_ts` is stamped when the bot OBSERVES a
+    settlement, and Kalshi has stalled settlement for 4h+ (2026-08-28), so a clock
+    or replay anomaly must degrade to the old behaviour rather than pin the book shut.
+    """
+    if not POST_LOSS_COOLDOWN_ENABLED:
+        return False, None
+    try:
+        ts = float(state.get("last_loss_ts", 0) or 0)
+    except (TypeError, ValueError):
+        return False, None
+    if ts <= 0:
+        return False, None
+    age = datetime.now(ET).timestamp() - ts
+    if age < 0:
+        return False, None
+    left = POST_LOSS_COOLDOWN_MINUTES * 60 - age
+    return (left > 0), (left / 60.0 if left > 0 else None)
 
 
 def cleanup_state(state):
@@ -1647,6 +1706,25 @@ def try_trade(
         # gate shipped, before that could happen.
         log(f"  [ZGATE-PASS] {ticker}  {side.upper()}  {fresh_ask}c  "
             f"{secs_left:.0f}s  z={_z_val:+.3f}")
+
+    # POST-LOSS COOLDOWN (pre-registered 2026-09-03, OFF by default). Sits here, after
+    # the z-gate, so the two filters' logs are directly comparable on the same signals.
+    #
+    # Ask and secs are logged on BOTH sides deliberately, copying the z-gate's format
+    # decision: the monitor must compute a REAL break-even for the kept group rather
+    # than assume 92c, and changing this format once data has accumulated would split
+    # the dataset. Fixed now, before the flag is ever turned on, so that cannot happen.
+    #
+    # It logs rather than halting the cycle on purpose. A cycle-level halt would stop
+    # the scan and destroy the record of what it skipped, which is the #233 blindness
+    # failure in a new place — a filter that cannot be scored can never be judged.
+    _cd_blocked, _cd_left = post_loss_cooldown_blocks(state)
+    if _cd_blocked:
+        log(f"  [COOLDOWN-SKIP] {ticker}  {side.upper()}  {fresh_ask}c  {secs_left:.0f}s  "
+            f"{_cd_left:.1f}min left of {POST_LOSS_COOLDOWN_MINUTES}min")
+        return
+    if POST_LOSS_COOLDOWN_ENABLED:
+        log(f"  [COOLDOWN-PASS] {ticker}  {side.upper()}  {fresh_ask}c  {secs_left:.0f}s")
 
     # C5 SHADOW-ONLY: prior1>=95c + prior3>=95c (54 OOS trades, not yet blockable)
     if int(prior_asks[0]) >= 95:
