@@ -12,7 +12,7 @@ Live state comes from the newest successful run's artifact, because the local
 certainty_state.json is always empty — the trader persists through
 actions/cache and never writes to the working tree.
 """
-import argparse, datetime as D, json, os, shutil, subprocess, sys, tempfile
+import argparse, ast, datetime as D, json, os, shutil, subprocess, sys, tempfile
 from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")   # rule 12: report ET, never make Chris convert
@@ -33,6 +33,12 @@ LC_SERIES = {"KXBTC15M", "KXETH15M", "KXSOL15M", "KXDOGE15M", "KXBNB15M", "KXXRP
 SETTLE_CACHE = Path(tempfile.gettempdir()) / "kstat-settlements.json"
 SETTLE_TTL = 900        # one scan cycle; a full pull is ~3.5s, cached it is instant
 
+TRADER = REPO / "late_certainty_trader.py"
+# Worst peak-to-trough drawdown in 74 days of archive, in LOSSES. Bet-size invariant
+# (see DAILY_LOSS_LIMIT_BETS) which is why headroom is reported in losses, not dollars:
+# $543.79 / $25 = 22. The 1.5x design target on this is what STOP_BALANCE was set from.
+WORST_DD_LOSSES = 22
+
 C = dict(g="\033[32m", y="\033[33m", r="\033[31m", d="\033[2m", b="\033[1m", x="\033[0m")
 def paint(s, c):
     return s if not sys.stdout.isatty() else C[c] + s + C["x"]
@@ -42,6 +48,78 @@ def gh(*args):
     if r.returncode:
         raise RuntimeError((r.stderr or r.stdout).strip()[:200])
     return r.stdout
+
+def const(name, default=None):
+    """A module-level literal from the trader, by AST. Never hardcode a strategy
+    constant here — FLAT_BET_DOLLARS moved six times in August and a copy in this
+    file would have silently reported the wrong headroom every time."""
+    try:
+        tree = ast.parse(TRADER.read_text())
+    except Exception:
+        return default
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == name:
+                    try:
+                        return ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        return default
+    return default
+
+
+def balance():
+    """(cash, shard, open_exposure) in dollars, or (None, None, 0.0).
+
+    THREE numbers because they answer three different questions and substituting one
+    for another is a live hazard in every direction:
+
+    - `cash` is /portfolio/balance. This is what the trader's own halt reads, so it
+      is the ONLY correct input to a STOP_BALANCE headroom figure.
+    - `shard` is the trading shard's slice. Collateral does not cross shards and
+      Kalshi moved crypto to shard 2 on 2026-08-24, so cash parked elsewhere cannot
+      back an order. That is how 2026-08-25 failed — every gate passed, every order
+      bounced, and the log read like a signal drought.
+    - `open_exposure` is collateral tied up in unsettled positions. Cash EXCLUDES it,
+      so cash alone understates the account by up to MAX_CONCURRENT x the bet while
+      trades are in flight. CLAUDE.md pins the displayed balance to equity
+      (cash + open cost) and says do not regress it; reporting bare cash here would
+      have made kstat disagree with the dashboard by ~$97 at current sizing.
+    """
+    sys.path.insert(0, str(REPO))
+    try:
+        from kalshi_auth import get as kget
+        code, r = kget("/portfolio/balance", {})
+    except Exception:
+        return None, None, 0.0
+    if code != 200:
+        return None, None, 0.0
+    try:
+        cash = float(r.get("balance_dollars", 0))
+    except (TypeError, ValueError):
+        return None, None, 0.0
+    shard = cash   # fail OPEN to the total, as the trader does
+    for row in r.get("balance_breakdown") or []:
+        try:
+            if int(row.get("exchange_index", -1)) == const("TRADING_EXCHANGE_SHARD", 2):
+                shard = float(row.get("balance", 0))
+                break
+        except (TypeError, ValueError):
+            continue
+    # Fails soft to 0: an unreadable position list must degrade equity to cash, not
+    # blank the whole row. Understating equity is the safe direction here.
+    openx = 0.0
+    try:
+        code2, r2 = kget("/portfolio/positions",
+                         {"settlement_status": "unsettled", "limit": 200})
+        if code2 == 200:
+            for mp in r2.get("market_positions") or []:
+                if mp.get("ticker"):
+                    openx += float(mp.get("market_exposure_dollars", 0) or 0)
+    except Exception:
+        pass
+    return cash, shard, openx
+
 
 def runs(n=15):
     return json.loads(gh("run", "list", "--workflow", WF, "--limit", str(n),
@@ -203,6 +281,45 @@ def main():
             out["health"] = dict(state="unknown")
     except Exception as e:
         rows_out.append(("trader", paint(f"health unavailable — {e}", "r")))
+
+    # ── balance ───────────────────────────────────────────────────────────
+    # Headroom is shown in LOSSES, not dollars, because that is the unit the stop is
+    # actually calibrated in and the only one that stays meaningful across a sizing
+    # change. Dollars-to-stop looks identical at $35 and $50 while meaning something
+    # very different. Both constants are read from the trader, never copied.
+    try:
+        cash, shard, openx = balance()
+        if cash is None:
+            rows_out.append(("balance", paint("unavailable — check KALSHI_* env", "y")))
+        else:
+            bet  = const("FLAT_BET_DOLLARS")
+            stop = const("STOP_BALANCE")
+            equity = cash + openx
+            line = f"${equity:,.2f} equity"
+            if openx >= 0.01:
+                line += paint(f" · cash ${cash:,.2f} + ${openx:,.2f} open", "d")
+            if shard is not None and (cash - shard) >= 0.01:
+                # Only worth the ink when it differs: cash off the trading shard
+                # cannot back an order, so a gap here is a real constraint.
+                line += paint(f" · ${cash - shard:,.2f} idle off-shard", "d")
+            rows_out.append(("balance", line))
+            if bet and stop:
+                # Deliberately CASH, not equity: should_halt() compares
+                # fetch_balance() to STOP_BALANCE, so this must be the same
+                # quantity the stop actually reads or the number is decorative.
+                hr = (cash - stop) / bet
+                ratio = hr / WORST_DD_LOSSES
+                rows_out.append(("headroom", paint(f"{hr:.1f} losses", "g" if ratio >= 1.5
+                                                   else ("y" if ratio >= 1.2 else "r"))
+                                 + f" to ${stop:,.0f} stop at ${bet} · {ratio:.2f}x worst "
+                                   f"drawdown (target 1.5x)"))
+                out["headroom"] = dict(losses=round(hr, 1), ratio=round(ratio, 2),
+                                       bet=bet, stop=stop, basis="cash")
+            out["balance"] = dict(equity=round(equity, 2), cash=round(cash, 2),
+                                  open_exposure=round(openx, 2),
+                                  shard=round(shard, 2) if shard is not None else None)
+    except Exception as e:
+        rows_out.append(("balance", paint(f"unavailable — {str(e)[:70]}", "y")))
 
     # ── trading ───────────────────────────────────────────────────────────
     try:
