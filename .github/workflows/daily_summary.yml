@@ -58,3 +58,25 @@ jobs:
           COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL_TO }}
           COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
         run: python3 scripts/zgate_monitor.py --days 7 --email || true
+
+      # Kalshi incentive pools (2026-09-02). Kalshi's Volume Incentive Program pays
+      # pro-rata on matched volume, counts the TAKER side, and accepts fills priced
+      # 3c-97c — so our 90-93c flow qualifies with no strategy change, capped at
+      # $0.005/contract (~93% of our 0.539c/contract fee load, ~$20/day at our run
+      # rate). It ran on KXBTC15M and KXETH15M for three days in May 2026 and nobody
+      # noticed, which is the entire reason this step exists.
+      #
+      # Silent unless there is money we can actually collect. It does NOT email on
+      # liquidity pools — those pay resting size and we are 100% taker, so alerting
+      # on them would fire constantly about money we structurally cannot take, and a
+      # channel that fires daily gets filtered. That is the #233 failure mode, and
+      # `|| true` below means email is the only live channel, exactly as for z-gate.
+      #
+      # Needs no Kalshi credentials: /incentive_programs is a public endpoint.
+      - name: incentive watch
+        continue-on-error: true
+        env:
+          COPY_EMAIL_FROM:      ${{ secrets.COPY_EMAIL_FROM }}
+          COPY_EMAIL_TO:        ${{ secrets.COPY_EMAIL_TO }}
+          COPY_EMAIL_PASSWORD:  ${{ secrets.COPY_EMAIL_PASSWORD }}
+        run: python3 scripts/incentive_watch.py --email || true
