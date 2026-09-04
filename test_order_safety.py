@@ -291,9 +291,13 @@ class OrderSafetyTests(unittest.TestCase):
         # the 1.5x target (exactly compliant would be $48.48). Second consecutive
         # override of the same two clauses — see FLAT_BET_DOLLARS for the standing
         # note that a third means deleting the clauses rather than overriding them.
-        self.assertEqual(trader.FLAT_BET_DOLLARS, 50)
-        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("50"))
-        self.assertEqual(count, 53)
+        # 50 -> 35 on 2026-09-04, mechanically: cash fell to $1,643.65, the
+        # (cash-400)/33 ceiling is $37.69, and headroom had decayed to 1.13x against
+        # the 1.5x target. Sizing follows the bankroll down on the same ratio it
+        # followed it up. Not a win-rate decision, and not a reaction to one bad day.
+        self.assertEqual(trader.FLAT_BET_DOLLARS, 35)
+        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("35"))
+        self.assertEqual(count, 37)
 
     def test_subpenny_boundaries_are_not_rounded_into_band(self):
         with patch.object(trader, "kalshi_get", return_value=(200, {"market": {"yes_ask_dollars": "0.8950"}})):

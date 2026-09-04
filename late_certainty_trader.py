@@ -360,7 +360,25 @@ SERIES_BET_MULTIPLIER = {}
 # Coupled change, required, see scripts/zgate_monitor.py: the z-gate revert rule 2 is
 # dollar-denominated and its n>=500 sample now spans two bet sizes, which a threshold
 # rescale CANNOT fix. It was converted to a ratio (return on wagered) instead.
-FLAT_BET_DOLLARS = 50
+#
+# $50 -> $35 on 2026-09-04. MECHANICAL, not discretionary, and not a reaction to a bad
+# day: the rule is bet <= (cash - STOP_BALANCE)/33, cash fell to $1,643.65, so the
+# ceiling is $37.69 and $50 was 33% above it. Headroom had decayed 1.64x -> 1.13x
+# against the 1.5x target; $35 restores it to 1.62x. Sizing follows the bankroll DOWN
+# on exactly the ratio it followed it up on Sep 1 — that symmetry is the whole point of
+# a ratio rule, and refusing to cut here would make the Sep 1 raise retroactively
+# dishonest.
+#
+# The Sep 1 entry predicted this in as many words: "the next ordinary drawdown will
+# feel materially worse than any previous one purely from the 1.43x size." 2026-09-04
+# ran 44 trades at 77.3% WR for -$343.93 (margin -14.59pp, the worst day in the visible
+# window). At $35 the same day is -$240.75, so the sizing decision cost ~$103 of it.
+# Recorded because a prediction that comes true is only worth anything if it is scored.
+#
+# NOT confounded with the z-gate, because Sep 1 fixed exactly this: REVERT_RETURN_ON_WAGERED
+# is a ratio, so a bet change no longer contaminates the n>=500 sample. That work is what
+# makes this cut safe to ship mid-experiment.
+FLAT_BET_DOLLARS = 35
 
 
 def compute_bet_dollars(balance):
