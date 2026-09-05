@@ -1071,6 +1071,84 @@ class ShadowZTests(unittest.TestCase):
         self.assertIn("z_value(", inspect.getsource(trader.z_gate_blocks))
 
 
+class ExecutionHaltResolutionTests(unittest.TestCase):
+    """The execution halt must last exactly as long as the AMBIGUITY, not forever.
+
+    2026-09-05: execution_halt_reason was set in six places and cleared in none, with no
+    CLI flag and no workflow input. A reconciliation that returned status=unavailable on
+    an order that had filled, won and settled for +$3.56 kept the book down ~10 hours.
+    Every test here is about clearing ONLY on exchange-confirmed closure, and failing
+    CLOSED on everything else."""
+
+    REASON = ("KXBNB15M-26SEP042315-15: order reconciliation unresolved for "
+              "01a06f8a-5988-750c-89ca-b23b7a998208: status=unavailable, remaining=unknown")
+
+    def _state(self):
+        return {"execution_halt_reason": self.REASON, "execution_halt_probed_at": 0}
+
+    def _patch(self, positions, settlements, pcode=200, scode=200):
+        def fake(path, params=None):
+            if "positions" in path:
+                return pcode, {"market_positions": positions}
+            return scode, {"settlements": settlements}
+        return patch.object(trader, "kalshi_get", side_effect=fake)
+
+    def test_recovers_ticker_from_an_existing_reason(self):
+        """The stuck halt predates execution_halt_ticker, so the regex path is the one
+        that actually has to work in production."""
+        m = trader.EXEC_HALT_TICKER_RE.search(self.REASON)
+        self.assertEqual(m.group(0), "KXBNB15M-26SEP042315-15")
+
+    def test_clears_when_settled_and_flat(self):
+        st = self._state()
+        with self._patch([], [{"ticker": "KXBNB15M-26SEP042315-15"}]), \
+             patch.object(trader, "save_state"), patch.object(trader, "send_email"):
+            self.assertTrue(trader.try_resolve_execution_halt(st))
+        self.assertNotIn("execution_halt_reason", st)
+
+    def test_stays_halted_while_a_position_is_open(self):
+        """An open position is the ambiguity this halt exists for."""
+        st = self._state()
+        with self._patch([{"position_fp": "-53.00"}], [{"ticker": "x"}]), \
+             patch.object(trader, "save_state"):
+            self.assertFalse(trader.try_resolve_execution_halt(st))
+        self.assertIn("execution_halt_reason", st)
+
+    def test_stays_halted_until_the_market_settles(self):
+        st = self._state()
+        with self._patch([], []), patch.object(trader, "save_state"):
+            self.assertFalse(trader.try_resolve_execution_halt(st))
+        self.assertIn("execution_halt_reason", st)
+
+    def test_fails_closed_on_api_errors(self):
+        for pcode, scode in ((500, 200), (200, 500)):
+            st = self._state()
+            with self._patch([], [{"ticker": "x"}], pcode=pcode, scode=scode), \
+                 patch.object(trader, "save_state"):
+                self.assertFalse(trader.try_resolve_execution_halt(st))
+            self.assertIn("execution_halt_reason", st)
+
+    def test_fails_closed_when_no_ticker_can_be_recovered(self):
+        st = {"execution_halt_reason": "something went wrong", "execution_halt_probed_at": 0}
+        with patch.object(trader, "save_state"):
+            self.assertFalse(trader.try_resolve_execution_halt(st))
+        self.assertIn("execution_halt_reason", st)
+
+    def test_probe_is_rate_limited(self):
+        """check_halts runs ~54x per job; unthrottled this would be ~108 API calls a job."""
+        st = self._state()
+        st["execution_halt_probed_at"] = trader.datetime.now(trader.ET).timestamp()
+        with patch.object(trader, "kalshi_get", side_effect=AssertionError("must not probe")):
+            self.assertFalse(trader.try_resolve_execution_halt(st))
+
+    def test_check_halts_still_reports_a_standing_halt(self):
+        st = self._state()
+        with self._patch([{"position_fp": "-53.00"}], []), patch.object(trader, "save_state"):
+            halt, reason = trader.check_halts(st, balance=1500, shard_balance=1500)
+        self.assertTrue(halt)
+        self.assertIn("execution safety halt", reason)
+
+
 class PostLossCooldownTests(unittest.TestCase):
     """Pre-registered 2026-09-03, shipped DISABLED. These tests pin two things: that
     it stays off until someone deliberately turns it on, and that every ambiguous

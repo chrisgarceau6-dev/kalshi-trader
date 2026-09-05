@@ -29,7 +29,7 @@ KILL SWITCHES:
 usage: --once | --dry-run | --status | --daemon [--interval N] [--duration N]
 """
 
-import argparse, base64, hashlib, json, math, os, smtplib, time, urllib.request, urllib.error, uuid
+import argparse, base64, hashlib, json, math, os, re, smtplib, time, urllib.request, urllib.error, uuid
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -919,8 +919,83 @@ def open_markets_longshot(series):
 
 # ── kill switches ──────────────────────────────────────────────────────────────
 
+# Tickers look like KXBNB15M-26SEP042315-15. Used only to recover the ticker from an
+# EXISTING halt reason; new halts record it in `execution_halt_ticker` directly.
+EXEC_HALT_TICKER_RE = re.compile(r"KX[A-Z0-9]+-\d{2}[A-Z]{3}\d{6}-[A-Z0-9.+-]+")
+EXEC_HALT_PROBE_SECONDS = 300
+
+
+def try_resolve_execution_halt(state):
+    """Clear an execution halt once the EXCHANGE can prove the exposure is closed.
+
+    The halt exists because exposure is UNKNOWN. It is not a punishment and it is not a
+    strategy signal, so it should last exactly as long as the ambiguity does — the same
+    reasoning the per-shard collateral brake below is built on ("NOT sticky ... a brake
+    rather than something that needs a human to unlatch").
+
+    2026-09-05: `execution_halt_reason` was set in six places and cleared in NONE, with
+    no CLI flag and no workflow input to unlatch it. A reconciliation call returned
+    `status=unavailable` on an order that had in fact filled, won and settled for +$3.56,
+    and the book sat down ~10 hours over a resolved winning trade. Uptime is not free:
+    at ~110 trades/day and a +0.75pp margin that outage is worth more than the trade was.
+
+    FAILS CLOSED on every uncertainty — no recoverable ticker, any non-200 response, any
+    non-zero position, or a market that has not settled all leave the halt standing. The
+    only path that clears is: the exchange lists no position AND the market has settled,
+    i.e. the exposure is not merely believed closed, it is closed and priced.
+    """
+    reason = state.get("execution_halt_reason")
+    if not reason:
+        return False
+    now = datetime.now(ET).timestamp()
+    # While halted there is no other API traffic, but check_halts runs on every scan
+    # (~54 per job), so probing unconditionally would be ~108 calls a job for nothing.
+    if now - float(state.get("execution_halt_probed_at", 0) or 0) < EXEC_HALT_PROBE_SECONDS:
+        return False
+    state["execution_halt_probed_at"] = now
+    ticker = state.get("execution_halt_ticker")
+    if not ticker:
+        m = EXEC_HALT_TICKER_RE.search(reason)
+        ticker = m.group(0) if m else None
+    if not ticker:
+        save_state(state)
+        return False
+    code, resp = kalshi_get("/portfolio/positions",
+                            {"ticker": ticker, "settlement_status": "all", "limit": 50})
+    if code != 200:
+        save_state(state)
+        return False
+    for mp in resp.get("market_positions") or []:
+        try:
+            if float(mp.get("position_fp", 0) or 0) != 0:
+                save_state(state)
+                return False          # still holding: the ambiguity is real, stay down
+        except (TypeError, ValueError):
+            save_state(state)
+            return False
+    code2, resp2 = kalshi_get("/portfolio/settlements", {"ticker": ticker, "limit": 10})
+    if code2 != 200 or not (resp2.get("settlements") or []):
+        save_state(state)
+        return False                  # not settled: exposure still genuinely unknown
+    state.pop("execution_halt_reason", None)
+    state.pop("execution_halt_ticker", None)
+    save_state(state)
+    log(f"  execution halt CLEARED — {ticker} has settled and no position remains. "
+        f"Was: {reason}")
+    try:
+        send_email("[Kalshi] execution halt auto-cleared",
+                   f"{ticker} has settled and the account holds no position in it, so the "
+                   f"unknown exposure that caused the halt is resolved. Trading resumed.\n\n"
+                   f"Original halt reason:\n{reason}\n")
+    except Exception as exc:
+        log(f"  (halt-clear email failed: {exc})")
+    return True
+
+
 def check_halts(state, balance, shard_balance=None):
     """Returns (halt: bool, reason: str). Daily loss limit is dynamic based on bet size."""
+    if state.get("execution_halt_reason"):
+        try_resolve_execution_halt(state)
     if state.get("execution_halt_reason"):
         return True, f"execution safety halt: {state['execution_halt_reason']}"
     if balance is not None and balance <= STOP_BALANCE:
@@ -2187,6 +2262,7 @@ def try_longshot_trade(market, state, dry_run):
             actual_contracts, actual_cost, actual_fee = reconcile_terminal_order(order_id, ticker, side)
         except RuntimeError as exc:
             state["execution_halt_reason"] = f"{ticker}: {exc}"
+            state["execution_halt_ticker"] = ticker
             save_state(state)
             raise
         if actual_contracts == 0:
