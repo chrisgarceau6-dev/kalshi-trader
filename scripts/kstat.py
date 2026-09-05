@@ -324,6 +324,30 @@ def main():
     # ── trading ───────────────────────────────────────────────────────────
     try:
         st = state()
+
+        # HALT STATUS. Added 2026-09-05 because kstat reported "trader live" for the
+        # entire ~10 hours the book was actually halted on a stuck execution latch.
+        # "live" here only ever meant "the Actions job is succeeding on schedule" —
+        # which it was, doing nothing, 60 times an hour. A status tool that cannot
+        # distinguish trading from not trading is worse than no status tool, because
+        # it actively reassures. This is the row that would have caught it.
+        halts = []
+        if st.get("execution_halt_reason"):
+            halts.append(("execution", str(st["execution_halt_reason"])[:88]))
+        ed = st.get("edge_degrade_halted_at") or 0
+        if ed:
+            mins = (D.datetime.now(ET).timestamp() - float(ed)) / 60
+            halts.append(("edge degrade", f"{mins:.0f}min in (auto-clears at 120min)"))
+        ha = st.get("halt_alert") or {}
+        if halts:
+            since = ""
+            if ha.get("ts"):
+                since = f" · alerting since {ago((D.datetime.now(ET).timestamp() - float(ha['ts']))/60)}"
+            for kind, detail in halts:
+                rows_out.append(("HALTED", paint(f"{kind}", "r") + f" · {detail}{since}"))
+            out["halted"] = [{"kind": k, "detail": d} for k, d in halts]
+        else:
+            out["halted"] = []
         P = [v for v in st["positions"].values()]
         S = [p for p in P if p.get("settled")]
         SI = [(t, p) for t, p in st["positions"].items() if p.get("settled")]
