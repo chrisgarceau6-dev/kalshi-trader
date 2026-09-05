@@ -1036,9 +1036,24 @@ def check_halts(state, balance, shard_balance=None):
                 state["edge_degrade_halted_at"] = now_ts
                 halted_at = now_ts
             age = now_ts - halted_at
-            if age >= EDGE_DEGRADE_COOLDOWN and cl < 3:
+            # `and cl < 3` was REMOVED 2026-09-05. It gated recovery on a value that
+            # CANNOT CHANGE WHILE HALTED: consec_losses only moves when a trade settles,
+            # and a halt stops new entries, so once any already-open positions finish the
+            # counter is frozen. If it was >= 3 at that moment the halt became PERMANENT —
+            # in the control whose own comment above promises "2h auto-recovery to prevent
+            # permanent deadlock". Exactly the defect that kept the book down ~10 hours on
+            # 2026-09-04 via execution_halt_reason: a latch with no path out.
+            #
+            # A stale counter carries no information about now, so nothing is lost by
+            # dropping it. consec_losses is reset alongside the window because the two
+            # describe the same thing — recent performance — and resuming with a fresh
+            # window but a stale streak would immediately mis-arm CONSEC_LOSS_LIMIT.
+            # If the strategy is genuinely broken it simply re-halts once the window
+            # refills, and STOP_BALANCE and the daily loss limit both still backstop.
+            if age >= EDGE_DEGRADE_COOLDOWN:
                 state["edge_degrade_halted_at"] = 0
                 state["recent_results"] = []
+                state["consec_losses"] = 0
                 log("  edge degrade cooldown expired — clearing window and resuming")
             else:
                 return True, (f"edge degrade: rolling {EDGE_DEGRADE_WINDOW}-trade WR "
