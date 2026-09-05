@@ -1071,6 +1071,63 @@ class ShadowZTests(unittest.TestCase):
         self.assertIn("z_value(", inspect.getsource(trader.z_gate_blocks))
 
 
+class NoPermanentLatchTests(unittest.TestCase):
+    """EVERY sticky halt must have a path out that does not require a human.
+
+    Written 2026-09-05 after two independent latches were found in one day:
+    execution_halt_reason (set in six places, cleared in none) held the book down ~10
+    hours over a trade that had already settled and WON; and the edge-degrade recovery
+    was gated on `consec_losses < 3`, a value that cannot change while halted, so a halt
+    entered with a 3-loss streak could never lift. Both were 'safe' in the sense of
+    failing closed, and both cost far more uptime than the risk they averted.
+
+    A brake that needs a human to unlatch is not a brake, it is an outage waiting for
+    someone to be awake. This class is the standing guarantee against a third one."""
+
+    def test_edge_degrade_recovers_regardless_of_a_frozen_loss_streak(self):
+        """The deadlock case: cooldown expired, streak stuck at 5, nothing else running."""
+        state = {
+            "recent_results": [[0, 92]] * trader.EDGE_DEGRADE_WINDOW,
+            "edge_degrade_halted_at": trader.datetime.now(trader.ET).timestamp()
+                                      - trader.EDGE_DEGRADE_COOLDOWN - 60,
+            "consec_losses": 5,
+        }
+        halt, reason = trader.check_halts(state, balance=1500, shard_balance=1500)
+        self.assertFalse(halt, f"edge degrade must release after its cooldown, got: {reason}")
+        self.assertEqual(state["recent_results"], [])
+        self.assertEqual(state["consec_losses"], 0,
+                         "a fresh window with a stale streak would mis-arm CONSEC_LOSS_LIMIT")
+
+    def test_edge_degrade_still_holds_before_the_cooldown_expires(self):
+        """Releasing the deadlock must not turn the brake off."""
+        state = {
+            "recent_results": [[0, 92]] * trader.EDGE_DEGRADE_WINDOW,
+            "edge_degrade_halted_at": trader.datetime.now(trader.ET).timestamp() - 60,
+            "consec_losses": 0,
+        }
+        halt, reason = trader.check_halts(state, balance=1500, shard_balance=1500)
+        self.assertTrue(halt)
+        self.assertIn("edge degrade", reason)
+
+    def test_every_sticky_halt_key_has_a_documented_release(self):
+        """Inventory. Any NEW state key that latches trading must be added here together
+        with the mechanism that clears it — or it is a latch with no path out."""
+        releases = {
+            "execution_halt_reason": "try_resolve_execution_halt: exchange confirms "
+                                     "settled + flat",
+            "edge_degrade_halted_at": "EDGE_DEGRADE_COOLDOWN elapses (unconditional "
+                                      "since 2026-09-05)",
+            "consec_losses": "60-min cooldown on last_loss_ts, and reset on any win",
+        }
+        for key, mechanism in releases.items():
+            self.assertTrue(mechanism, f"{key} has no release mechanism")
+        self.assertIn("try_resolve_execution_halt", dir(trader))
+
+    def test_a_totally_clean_state_never_halts(self):
+        halt, reason = trader.check_halts({}, balance=1500, shard_balance=1500)
+        self.assertFalse(halt, reason)
+
+
 class ExecutionHaltResolutionTests(unittest.TestCase):
     """The execution halt must last exactly as long as the AMBIGUITY, not forever.
 
