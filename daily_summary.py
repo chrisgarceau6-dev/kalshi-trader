@@ -169,7 +169,8 @@ def main(hours=24, trades=None):
         send_email("[Kalshi] Daily Summary — no trades", body)
         return
 
-    trades = []
+    trades  = []
+    foreign = []          # settlements outside the six series — see the filter below
     for s in settlements:
         ticker    = s.get("ticker", "")
         revenue   = int(s.get("revenue", 0)) / 100.0
@@ -182,6 +183,25 @@ def main(hours=24, trades=None):
         won       = revenue > 0.01
         pnl       = revenue - cost - fee
 
+        # THE SETTLEMENTS API IS ACCOUNT-WIDE. Every figure below — win rate, Net P&L,
+        # and $/wagered in particular — used to be computed over every settlement in
+        # the window, so any position taken outside this strategy landed in the
+        # headline numbers while BY SERIES silently dropped it (that block iterates
+        # SERIES_LIST). On 2026-09-09 two manual NFL bets put 107 trades and -$235.73
+        # in the email against the strategy's real 105 and -$211.73.
+        #
+        # $/wagered is the metric z-gate revert rule 2 is denominated in, and rule 2
+        # is the one rule zgate_monitor.py does NOT compute — it prints a pointer to
+        # this script and a human reads the number off. The 2026-09-09 contamination
+        # was 0.0063, larger than the 0.0041 threshold the rule turns on. kstat.py has
+        # filtered on LC_SERIES since it was written; this script never did.
+        #
+        # Excluded, not dropped: the count and P&L are reported below, because a
+        # figure that vanishes silently is how this class of bug survives.
+        if series_from_ticker(ticker) not in SERIES_LIST:
+            foreign.append({"ticker": ticker, "pnl": revenue - cost - fee})
+            continue
+
         trades.append({
             "ticker":    ticker,
             "series":    series_from_ticker(ticker),
@@ -193,6 +213,18 @@ def main(hours=24, trades=None):
             "pnl":       pnl,
             "won":       won,
         })
+
+    if not trades:
+        f_pnl = sum(t["pnl"] for t in foreign)
+        bal_line = f"${balance:.2f}" if balance else "unavailable"
+        body = (f"Period:  {window_start}  →  {window_end}\n"
+                f"Balance: {bal_line}\n\n"
+                f"No strategy trades settled in this period.\n"
+                f"({len(foreign)} settlement(s) outside the six series, ${f_pnl:+.2f}, "
+                f"excluded from all figures.)")
+        send_email("[Kalshi] Daily Summary — no trades", body)
+        print(body)
+        return
 
     n         = len(trades)
     wins      = sum(1 for t in trades if t["won"])
@@ -237,6 +269,13 @@ def main(hours=24, trades=None):
         f"Avg fill:  {avg_fill:.1f} contracts",
         archive_status(),
     ]
+
+    if foreign:
+        f_pnl = sum(t["pnl"] for t in foreign)
+        lines.append(f"Excluded:  {len(foreign)} settlement(s) outside the six series, "
+                     f"${f_pnl:+.2f} — in NO figure above")
+        for t in foreign:
+            lines.append(f"             {t['ticker']}  ${t['pnl']:+.2f}")
 
     if partial_fills:
         lines.append(f"Partials:  {len(partial_fills)} trades with <20 contracts")
