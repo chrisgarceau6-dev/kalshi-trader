@@ -494,7 +494,7 @@ CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fi
 # running both at once confounds both measurements.
 POST_LOSS_COOLDOWN_ENABLED = False
 POST_LOSS_COOLDOWN_MINUTES = 15
-MAX_CONCURRENT_POSITIONS = 2  # 2×$50=$100=5.0% of a $2,000 balance (comment was written at $75=10.9%)
+MAX_CONCURRENT_POSITIONS = 2  # 2×$35=$70=3.1% of a $2,224.82 balance (was $50=5.0%, and $75=10.9% when written)
 
 # Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
 # bot trades lives there, and collateral does not cross shards.
@@ -2352,10 +2352,16 @@ def awaiting_settlement_tickers(state):
 
 def check_outcomes(state, balance):
     today = datetime.now(ET).date().isoformat()
-    daily = state.setdefault("daily", {"date": today, "pnl": 0.0})
+    daily = state.setdefault("daily", {"date": today, "pnl": 0.0, "trades_today": 0})
     if daily.get("date") != today:
         daily["date"] = today
         daily["pnl"]  = 0.0
+        # trades_today resets HERE, not only in the two fill paths. Settlement runs
+        # before the first fill of any new day, so this is the branch that actually
+        # sees the date roll; the fill paths then find date == today and skip their
+        # own reset. The counter therefore never zeroed and accumulated across every
+        # day the bot has run — 3405 against 1914 lifetime trades on 2026-09-10.
+        daily["trades_today"] = 0
 
     for ticker, pos in list(state.get("positions", {}).items()):
         if pos.get("settled"):
