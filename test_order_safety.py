@@ -295,9 +295,16 @@ class OrderSafetyTests(unittest.TestCase):
         # (cash-400)/33 ceiling is $37.69, and headroom had decayed to 1.13x against
         # the 1.5x target. Sizing follows the bankroll down on the same ratio it
         # followed it up. Not a win-rate decision, and not a reaction to one bad day.
-        self.assertEqual(trader.FLAT_BET_DOLLARS, 35)
-        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("35"))
-        self.assertEqual(count, 37)
+        # 35 -> 45 on 2026-09-10, bankroll scaling at Chris's explicit direction on a
+        # $2,224.82 balance. Passes the ratio rule — ceiling (cash-400)/33 = $55.30, so
+        # $45 is 19% under it, headroom 1.84x against the 1.5x target. THIRD override of
+        # the "not on a good week" bar, though that leg is itself satisfied for the first
+        # time (09-09 and 09-10 both lost). Cost recorded, not hidden: a repeat of the
+        # worst measured drawdown puts headroom at 0.88x and forces a cut, because the
+        # ratio rule is evaluated on today's cash only. See FLAT_BET_DOLLARS.
+        self.assertEqual(trader.FLAT_BET_DOLLARS, 45)
+        self.assertLessEqual(Decimal(count) * Decimal("0.93"), Decimal("45"))
+        self.assertEqual(count, 48)
 
     def test_subpenny_boundaries_are_not_rounded_into_band(self):
         with patch.object(trader, "kalshi_get", return_value=(200, {"market": {"yes_ask_dollars": "0.8950"}})):
