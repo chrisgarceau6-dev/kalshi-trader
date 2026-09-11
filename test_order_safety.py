@@ -1296,8 +1296,22 @@ class ZGateTests(unittest.TestCase):
 
     def test_threshold_direction(self):
         """Below the threshold blocks, at or above passes — checked on the real code
-        path with _spot_momentum stubbed, so the comparison itself is exercised."""
+        path with _spot_momentum stubbed, so the comparison itself is exercised.
+
+        TRIPWIRE, asserted first: the gate ships DISABLED as of 2026-09-11, when the
+        pre-registered reversal rule fired (rejected 92.31% vs 91.59% break-even on
+        n=273). Same shape as PostLossCooldownTests — the flag's shipped value is
+        pinned so it cannot be flipped back silently, while the comparison logic below
+        stays exercised by forcing the flag on for the duration of the test. Without
+        that force this test would pass vacuously the moment the gate was disabled,
+        which would retire the only coverage of the threshold direction."""
+        self.assertFalse(trader.Z_GATE_ENABLED,
+                         "z-gate ships disabled; re-enabling needs a dated row and a "
+                         "cut fitted out-of-sample — see FLAT_BET_DOLLARS-style history "
+                         "above Z_GATE_ENABLED")
         old = trader._spot_momentum
+        old_enabled = trader.Z_GATE_ENABLED
+        trader.Z_GATE_ENABLED = True
         try:
             # sigma 100bp/min, spot 100, strike 100 -> z = 0 -> must BLOCK
             trader._spot_momentum = lambda s: (0.0, 0.01, 100.0)
@@ -1314,6 +1328,7 @@ class ZGateTests(unittest.TestCase):
             self.assertTrue(blocked)
         finally:
             trader._spot_momentum = old
+            trader.Z_GATE_ENABLED = old_enabled
 
     def test_gate_runs_before_the_book_read(self):
         """The book last look must stay the final call before place_order."""

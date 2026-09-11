@@ -233,7 +233,35 @@ SURVIVOR_LOOKBACK = (480, 600)
 # SHIPPED AGAINST REVIEW ADVICE — the hypothesis was chosen on the same data it is
 # measured on, which no statistic here repairs. Revert rule is pre-registered in
 # CLAUDE.md and enforced by scripts/zgate_monitor.py. To disable: Z_GATE_ENABLED=False.
-Z_GATE_ENABLED  = True
+#
+# REVERTED 2026-09-11. The pre-registered reversal rule fired on its own terms:
+#
+#   *** REVERSAL: rejected signals win 92.31% vs break-even 91.59% on n=273 (>= 200).
+#       The gate is discarding winners. REVERT.
+#
+# Measured over 14 days: 2,347 decisions, 2,142 scoreable (91%), 273 rejected (12.7%).
+# REJECTED 92.31% WR vs 91.59% break-even = +0.72pp, where rule 1 requires NEGATIVE.
+# KEPT 93.10% vs 91.96% = +1.13pp. So the gate RANKS correctly — it keeps a better set
+# than it rejects — but Z_GATE_MIN=0.761 sits INSIDE profitable territory, so what it
+# discards still makes money: ~$72 over the 14 days, ~$5/day, in forgone profit.
+# Reproduce: python3 scripts/zgate_monitor.py --days 14
+#
+# WHY THIS TOOK TWO WEEKS TO SEE, which matters more than the $72. Rule 1 needs n>=200
+# rejected, but daily_summary.yml invoked the monitor as `--days 7`, a ROLLING window.
+# At a 12.7% rejection rate that window holds ~110-130 rejected signals and plateaus
+# there — the observed series was 68, 118, 129, 119, 111, 116 across Sep 1-10. The
+# threshold was pre-registered against a CUMULATIVE sample and evaluated against a
+# rolling one, so rule 1 sat permanently below its own trigger while the condition it
+# tests was true underneath it. A control that cannot reach its threshold is not a
+# control. The window is widened and a blindness warning added in the same PR.
+#
+# This is the failure mode the Aug 27 row called "the case against" point 2: low z
+# stopped meaning "fragile" and started meaning the disagreement was the gate's, not
+# the market's. Reverting restores ~12.7% of signals at +0.72pp each. Re-enable only
+# against a cut fitted OUT of sample — the original was chosen on the same 76 days it
+# was measured on, which the shipping note above already flagged and which no amount
+# of walk-forward on those same days repairs.
+Z_GATE_ENABLED  = False
 Z_GATE_MIN      = 0.761    # walk-forward cut; stable at 0.746-0.776 across all 11 weeks
 
 # SHADOW ONLY — poll-level gate inputs (2026-08-21). data/candles/*.csv.gz lets any
