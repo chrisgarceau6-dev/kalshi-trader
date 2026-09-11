@@ -406,7 +406,42 @@ SERIES_BET_MULTIPLIER = {}
 # NOT confounded with the z-gate, because Sep 1 fixed exactly this: REVERT_RETURN_ON_WAGERED
 # is a ratio, so a bet change no longer contaminates the n>=500 sample. That work is what
 # makes this cut safe to ship mid-experiment.
-FLAT_BET_DOLLARS = 35
+#
+# $35 -> $45 on 2026-09-10, at Chris's explicit and twice-repeated direction. THIS IS THE
+# THIRD OVERRIDE of the "not on a good week / ~2,418 clean trades" bar, and per that bar's
+# own standing note the correct response to a third is to DELETE the clause rather than
+# override it again. The clause is deliberately left standing in this commit and the
+# deletion raised separately, because removing a control inside the commit that the
+# control would have blocked is indistinguishable from removing it to permit the change.
+#
+# What the rules actually say, both directions:
+#   - PASSES the ratio rule. Ceiling is (cash - STOP_BALANCE)/33 = $55.30 at $2,224.82,
+#     so $45 sits 19% under it. Headroom 40.6 losses = 1.84x the 22-loss worst measured
+#     drawdown, against a 1.5x target.
+#   - The "not on a good week" leg is, for the first time, SATISFIED: 09-09 and 09-10 both
+#     lost money. This is not a raise into a hot streak, which is what that clause was for.
+#   - The trade-count leg is NOT met and was not measurable here: the state file keeps only
+#     MAX_POSITIONS_STATE=500 settled positions, five days' worth.
+#   - Depth gate rescales 56 -> 72. Measured cost, not assumed: of 1,067 signals clearing
+#     depth 56 over 09-06..09-10, only 13 (1.2%) sit in the [56,72) band this newly
+#     rejects. Reproduce: data/gatelog/*.csv, columns depth and min_depth.
+#   - z-gate uncontaminated: rules 1 and 3 are win-rate/rate based, rule 2 is
+#     REVERT_RETURN_ON_WAGERED, a ratio. No tripwire needs rescaling for this change.
+#
+# THE COST, STATED PLAINLY BECAUSE IT IS THE PART THE RATIO RULE CANNOT SEE. The rule is
+# evaluated on TODAY's cash, so it permits sizes that unwind themselves. A repeat of the
+# 22-loss worst drawdown at $45 takes cash to ~$1,274 and headroom to 0.88x — below the
+# 1.5x target, i.e. a forced cut. The size that still clears 1.5x AFTER such a run is
+# $33.72, which is where $35 came from. Sep 1 -> Sep 4 -> #242 already ran this exact
+# loop at $50 and the cut cost ~$103 on Sep 4 alone. Expect the next ordinary drawdown to
+# feel ~29% worse purely from size, and do NOT read that as edge decay.
+#
+# Recorded honestly: this is a bankroll-scaling decision taken on an unproven edge. The
+# last 100 settled trades ran 91.0% WR for -$36.33 against a ~93.0% fee-inclusive
+# break-even; the 500 in state run 93.6% for +$335.26. Aug 1-28 was +0.75pp with a
+# cluster-bootstrap CI of [-0.70,+1.99] — still including zero after 2,099 trades.
+# Revert: FLAT_BET_DOLLARS = 35. Nothing else needs touching, by design.
+FLAT_BET_DOLLARS = 45
 
 
 def compute_bet_dollars(balance):
@@ -522,7 +557,7 @@ CONSEC_LOSS_LIMIT       = 9   # halt for 60 min after 9 consecutive losses (5 fi
 # running both at once confounds both measurements.
 POST_LOSS_COOLDOWN_ENABLED = False
 POST_LOSS_COOLDOWN_MINUTES = 15
-MAX_CONCURRENT_POSITIONS = 2  # 2×$35=$70=3.1% of a $2,224.82 balance (was $50=5.0%, and $75=10.9% when written)
+MAX_CONCURRENT_POSITIONS = 2  # 2×$45=$90=4.0% of a $2,224.82 balance (was $35=3.1%, $50=5.0%, $75=10.9% when written)
 
 # Kalshi moved crypto to exchange shard 2 on 2026-08-24 12:00 ET. Every series this
 # bot trades lives there, and collateral does not cross shards.
