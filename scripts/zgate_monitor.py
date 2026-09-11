@@ -11,13 +11,13 @@ That is what the rejected-signal win rate below is watching for.
 Harvests [ZGATE-SKIP] / [ZGATE-PASS] from Actions run logs — the decisions the bot
 ACTUALLY made — and joins them to settlement outcomes from the archive.
 
-  python3 scripts/zgate_monitor.py --days 7
-  python3 scripts/zgate_monitor.py --days 7 --email      # mails on a trip OR on blindness
+  python3 scripts/zgate_monitor.py --days 14
+  python3 scripts/zgate_monitor.py --days 14 --email     # mails on a trip OR on blindness
 
 Exit: 0 clean · 2 a pre-registered revert rule tripped · 3 the archive is too stale to
 score the decisions harvested (the monitor cannot see, which is its own alarm).
 """
-import argparse, datetime as dt, glob, gzip, csv, json, os, re, subprocess, sys
+import argparse, datetime as dt, glob, gzip, csv, json, math, os, re, subprocess, sys
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -148,7 +148,7 @@ def outcomes():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=int, default=7)
+    ap.add_argument("--days", type=int, default=14)  # 7 could not reach rule 1's n>=200 — see the unreachable-threshold warning
     ap.add_argument("--email", action="store_true")
     a = ap.parse_args()
 
@@ -200,6 +200,31 @@ def main():
                      f"advance and rule 3's rate is a rate over a biased subset. "
                      f"archive_candles.py has stopped keeping up.")
     lines.append(f"  signals scored {tot}   rejected {n_r} ({rate*100:.1f}%)   kept {n_k}")
+    # UNREACHABLE-THRESHOLD WARNING, added 2026-09-11 after this exact failure.
+    #
+    # Rule 1 needs n>=MIN_N_REJECTED rejected signals, but this window is ROLLING, so n
+    # does not accumulate — it converges to (rejection rate x signals per day x days)
+    # and sits there. At --days 7 and a 12.7% rejection rate that is ~110-130, and the
+    # observed series over Sep 1-10 was 68, 118, 129, 119, 111, 116: permanently below
+    # the 200 the rule was pre-registered against. For two weeks rule 1 printed its
+    # threshold every morning while being structurally incapable of reaching it, and
+    # the condition it tests was TRUE the whole time (confirmed at --days 14: rejected
+    # 92.31% vs 91.59% break-even on n=273, which is the revert condition).
+    #
+    # A threshold that the window cannot reach is not a control, it is decoration. This
+    # says so out loud rather than leaving a reader to infer it from a bracketed number,
+    # and it routes through warns so it EMAILS — same reasoning as the BLIND and STALE
+    # warnings above, and the same lesson as #232's undercounting watcher.
+    if n_r < MIN_N_REJECTED:
+        need_days = math.ceil(a.days * MIN_N_REJECTED / n_r) if n_r else None
+        warns.append(
+            f"RULE 1 CANNOT FIRE — {n_r} rejected in this {a.days}d window against a "
+            f"n>={MIN_N_REJECTED} threshold. The window is ROLLING, so n converges "
+            f"rather than accumulating and this gap does not close by waiting."
+            + (f" Widen to about --days {need_days} to reach {MIN_N_REJECTED}."
+               if need_days else "")
+            + " Until then the reversal test is not 'not yet tripped', it is NOT BEING "
+              "EVALUATED.")
     if not tot:
         lines.append("  no scoreable decisions yet")
         if warns:

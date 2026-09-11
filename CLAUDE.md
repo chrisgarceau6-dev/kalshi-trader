@@ -26,7 +26,7 @@ and `python3 scripts/verify.py` re-derives it against the live API on demand.
 against the code and the API on 2026-08-24 by two independent audits
 (`docs/audit/`).*
 
-## Current strategy — v5.17 + z-gate (2026-08-27)
+## Current strategy — v5.17, z-gate REVERTED 2026-09-11
 
 Buy **either side** at ask [90,93]¢ with 150-600s left, provided the prior 2 same-side
 1-min candles are all ≥75¢. If ask ≤91¢, also requires a 3rd prior candle ≥80¢. Hold
@@ -49,7 +49,7 @@ to settlement.
 | poll cadence | **900s job / 15s interval** | ~52 scans per CI job (measured, run 32776379439) |
 | `EDGE_DEGRADE_THRESHOLD` | 0.84 | catastrophic breaker only |
 | `BLACKOUT_HOURS` | `set()` | — |
-| **`Z_GATE_ENABLED` / `Z_GATE_MIN`** | **True / 0.761** | **LIVE 2026-08-27.** Skips signals whose cushion is small vs remaining vol. Fails open. Revert = `Z_GATE_ENABLED=False`. Pre-registration + revert rule in PART II; monitor with `scripts/zgate_monitor.py` |
+| **`Z_GATE_ENABLED` / `Z_GATE_MIN`** | **False / 0.761** | **REVERTED 2026-09-11 — the pre-registered reversal rule fired on its own terms.** Live 2026-08-27 to 2026-09-11. Over 14 days: 2,347 decisions, 2,142 scoreable (91%), **rejected 273 at 92.31% WR vs a 91.59% break-even = +0.72pp, where rule 1 requires NEGATIVE**; kept 1,869 at 93.10% vs 91.96% = +1.13pp. The gate RANKED correctly but its cut sat inside profitable territory, so what it discarded still made money — **~$72 over 14 days, ~$5/day, forgone**. **WHY IT TOOK TWO WEEKS, which matters more than the $72: `daily_summary.yml` ran the monitor as `--days 7`, a ROLLING window holding ~110-130 rejected signals against a `n>=200` threshold pre-registered for a CUMULATIVE sample — observed 68, 118, 129, 119, 111, 116 across Sep 1-10. Rule 1 was never "not yet tripped"; it was NOT BEING EVALUATED, while the condition it tests was true underneath. A threshold the window cannot reach is decoration, not a control.** Window widened to 14d and the monitor now EMAILS an explicit `RULE 1 CANNOT FIRE` warning whenever n is short of its threshold. Re-enable only against a cut fitted OUT of sample. Reproduce: `python3 scripts/zgate_monitor.py --days 14` |
 
 **Series:** KXBTC15M, KXETH15M, KXSOL15M, KXDOGE15M, KXBNB15M, KXXRP15M.
 **KXWTI15M paused 2026-08-19** — shadow-logged, still archived, see §7.
